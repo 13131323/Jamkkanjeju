@@ -1,4 +1,4 @@
-package com.jamkkanjeju.server_spring;
+package com.jamkkanjeju.server;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

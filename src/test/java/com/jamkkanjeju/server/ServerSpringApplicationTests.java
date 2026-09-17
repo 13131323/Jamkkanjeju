@@ -1,4 +1,4 @@
-package com.jamkkanjeju.server_spring;
+package com.jamkkanjeju.server;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
