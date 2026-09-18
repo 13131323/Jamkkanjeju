@@ -1,4 +1,4 @@
-﻿INSERT INTO `EXPECTATION` (`expectation_type`)
+﻿INSERT INTO `expectation` (`expectation_type`)
 VALUES
     ('PHOTO'),
     ('LOCAL'),
@@ -8,7 +8,7 @@ VALUES
     ('WALKING');
 
 
-INSERT INTO `TRANSPORTATION` (`transportation_type`)
+INSERT INTO `transportation` (`transportation_type`)
 VALUES
     ('WALK'),
     ('BUS'),
@@ -16,14 +16,14 @@ VALUES
     ('BICYCLE');
 
 
-INSERT INTO `TRAVEL_STYLE` (`travel_style_type`)
+INSERT INTO `travel_style` (`travel_style_type`)
 VALUES
     ('RIGHT_HERE'),
     ('NEAR_AROUND'),
     ('NEAR_DESTINATION');
 
 
-INSERT INTO `ONBOARDING_RESULT` (`user_type`, `type_description`, `hashtags`, `profile_img_url`)
+INSERT INTO `onboarding_result` (`user_type`, `type_description`, `hashtags`, `profile_img_url`)
 VALUES
     ('제주 사진작가', '제주의 빛과 색을 카메라에 담으며 여행지마다 특별한 순간을 발견하는 여행자입니다', '["PHOTO", "인생사진", "제주풍경"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/001.png'),
     ('로컬 탐험가', '관광 안내서에 없는 골목과 시장을 누비며 제주 사람들의 일상과 숨은 이야기를 찾는 여행자입니다.', '["LOCAL", "로컬탐방", "제주골목"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/002.png'),
@@ -34,11 +34,10 @@ VALUES
     ('여행자', '제주를 자유롭게 돌아다니는 여행자입니다.', '["#TRAVELER", "#자유여행", "#좋은시간"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/004.png');
 
 -- ---------------------------------------------------------------------
--- AR_CHARACTER : 캐릭터 도감 12종
--- 입력 순서에 따라 문화/협동/보물찾기 보상 캐릭터는 각각 id 4/5/6을 사용한다.
+-- AR_CHARACTER
 -- ---------------------------------------------------------------------
 
-INSERT INTO `AR_CHARACTER`
+INSERT INTO `ar_character`
     (`name`, `description`, `story_title`, `acquire_condition`, `img_url`, `representative_color`, `hashtags`)
 VALUES
     ('바람 정령',
@@ -118,7 +117,7 @@ VALUES
 -- 문화 미션
 -- ---------------------------------------------------------------------
 
-INSERT INTO `MISSION_TYPE` (`type`, `title`, `description`, `steps`)
+INSERT INTO `mission_type` (`type`, `title`, `description`, `steps`)
 VALUES
     ('CULTURE', '제주 문화 퀴즈',
      '제주의 퀴즈를 맞춰보세요.',
@@ -134,7 +133,7 @@ VALUES
 
 -- 문화미션 30개에 대응하는 공통 MISSION 행
 -- 빈 DB에서 MISSION_TYPE의 CULTURE가 id=1로 생성되는 것을 전제로 한다.
-INSERT INTO `MISSION` (`mission_type_id`)
+INSERT INTO `mission` (`mission_type_id`)
 VALUES
     (1),
     (1),
@@ -168,7 +167,7 @@ VALUES
     (1);
 
 
-INSERT INTO `CULTURE_MISSION`
+INSERT INTO `culture_mission`
     (`mission_id`, `status`, `ar_character_id`, `point`, `coupon_id`)
 VALUES
     (1, 'ACTIVE', 4, 100, NULL),
@@ -204,7 +203,7 @@ VALUES
 
 
 
-INSERT INTO `CULTURE_MISSION_QUIZ`
+INSERT INTO `culture_mission_quiz`
     (`culture_mission_id`, `quiz_index`, `img_url`, `question`, `options`, `answer`, `hint`, `explanation`)
 VALUES
     (1, 1, NULL, '제주어로 할아버지는 무엇일까요?', '["하르방","하라범","하르봉","하르범"]', '하르방', '제주의 돌하르방을 떠올려 보세요.', '제주어에서 할아버지를 뜻하는 대표적인 표현은 하르방입니다.'),
@@ -303,7 +302,7 @@ VALUES
 -- 협동 미션
 -- ---------------------------------------------------------------------
 
-INSERT INTO `COOPERATIVE_ROLE_CARD`
+INSERT INTO `cooperative_role_card`
     (`role_name`, `role_description`, `location_to_find`)
 VALUES
     ('땅지기',

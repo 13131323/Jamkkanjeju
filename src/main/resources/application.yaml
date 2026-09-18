@@ -12,6 +12,9 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+      naming:
+        # 엔티티/필드명(camelCase) -> 소문자 snake_case 테이블/컬럼명 (예: CultureMissionQuiz -> culture_mission_quiz)
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
     properties:
       hibernate:
         format_sql: true

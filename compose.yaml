@@ -7,10 +7,15 @@ services:
       MYSQL_USER: ${MYSQL_USER:-tour}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tour_password}
       TZ: Asia/Seoul
+      # 한글이 깨지지 않도록 UTF-8 로케일 지정
+      LANG: C.UTF-8
     ports:
       - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      # 볼륨이 비어있을 때(최초 생성 시)만 파일명 알파벳 순으로 실행된다: DDL -> 목데이터
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./scripts/data_init.sql:/docker-entrypoint-initdb.d/02_data_init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
