@@ -3,7 +3,7 @@ SET NAMES utf8mb4;
 
 DROP DATABASE IF EXISTS tour;
 
-CREATE DATABASE mydb
+CREATE DATABASE tour
 CHARACTER SET utf8mb4
 COLLATE utf8mb4_0900_ai_ci;
 
@@ -247,7 +247,7 @@ CREATE TABLE `mission` (
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_mission_mission_type`
         FOREIGN KEY (`mission_type_id`) REFERENCES `mission_type` (`id`)
-        ON DELETE CASCADE
+        ON DELETE RESTRICT
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -591,6 +591,7 @@ CREATE TABLE `road_guestbook_like` (
         ON DELETE CASCADE,
     CONSTRAINT `fk_road_guestbook_like_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+        ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -642,3 +643,5 @@ CREATE TABLE `picture_with_character` (
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE SET NULL
 ) ENGINE = InnoDB;
+
+방명록 user null 허용이랑 visited lcoation을 참조해야하는거아닌지????
