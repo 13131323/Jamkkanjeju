@@ -1,6 +1,7 @@
 services:
   mysql:
     image: mysql:8.4
+    command: --log-bin-trust-function-creators=1
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-tour}
@@ -13,6 +14,8 @@ services:
       - "${MYSQL_HOST_PORT:-3306}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      # MySQL 데이터 볼륨이 비어 있는 최초 기동 시에만 실행된다.
+      - ./scripts/create_db.sql:/docker-entrypoint-initdb.d/00_create_db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
@@ -43,7 +46,7 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
-    restart: unless-stopped
+    restart: "no"
 
 volumes:
   mysql-data:

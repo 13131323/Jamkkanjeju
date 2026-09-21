@@ -5,7 +5,7 @@
 - Spring Boot + Spring Data JPA + Maven
 - MySQL 8.4
 - Docker Compose로 MySQL 실행
-- 기존 `scripts/schema.sql`에 전체 DDL 작성
+- 기존 `scripts/V1__initial_schema.sql`에 전체 DDL 작성
 - `scripts/data_init.sql`에 목데이터 작성
 - MySQL 데이터는 Docker 볼륨 `mysql-data`에 저장
 
@@ -22,7 +22,7 @@ Docker Compose 실행
        ↓
 MySQL 컨테이너 실행
        ↓
-schema.sql 실행
+V1__initial_schema.sql 실행
        ↓
 data_init.sql 실행
        ↓
@@ -31,7 +31,7 @@ Spring Boot 실행
 
 다만 Docker의 초기화 SQL은 **MySQL 데이터 디렉터리가 비어 있을 때만 실행돼.**
 
-그래서 테이블 구조가 변경되더라도 기존 볼륨이 존재하면 `schema.sql`이 다시 실행되지 않아.
+그래서 테이블 구조가 변경되더라도 기존 볼륨이 존재하면 `V1__initial_schema.sql`이 다시 실행되지 않아.
 
 Flyway를 도입하면 다음과 같이 바뀌어.
 
@@ -68,7 +68,7 @@ services:
 
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./scripts/V1__initial_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
       - ./scripts/data_init.sql:/docker-entrypoint-initdb.d/02_data_init.sql:ro
 
 volumes:
@@ -131,7 +131,7 @@ Spring Boot의 의존성 관리를 사용하고 있다면 일반적으로 별도
 
 # 4. 마이그레이션 폴더 생성
 
-기존 `scripts/schema.sql`을 다음 위치로 옮겨서 최초 마이그레이션 파일을 만들어.
+기존 `scripts/V1__initial_schema.sql`을 다음 위치로 옮겨서 최초 마이그레이션 파일을 만들어.
 
 ```text
 server-spring/
@@ -175,7 +175,7 @@ V4__add_mission_column.sql
 
 # 5. V1__initial_schema.sql 수정
 
-기존 `schema.sql` 전체를 복사하되, 아래 부분은 제거해.
+기존 `V1__initial_schema.sql` 전체를 복사하되, 아래 부분은 제거해.
 
 ```sql
 DROP DATABASE IF EXISTS tour;
@@ -256,7 +256,7 @@ Flyway를 사용할 때는 Hibernate의 `update`와 함께 스키마를 변경�
 
 여기가 가장 중요해.
 
-현재 네 Docker MySQL에는 기존 `schema.sql`을 통해 생성된 테이블과 목데이터가 있을 가능성이 높잖아.
+현재 네 Docker MySQL에는 기존 `V1__initial_schema.sql`을 통해 생성된 테이블과 목데이터가 있을 가능성이 높잖아.
 
 이 상태에서 Flyway를 처음 실행하면 기존 스키마가 존재하는데 마이그레이션 이력이 없는 상태라 오류가 발생할 수 있어.
 
@@ -456,6 +456,6 @@ ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE';
 6. JPA가 DB 구조 검증
 ```
 
-**네 프로젝트에서 가장 중요한 변화는 앞으로 `schema.sql` 전체를 계속 수정해서 재실행하는 게 아니라, `V1 → V2 → V3`처럼 변경 사항을 누적 관리한다는 점이야.**
+**네 프로젝트에서 가장 중요한 변화는 앞으로 `V1__initial_schema.sql` 전체를 계속 수정해서 재실행하는 게 아니라, `V1 → V2 → V3`처럼 변경 사항을 누적 관리한다는 점이야.**
 
 이렇게 하면 나중에 Azure MySQL에 배포할 때도 운영 DB의 데이터를 삭제하지 않고 필요한 변경 사항만 적용할 수 있어. 다만 MySQL DDL은 일반적으로 트랜잭션으로 완전히 롤백되지 않으므로, 운영 적용 전에는 백업과 테스트가 필요해.
