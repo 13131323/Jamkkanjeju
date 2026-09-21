@@ -2,10 +2,10 @@
 erDiagram
 USER {
 	bigint id PK "NOT NULL"
-	bigint onboarding_result_id FK "NULL"
+	bigint onboarding_result_id FK "NOT NULL"
 	varchar_20 nickname
-	int point "NOT NULL, DEFAULT: 0"
-	int target_step "NOT NULL, DEFAULT: 10000"
+	int point "NOT NULL, DEFAULT: 0, CHECK: >= 0"
+	int target_step "NOT NULL, DEFAULT: 10000, CHECK: >= 0"
 	char_64 access_token_hash UK "NOT NULL"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -65,7 +65,7 @@ ONBOARDING_RESULT {
 	bigint id PK "NOT NULL"
 	varchar_20 user_type "NOT NULL"
 	varchar_200 type_description "NOT NULL"
-	json hashtags "NOT NULL, json: string[]"
+	json hashtags "NOT NULL, CHECK: string[]"
 	varchar_500 profile_img_url "NOT NULL"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -83,7 +83,7 @@ STEP_REWARD {
 	bigint user_id PK, FK "NOT NULL"
 	date reward_date PK "NOT NULL"
 	datetime rewarded_at "NOT NULL"
-	int steps_count "NOT NULL"
+	int steps_count "NOT NULL, CHECK: >= 0"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -93,7 +93,7 @@ MISSION_TYPE {
 	varchar_50 type "NOT NULL, Enum: CULTURE, COOPERATIVE, TREASURE"
 	varchar_50 title "NOT NULL"
 	varchar_200 description "NOT NULL"
-	json steps "NOT NULL, json: {step: int, step_title: string, description: string}"
+	json steps "NOT NULL, CHECK: {step: int, step_title: string, description: string}[]"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	
@@ -113,9 +113,9 @@ LOCATION {
 	varchar_100 title "NOT NULL"
 	varchar_255 address "NOT NULL"
 	varchar_20 category "NOT NULL"
-	int radius "NOT NULL"
-	double latitude "NOT NULL"
-	double longitude "NOT NULL"
+	int radius "NOT NULL, CHECK: >= 0"
+	double latitude "NOT NULL, CHECK: -90 ~ 90"
+	double longitude "NOT NULL, CHECK: -180 ~ 180"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	
@@ -123,17 +123,20 @@ LOCATION {
 }
 
 VISITED_LOCATION {
-	bigint user_id PK, FK "NOT NULL"
-	bigint location_id PK, FK "NOT NULL"
+	bigint id PK "NOT NULL"
+	bigint user_id FK "NOT NULL"
+	bigint location_id FK "NOT NULL"
 	datetime last_visited_at "NOT NULL"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+
+	UNIQUE(user_id, location_id)
 }
 
 COUPON {
    	bigint id PK "NOT NULL"
    	bigint location_id FK
-   	int coupon_price "NOT NULL"
+    int coupon_price "NOT NULL, CHECK: >= 0"
    	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -149,8 +152,8 @@ ACQUIRED_COUPON {
 GPS {
 	bigint id PK "NOT NULL"
 	bigint user_id FK "NOT NULL"
-	double latitude "NOT NULL"
-	double longitude "NOT NULL"
+	double latitude "NOT NULL, CHECK: -90 ~ 90"
+	double longitude "NOT NULL, CHECK: -180 ~ 180"
 	datetime saved_at "NOT NULL"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -160,7 +163,7 @@ CULTURE_MISSION {
 	bigint mission_id PK, FK "NOT NULL"
 	varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
 	bigint ar_character_id FK
-	int point
+	int point "CHECK: >= 0"
 	bigint coupon_id FK
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -168,13 +171,16 @@ CULTURE_MISSION {
 
 CULTURE_MISSION_QUIZ {
     bigint culture_mission_id PK, FK "NOT NULL"
-    int quiz_index PK "NOT NULL"
+    int quiz_index PK "NOT NULL, CHECK: >= 0"
     varchar_500 img_url
     varchar_500 question "NOT NULL"
-    json options "json: string[]"
+    json options "CHECK: string[]"
     varchar_500 answer "NOT NULL"
     varchar_500 hint
     varchar_500 explanation
+	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+
 }
 
 CULTURE_MISSION_REWARD_STATUS {
@@ -192,8 +198,8 @@ CULTURE_MISSION_PROGRESS {
 	bigint culture_mission_id FK "NOT NULL"
 	bigint user_id FK "NOT NULL"
 	varchar_20 mission_status "NOT NULL, Enum: IN_PROGRESS, COMPLETED"
-	int current_quiz_index "NOT NULL, DEFAULT: 1"
-	int correct_count "NOT NULL, DEFAULT: 0"
+	int current_quiz_index "NOT NULL, DEFAULT: 1, CHECK: >= 0"
+	int correct_count "NOT NULL, DEFAULT: 0, CHECK: >= 0"
 	datetime last_completed_at
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -206,7 +212,7 @@ COOPERATIVE_MISSION {
 	bigint location_id FK
 	varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
 	bigint ar_character_id FK
-	int point
+	int point "CHECK: >= 0"
 	bigint coupon_id FK
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -239,7 +245,7 @@ COOPERATIVE_ROLE_CARD {
 	bigint id PK "NOT NULL"
 	varchar_20 role_name "NOT NULL"
 	varchar_200 role_description "NOT NULL"
-	json location_to_find "NOT NULL, json: string[]"
+	json location_to_find "NOT NULL, CHECK: string[]"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -270,10 +276,10 @@ COOPERATIVE_MISSION_ROLE_PROGRESS {
 TREASURE_MISSION {
 	bigint mission_id PK, FK "NOT NULL"
 	bigint location_id FK
-	int item_total_count "NOT NULL"
+	int item_total_count "NOT NULL, CHECK: >= 0"
 	varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
 	bigint ar_character_id FK
-	int point
+	int point "CHECK: >= 0"
 	bigint coupon_id FK
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -293,7 +299,7 @@ TREASURE_MISSION_PROGRESS {
     bigint id PK "NOT NULL"
 	bigint treasure_mission_id FK "NOT NULL"
 	bigint user_id FK "NOT NULL"
-	int found_item_count "NOT NULL, DEFAULT: 0"
+	int found_item_count "NOT NULL, DEFAULT: 0, CHECK: >= 0"
 	varchar_20 mission_status "NOT NULL, Enum: IN_PROGRESS, COMPLETED"
 	datetime completed_at
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -304,7 +310,7 @@ TREASURE_MISSION_PROGRESS {
 
 TREASURE_MISSION_PROGRESS_ITEM {
     bigint treasure_mission_progress_id PK, FK "NOT NULL"
-    int item_index PK "NOT NULL"
+    int item_index PK "NOT NULL, CHECK: >= 0"
     varchar_20 item_status "NOT NULL, Enum: UNFOUND, FOUND"
     datetime found_at
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
@@ -312,20 +318,35 @@ TREASURE_MISSION_PROGRESS_ITEM {
 }
 
 GUESTBOOK {
-	bigint id PK "NOT NULL"
-	bigint user_id FK "NOT NULL"
-	bigint location_id FK
-	date visited_at "NOT NULL"
-	varchar_500 content_img_url
-	varchar_500 content_writing
-	varchar_500 content_audio_url
-	varchar_50 audio_title
-	varchar_20 content_weather
-	decimal(4,1) content_temperature_celsius
-	varchar_20 content_color_code
-	datetime saved_at "NOT NULL"
+    bigint id PK
+    bigint user_id FK
+    date visited_at "NOT NULL"
+    varchar_500 content_img_url
+    varchar_500 content_writing
+    varchar_500 content_audio_url
+    varchar_50 audio_title
+    varchar_20 content_weather
+    decimal(4,1) content_temperature_celsius
+    varchar_20 content_color_code
+    datetime saved_at "NOT NULL"
+    varchar_20 status "NOT NULL"
+	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+}
+
+LOCATION_GUESTBOOK  {
+    bigint guestbook_id PK, FK "NOT NULL"
+    bigint visited_location_id FK
     bigint mission_id FK
-	varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
+	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+}
+
+ROAD_GUESTBOOK {
+    bigint guestbook_id PK, FK "NOT NULL"
+    varchar_100 location_alias "NOT NULL"
+    double latitude "NOT NULL, CHECK: -90 ~ 90"
+    double longitude "NOT NULL, CHECK: -180 ~ 180"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -336,37 +357,11 @@ GUESTBOOK_LIKE {
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
 
-ROAD_GUESTBOOK {
-	bigint id PK "NOT NULL"
-	bigint user_id FK "NOT NULL"
-	varchar_100 location_alias "NOT NULL"
-	date visited_at "NOT NULL"
-	varchar_500 content_img_url
-	varchar_500 content_writing
-	varchar_500 content_audio_url
-	varchar_50 audio_title
-	varchar_20 content_weather
-	decimal(4,1) content_temperature_celsius
-	varchar_20 content_color_code
-	double latitude "NOT NULL"
-	double longitude "NOT NULL"
-	datetime saved_at "NOT NULL"
-	varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
-	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-}
-
-ROAD_GUESTBOOK_LIKE {
-    bigint road_guestbook_id PK, FK "NOT NULL"
-    bigint user_id PK, FK "NOT NULL"
-    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-}
-
 ACQUIRED_AR_CHARACTER {
     bigint id PK "NOT NULL"
     bigint ar_character_id FK "NOT NULL"
     bigint user_id FK "NOT NULL"
-    bigint mission_id FK "NULL"
+    bigint mission_id FK
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -381,7 +376,7 @@ AR_CHARACTER {
 	varchar_200 acquire_condition "NOT NULL"
 	varchar_500 img_url "NOT NULL"
 	varchar_20 representative_color "NOT NULL"
-	json hashtags "NOT NULL, json: string[]"
+	json hashtags "NOT NULL, CHECK: string[]"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -424,10 +419,8 @@ USER ||--o{ COOPERATIVE_MISSION_REWARD_STATUS : receives
 USER ||--o{ COOPERATIVE_MISSION_PARTICIPANT : joins
 USER ||--o{ TREASURE_MISSION_REWARD_STATUS : receives
 USER ||--o{ TREASURE_MISSION_PROGRESS : progresses
-USER ||--o{ GUESTBOOK : writes
-USER ||--o{ ROAD_GUESTBOOK : writes
+USER o|--o{ GUESTBOOK : writes
 USER ||--o{ GUESTBOOK_LIKE : likes
-USER ||--o{ ROAD_GUESTBOOK_LIKE : likes
 USER ||--o{ ACQUIRED_AR_CHARACTER : acquires
 USER ||--o{ TRAVEL_ENDING_CONTENT : owns
 USER ||--o{ PICTURE_WITH_CHARACTER : has
@@ -435,15 +428,16 @@ USER ||--o{ ACQUIRED_COUPON : acquires
 
 LOCATION ||--o{ VISITED_LOCATION : visited_by
 LOCATION o|--o{ COUPON : provides
-LOCATION o|--o{ GUESTBOOK : contains
 LOCATION o|--o{ COOPERATIVE_MISSION : hosts
 LOCATION o|--o{ TREASURE_MISSION : hosts
+
+VISITED_LOCATION o|--o{ LOCATION_GUESTBOOK : referenced_by
 
 MISSION_TYPE ||--o{ MISSION : categorizes
 MISSION ||--o| CULTURE_MISSION : has_detail
 MISSION ||--o| COOPERATIVE_MISSION : has_detail
 MISSION ||--o| TREASURE_MISSION : has_detail
-MISSION o|--o{ GUESTBOOK : relates_to
+MISSION o|--o{ LOCATION_GUESTBOOK : relates_to
 MISSION o|--o{ ACQUIRED_AR_CHARACTER : rewards
 
 AR_CHARACTER o|--o{ CULTURE_MISSION : rewards
@@ -470,6 +464,7 @@ TREASURE_MISSION ||--o{ TREASURE_MISSION_REWARD_STATUS : tracks
 TREASURE_MISSION ||--o{ TREASURE_MISSION_PROGRESS : tracks
 TREASURE_MISSION_PROGRESS ||--|{ TREASURE_MISSION_PROGRESS_ITEM : contains
 
+GUESTBOOK ||--o| LOCATION_GUESTBOOK : has_detail
+GUESTBOOK ||--o| ROAD_GUESTBOOK : has_detail
 GUESTBOOK ||--o{ GUESTBOOK_LIKE : liked_by
-ROAD_GUESTBOOK ||--o{ ROAD_GUESTBOOK_LIKE : liked_by
 ```

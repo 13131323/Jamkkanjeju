@@ -1,14 +1,3 @@
--- db 세션 관련 문자열 인코딩 utf8로 설정
-SET NAMES utf8mb4;
-
-DROP DATABASE IF EXISTS tour;
-
-CREATE DATABASE tour
-CHARACTER SET utf8mb4
-COLLATE utf8mb4_0900_ai_ci;
-
-USE tour;
-
 -- ---------------------------------------------------------------------
 -- 온보딩 / 사용자
 -- ---------------------------------------------------------------------
@@ -21,12 +10,14 @@ CREATE TABLE `onboarding_result` (
     `profile_img_url`  VARCHAR(500) NOT NULL,
     `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    CONSTRAINT `chk_onboarding_result_hashtags_schema`
+        CHECK (JSON_SCHEMA_VALID('{"type":"array","items":{"type":"string"}}', `hashtags`))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `user` (
     `id`                   BIGINT      NOT NULL AUTO_INCREMENT,
-    `onboarding_result_id` BIGINT      NULL,
+    `onboarding_result_id` BIGINT      NOT NULL,
     `nickname`             VARCHAR(20) NULL,
     `point`                INT         NOT NULL DEFAULT 0,
     `target_step`          INT         NOT NULL DEFAULT 10000,
@@ -35,6 +26,10 @@ CREATE TABLE `user` (
     `updated_at`           DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_access_token_hash` (`access_token_hash`),
+    CONSTRAINT `chk_user_point_nonnegative`
+        CHECK (`point` >= 0),
+    CONSTRAINT `chk_user_target_step_nonnegative`
+        CHECK (`target_step` >= 0),
     CONSTRAINT `fk_user_onboarding_result`
         FOREIGN KEY (`onboarding_result_id`) REFERENCES `onboarding_result` (`id`)
         ON DELETE RESTRICT
@@ -129,6 +124,8 @@ CREATE TABLE `step_reward` (
     `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`user_id`, `reward_date`),
+    CONSTRAINT `chk_step_reward_steps_count_nonnegative`
+        CHECK (`steps_count` >= 0),
     CONSTRAINT `fk_step_reward_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE CASCADE
@@ -143,6 +140,10 @@ CREATE TABLE `gps` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    CONSTRAINT `chk_gps_latitude_range`
+        CHECK (`latitude` BETWEEN -90 AND 90),
+    CONSTRAINT `chk_gps_longitude_range`
+        CHECK (`longitude` BETWEEN -180 AND 180),
     CONSTRAINT `fk_gps_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE CASCADE
@@ -164,16 +165,24 @@ CREATE TABLE `location` (
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_location_content_id` (`content_id`)
+    UNIQUE KEY `uk_location_content_id` (`content_id`),
+    CONSTRAINT `chk_location_radius_nonnegative`
+        CHECK (`radius` >= 0),
+    CONSTRAINT `chk_location_latitude_range`
+        CHECK (`latitude` BETWEEN -90 AND 90),
+    CONSTRAINT `chk_location_longitude_range`
+        CHECK (`longitude` BETWEEN -180 AND 180)
 ) ENGINE = InnoDB;
 
 CREATE TABLE `visited_location` (
+    `id`              BIGINT   NOT NULL AUTO_INCREMENT,
     `user_id`         BIGINT   NOT NULL,
     `location_id`     BIGINT   NOT NULL,
     `last_visited_at` DATETIME NOT NULL,
     `created_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`user_id`, `location_id`),
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_visited_location_user_location` (`user_id`, `location_id`),
     CONSTRAINT `fk_visited_location_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE CASCADE,
@@ -189,6 +198,8 @@ CREATE TABLE `coupon` (
     `created_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    CONSTRAINT `chk_coupon_price_nonnegative`
+        CHECK (`coupon_price` >= 0),
     CONSTRAINT `fk_coupon_location`
         FOREIGN KEY (`location_id`) REFERENCES `location` (`id`)
         ON DELETE SET NULL
@@ -220,7 +231,9 @@ CREATE TABLE `ar_character` (
     `hashtags`             JSON         NOT NULL COMMENT 'string[]',
     `created_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    CONSTRAINT `chk_ar_character_hashtags_schema`
+        CHECK (JSON_SCHEMA_VALID('{"type":"array","items":{"type":"string"}}', `hashtags`))
 ) ENGINE = InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -236,7 +249,11 @@ CREATE TABLE `mission_type` (
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_mission_type_type` (`type`)
+    UNIQUE KEY `uk_mission_type_type` (`type`),
+    CONSTRAINT `chk_mission_type_type_enum`
+        CHECK (`type` IN ('CULTURE', 'COOPERATIVE', 'TREASURE')),
+    CONSTRAINT `chk_mission_type_steps_schema`
+        CHECK (JSON_SCHEMA_VALID('{"type":"array","items":{"type":"object","required":["step","step_title","description"],"properties":{"step":{"type":"integer"},"step_title":{"type":"string"},"description":{"type":"string"}},"additionalProperties":false}}', `steps`))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `mission` (
@@ -263,6 +280,10 @@ CREATE TABLE `culture_mission` (
     `created_at`      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`mission_id`),
+    CONSTRAINT `chk_culture_mission_status_enum`
+        CHECK (`status` IN ('ACTIVE', 'INACTIVE')),
+    CONSTRAINT `chk_culture_mission_point_nonnegative`
+        CHECK (`point` IS NULL OR `point` >= 0),
     CONSTRAINT `fk_culture_mission_mission`
         FOREIGN KEY (`mission_id`) REFERENCES `mission` (`id`)
         ON DELETE CASCADE,
@@ -283,7 +304,13 @@ CREATE TABLE `culture_mission_quiz` (
     `answer`             VARCHAR(500) NOT NULL,
     `hint`               VARCHAR(500) NULL,
     `explanation`        VARCHAR(500) NULL,
+    `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`culture_mission_id`, `quiz_index`),
+    CONSTRAINT `chk_culture_mission_quiz_index_nonnegative`
+        CHECK (`quiz_index` >= 0),
+    CONSTRAINT `chk_culture_mission_quiz_options_schema`
+        CHECK (`options` IS NULL OR JSON_SCHEMA_VALID('{"type":"array","items":{"type":"string"}}', `options`)),
     CONSTRAINT `fk_culture_mission_quiz_culture_mission`
         FOREIGN KEY (`culture_mission_id`) REFERENCES `culture_mission` (`mission_id`)
         ON DELETE CASCADE
@@ -318,6 +345,12 @@ CREATE TABLE `culture_mission_progress` (
     `updated_at`         DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_culture_mission_progress_mission_user` (`culture_mission_id`, `user_id`),
+    CONSTRAINT `chk_culture_mission_progress_status_enum`
+        CHECK (`mission_status` IN ('IN_PROGRESS', 'COMPLETED')),
+    CONSTRAINT `chk_culture_mission_progress_quiz_index_nonnegative`
+        CHECK (`current_quiz_index` >= 0),
+    CONSTRAINT `chk_culture_mission_progress_correct_count_nonnegative`
+        CHECK (`correct_count` >= 0),
     CONSTRAINT `fk_culture_mission_progress_culture_mission`
         FOREIGN KEY (`culture_mission_id`) REFERENCES `culture_mission` (`mission_id`)
         ON DELETE CASCADE,
@@ -340,6 +373,10 @@ CREATE TABLE `cooperative_mission` (
     `created_at`      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`mission_id`),
+    CONSTRAINT `chk_cooperative_mission_status_enum`
+        CHECK (`status` IN ('ACTIVE', 'INACTIVE')),
+    CONSTRAINT `chk_cooperative_mission_point_nonnegative`
+        CHECK (`point` IS NULL OR `point` >= 0),
     CONSTRAINT `fk_cooperative_mission_mission`
         FOREIGN KEY (`mission_id`) REFERENCES `mission` (`id`)
         ON DELETE CASCADE,
@@ -382,6 +419,10 @@ CREATE TABLE `cooperative_mission_progress` (
     `updated_at`             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_cooperative_mission_progress_team_token` (`team_token`),
+    CONSTRAINT `chk_cooperative_mission_progress_current_step_enum`
+        CHECK (`current_step` IN (1, 2, 3)),
+    CONSTRAINT `chk_cooperative_mission_progress_status_enum`
+        CHECK (`mission_status` IN ('IN_PROGRESS', 'COMPLETED')),
     CONSTRAINT `fk_cooperative_mission_progress_cooperative_mission`
         FOREIGN KEY (`cooperative_mission_id`) REFERENCES `cooperative_mission` (`mission_id`)
         ON DELETE CASCADE
@@ -394,7 +435,9 @@ CREATE TABLE `cooperative_role_card` (
     `location_to_find` JSON         NOT NULL COMMENT 'string[]',
     `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    CONSTRAINT `chk_cooperative_role_card_location_schema`
+        CHECK (JSON_SCHEMA_VALID('{"type":"array","items":{"type":"string"}}', `location_to_find`))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `cooperative_mission_participant` (
@@ -408,6 +451,10 @@ CREATE TABLE `cooperative_mission_participant` (
     `updated_at`                      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_cooperative_mission_participant_progress_user` (`cooperative_mission_progress_id`, `user_id`),
+    CONSTRAINT `chk_cooperative_mission_participant_status_enum`
+        CHECK (`participant_status` IN ('PENDING', 'ACCEPTED')),
+    CONSTRAINT `chk_cooperative_mission_participant_role_enum`
+        CHECK (`participant_role` IN ('HOST', 'MEMBER')),
     CONSTRAINT `fk_cooperative_mission_participant_progress`
         FOREIGN KEY (`cooperative_mission_progress_id`) REFERENCES `cooperative_mission_progress` (`id`)
         ON DELETE CASCADE,
@@ -425,6 +472,8 @@ CREATE TABLE `cooperative_mission_role_progress` (
     `created_at`                         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`                         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`cooperative_mission_participant_id`, `cooperative_role_card_id`),
+    CONSTRAINT `chk_cooperative_mission_role_progress_status_enum`
+        CHECK (`progress_status` IN ('IN_PROGRESS', 'COMPLETED')),
     CONSTRAINT `fk_cooperative_mission_role_progress_participant`
         FOREIGN KEY (`cooperative_mission_participant_id`) REFERENCES `cooperative_mission_participant` (`id`)
         ON DELETE CASCADE,
@@ -448,6 +497,12 @@ CREATE TABLE `treasure_mission` (
     `created_at`       DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`       DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`mission_id`),
+    CONSTRAINT `chk_treasure_mission_item_total_count_nonnegative`
+        CHECK (`item_total_count` >= 0),
+    CONSTRAINT `chk_treasure_mission_status_enum`
+        CHECK (`status` IN ('ACTIVE', 'INACTIVE')),
+    CONSTRAINT `chk_treasure_mission_point_nonnegative`
+        CHECK (`point` IS NULL OR `point` >= 0),
     CONSTRAINT `fk_treasure_mission_mission`
         FOREIGN KEY (`mission_id`) REFERENCES `mission` (`id`)
         ON DELETE CASCADE,
@@ -490,6 +545,10 @@ CREATE TABLE `treasure_mission_progress` (
     `updated_at`          DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_treasure_mission_progress_mission_user` (`treasure_mission_id`, `user_id`),
+    CONSTRAINT `chk_treasure_mission_progress_found_count_nonnegative`
+        CHECK (`found_item_count` >= 0),
+    CONSTRAINT `chk_treasure_mission_progress_status_enum`
+        CHECK (`mission_status` IN ('IN_PROGRESS', 'COMPLETED')),
     CONSTRAINT `fk_treasure_mission_progress_treasure_mission`
         FOREIGN KEY (`treasure_mission_id`) REFERENCES `treasure_mission` (`mission_id`)
         ON DELETE CASCADE,
@@ -506,6 +565,10 @@ CREATE TABLE `treasure_mission_progress_item` (
     `created_at`                   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`                   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`treasure_mission_progress_id`, `item_index`),
+    CONSTRAINT `chk_treasure_mission_progress_item_index_nonnegative`
+        CHECK (`item_index` >= 0),
+    CONSTRAINT `chk_treasure_mission_progress_item_status_enum`
+        CHECK (`item_status` IN ('UNFOUND', 'FOUND')),
     CONSTRAINT `fk_treasure_mission_progress_item_progress`
         FOREIGN KEY (`treasure_mission_progress_id`) REFERENCES `treasure_mission_progress` (`id`)
         ON DELETE CASCADE
@@ -517,8 +580,7 @@ CREATE TABLE `treasure_mission_progress_item` (
 
 CREATE TABLE `guestbook` (
     `id`                          BIGINT       NOT NULL AUTO_INCREMENT,
-    `user_id`                     BIGINT       NOT NULL,
-    `location_id`                 BIGINT       NULL,
+    `user_id`                     BIGINT       NULL,
     `visited_at`                  DATE         NOT NULL,
     `content_img_url`             VARCHAR(500) NULL,
     `content_writing`             VARCHAR(500) NULL,
@@ -528,21 +590,64 @@ CREATE TABLE `guestbook` (
     `content_temperature_celsius` DECIMAL(4,1) NULL,
     `content_color_code`          VARCHAR(20)  NULL,
     `saved_at`                    DATETIME     NOT NULL,
-    `mission_id`                  BIGINT       NULL,
-    `status`                      VARCHAR(20)  NOT NULL COMMENT 'ACTIVE, INACTIVE',
+    `status`                      VARCHAR(20)  NOT NULL,
     `created_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_guestbook_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+        ON DELETE SET NULL
+) ENGINE = InnoDB;
+
+CREATE TABLE `location_guestbook` (
+    `guestbook_id`        BIGINT   NOT NULL,
+    `visited_location_id` BIGINT   NULL,
+    `mission_id`          BIGINT   NULL,
+    `created_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`guestbook_id`),
+    CONSTRAINT `fk_location_guestbook_guestbook`
+        FOREIGN KEY (`guestbook_id`) REFERENCES `guestbook` (`id`)
         ON DELETE CASCADE,
-    CONSTRAINT `fk_guestbook_location`
-        FOREIGN KEY (`location_id`) REFERENCES `location` (`id`)
+    CONSTRAINT `fk_location_guestbook_visited_location`
+        FOREIGN KEY (`visited_location_id`) REFERENCES `visited_location` (`id`)
         ON DELETE SET NULL,
-    CONSTRAINT `fk_guestbook_mission`
+    CONSTRAINT `fk_location_guestbook_mission`
         FOREIGN KEY (`mission_id`) REFERENCES `mission` (`id`)
         ON DELETE SET NULL
 ) ENGINE = InnoDB;
+
+CREATE TABLE `road_guestbook` (
+    `guestbook_id`   BIGINT       NOT NULL,
+    `location_alias` VARCHAR(100) NOT NULL,
+    `latitude`       DOUBLE       NOT NULL,
+    `longitude`      DOUBLE       NOT NULL,
+    `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`guestbook_id`),
+    CONSTRAINT `chk_road_guestbook_latitude_range`
+        CHECK (`latitude` BETWEEN -90 AND 90),
+    CONSTRAINT `chk_road_guestbook_longitude_range`
+        CHECK (`longitude` BETWEEN -180 AND 180),
+    CONSTRAINT `fk_road_guestbook_guestbook`
+        FOREIGN KEY (`guestbook_id`) REFERENCES `guestbook` (`id`)
+        ON DELETE CASCADE
+) ENGINE = InnoDB;
+
+-- 미션/방명록 하위 테이블의 수정이 발생하면 guestbook.updated_at을 현재 시간으로 갱신하는 트리거
+CREATE TRIGGER `trg_location_guestbook_after_update`
+    AFTER UPDATE ON `location_guestbook`
+    FOR EACH ROW
+    UPDATE `guestbook`
+       SET `updated_at` = CURRENT_TIMESTAMP
+     WHERE `id` = NEW.`guestbook_id`;
+
+CREATE TRIGGER `trg_road_guestbook_after_update`
+    AFTER UPDATE ON `road_guestbook`
+    FOR EACH ROW
+    UPDATE `guestbook`
+       SET `updated_at` = CURRENT_TIMESTAMP
+     WHERE `id` = NEW.`guestbook_id`;
 
 CREATE TABLE `guestbook_like` (
     `guestbook_id` BIGINT   NOT NULL,
@@ -553,43 +658,6 @@ CREATE TABLE `guestbook_like` (
         FOREIGN KEY (`guestbook_id`) REFERENCES `guestbook` (`id`)
         ON DELETE CASCADE,
     CONSTRAINT `fk_guestbook_like_user`
-        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE CASCADE
-) ENGINE = InnoDB;
-
-CREATE TABLE `road_guestbook` (
-    `id`                          BIGINT       NOT NULL AUTO_INCREMENT,
-    `user_id`                     BIGINT       NOT NULL,
-    `location_alias`              VARCHAR(100) NOT NULL,
-    `visited_at`                  DATE         NOT NULL,
-    `content_img_url`             VARCHAR(500) NULL,
-    `content_writing`             VARCHAR(500) NULL,
-    `content_audio_url`           VARCHAR(500) NULL,
-    `audio_title`                 VARCHAR(50)  NULL,
-    `content_weather`             VARCHAR(20)  NULL,
-    `content_temperature_celsius` DECIMAL(4,1) NULL,
-    `content_color_code`          VARCHAR(20)  NULL,
-    `latitude`                    DOUBLE       NOT NULL,
-    `longitude`                   DOUBLE       NOT NULL,
-    `saved_at`                    DATETIME     NOT NULL,
-    `status`                      VARCHAR(20)  NOT NULL COMMENT 'ACTIVE, INACTIVE',
-    `created_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`id`),
-    CONSTRAINT `fk_road_guestbook_user`
-        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE CASCADE
-) ENGINE = InnoDB;
-
-CREATE TABLE `road_guestbook_like` (
-    `road_guestbook_id` BIGINT   NOT NULL,
-    `user_id`           BIGINT   NOT NULL,
-    `created_at`        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (`road_guestbook_id`, `user_id`),
-    CONSTRAINT `fk_road_guestbook_like_road_guestbook`
-        FOREIGN KEY (`road_guestbook_id`) REFERENCES `road_guestbook` (`id`)
-        ON DELETE CASCADE,
-    CONSTRAINT `fk_road_guestbook_like_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE CASCADE
 ) ENGINE = InnoDB;
@@ -628,7 +696,7 @@ CREATE TABLE `travel_ending_content` (
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_travel_ending_content_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE SET NULL
+        ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 CREATE TABLE `picture_with_character` (
@@ -641,7 +709,5 @@ CREATE TABLE `picture_with_character` (
     PRIMARY KEY (`id`),
     CONSTRAINT `fk_picture_with_character_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE SET NULL
+        ON DELETE CASCADE
 ) ENGINE = InnoDB;
-
-방명록 user null 허용이랑 visited lcoation을 참조해야하는거아닌지????
