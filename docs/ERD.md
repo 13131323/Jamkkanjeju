@@ -15,7 +15,7 @@ USER {
 
 EXPECTATION {
     bigint id PK "NOT NULL"
-    varchar_20 expectation_type "NOT NULL"
+    varchar_20 expectation_type "NOT NULL, Enum: PHOTO, LOCAL, NATURE, CULTURE, CAFE, WALKING"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -24,7 +24,7 @@ EXPECTATION {
 
 TRANSPORTATION {
     bigint id PK "NOT NULL"
-    varchar_20 transportation_type "NOT NULL"
+    varchar_20 transportation_type "NOT NULL, Enum: WALK, BUS, CAR, BICYCLE"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -33,7 +33,7 @@ TRANSPORTATION {
 
 TRAVEL_STYLE {
     bigint id PK "NOT NULL"
-    varchar_20 travel_style_type "NOT NULL"
+    varchar_20 travel_style_type "NOT NULL, Enum: RIGHT_HERE, NEAR_AROUND, NEAR_DESTINATION"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
