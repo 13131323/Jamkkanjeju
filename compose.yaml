@@ -32,11 +32,14 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
+      MYSQL_HOST: ${MYSQL_HOST:-mysql}
+      MYSQL_PORT: ${MYSQL_PORT:-3306}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-tour}
       MYSQL_USER: ${MYSQL_USER:-tour}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-tour_password}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ACCESS_TOKEN_EXPIRATION: ${JWT_ACCESS_TOKEN_EXPIRATION:-30m}
+      JWT_REFRESH_TOKEN_EXPIRATION: ${JWT_REFRESH_TOKEN_EXPIRATION:-14d}
       TZ: Asia/Seoul
     ports:
       - "${SERVER_PORT:-8080}:8080"

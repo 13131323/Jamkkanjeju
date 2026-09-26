@@ -32,6 +32,13 @@ spring:
     init:
       mode: never
 
+app:
+  jwt:
+    # 32바이트 이상의 키를 Base64로 인코딩한 값을 환경변수로 주입한다.
+    secret-key: ${JWT_SECRET_KEY}
+    access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
+    refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
+
 management:
   endpoint:
     health:
