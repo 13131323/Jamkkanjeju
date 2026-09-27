@@ -18,7 +18,7 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
+    @Bean   
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/api/v2/auth/login",
+                                "/error",
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
