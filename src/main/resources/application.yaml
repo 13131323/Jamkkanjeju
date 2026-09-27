@@ -39,6 +39,10 @@ app:
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
     refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
+springdoc:
+  swagger-ui:
+    path: /docs   # http://localhost:8080/docs 로 Swagger UI 접속
+
 management:
   endpoint:
     health:

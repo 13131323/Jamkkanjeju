@@ -57,4 +57,73 @@ class LoginRequestValidationTest {
 
         assertThat(validator.validateProperty(request, "password")).isNotEmpty();
     }
+
+    @Test
+    void 숫자만으로_된_비밀번호도_허용한다() {
+        LoginRequest request = new LoginRequest("user@example.com", "12345678", null);
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 비밀번호는_공백제거나_대소문자_변환_없이_그대로_둔다() {
+        LoginRequest request = new LoginRequest("user@example.com", "PassWord123!", null);
+
+        assertThat(request.password()).isEqualTo("PassWord123!");
+    }
+
+    @Test
+    void 비밀번호가_없으면_거부한다() {
+        LoginRequest request = new LoginRequest("user@example.com", null, null);
+
+        assertThat(validator.validateProperty(request, "password")).isNotEmpty();
+    }
+
+    @Test
+    void 이메일은_앞뒤_공백을_제거하고_소문자로_정규화한다() {
+        LoginRequest request = new LoginRequest("  User@Example.COM  ", "password123!", null);
+
+        assertThat(request.email()).isEqualTo("user@example.com");
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 이메일이_없거나_공백뿐이면_거부한다() {
+        assertThat(validator.validateProperty(new LoginRequest(null, "password123!", null), "email")).isNotEmpty();
+        assertThat(validator.validateProperty(new LoginRequest("   ", "password123!", null), "email")).isNotEmpty();
+    }
+
+    @Test
+    void 골뱅이가_없는_이메일을_거부한다() {
+        LoginRequest request = new LoginRequest("user example.com", "password123!", null);
+
+        assertThat(validator.validateProperty(request, "email")).isNotEmpty();
+    }
+
+    @Test
+    void 도메인에_점이_없는_이메일을_거부한다() {
+        LoginRequest request = new LoginRequest("user@example", "password123!", null);
+
+        assertThat(validator.validateProperty(request, "email")).isNotEmpty();
+    }
+
+    @Test
+    void 이백오십오자를_초과한_이메일을_거부한다() {
+        LoginRequest request = new LoginRequest("a".repeat(250) + "@example.com", "password123!", null);
+
+        assertThat(validator.validateProperty(request, "email")).isNotEmpty();
+    }
+
+    @Test
+    void deviceInfo는_생략할_수_있고_255자까지_허용한다() {
+        assertThat(validator.validate(new LoginRequest("user@example.com", "password123!", null))).isEmpty();
+        assertThat(validator.validate(new LoginRequest("user@example.com", "password123!", "a".repeat(255)))).isEmpty();
+    }
+
+    @Test
+    void 이백오십오자를_초과한_deviceInfo를_거부한다() {
+        LoginRequest request = new LoginRequest("user@example.com", "password123!", "a".repeat(256));
+
+        assertThat(validator.validateProperty(request, "deviceInfo")).isNotEmpty();
+    }
 }

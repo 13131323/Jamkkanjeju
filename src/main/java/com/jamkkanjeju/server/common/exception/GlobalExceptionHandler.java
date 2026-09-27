@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,6 +36,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception exception) {
         log.debug("Invalid request: {}", exception.getMessage());
         return toResponse(CommonErrorCode.INVALID_REQUEST);
+    }
+
+    /**
+     * 메서드 보안(@PreAuthorize 등)에서 난 인증·인가 예외는 아래 Exception 핸들러가 500으로 바꾸지 않도록 다시 던진다.
+     * Spring Security의 ExceptionTranslationFilter가 받아 EntryPoint(401) / AccessDeniedHandler(403)로 응답한다.
+     */
+    @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
+    public void rethrowSecurityException(RuntimeException exception) {
+        throw exception;
     }
 
     /**

@@ -40,6 +40,10 @@ JWT_SECRET_KEY=$(openssl rand -base64 32) JWT_ACCESS_TOKEN_EXPIRATION=30m JWT_RE
 ./mvnw spring-boot:run -Dspring-boot.run.arguments=--server.port=18080
 ```
 
+Swagger UI는 앱 실행 후 `http://localhost:<포트>/docs` (`springdoc.swagger-ui.path`), OpenAPI JSON은 `/v3/api-docs` (springdoc-openapi 3.1.1).
+인증이 필요한 API는 Swagger 우측 상단 Authorize에 로그인 응답의 `accessToken`을 넣고 호출한다.
+두 경로는 `SecurityConfig`에서 permitAll이다.
+
 엔티티 매핑이 스키마와 맞는지는 같은 환경변수로 `./mvnw test`(컨텍스트 로딩 테스트)를 돌려 확인한다
 (`ddl-auto: validate`라서 매핑이 틀리면 컨텍스트 로딩이 실패한다).
 
@@ -55,14 +59,16 @@ JWT_SECRET_KEY=$(openssl rand -base64 32) JWT_ACCESS_TOKEN_EXPIRATION=30m JWT_RE
 ```
 com.jamkkanjeju.server
 ├── common
-│   ├── config        # 전역 설정 (JpaAuditingConfig, ClockConfig)
+│   ├── config        # 전역 설정 (JpaAuditingConfig, ClockConfig, OpenApiConfig)
 │   ├── exception     # ErrorCode, CommonErrorCode, BusinessException, ErrorResponse, GlobalExceptionHandler
 │   └── persistence   # BaseTimeEntity
 └── domain
     └── <도메인>       # auth, onboarding, home, map, mission, culturemission, cooperativemission,
         │             # treasurehunt, guestbook, mypage, etc
-        ├── API_SPEC.md         # 외부 API 계약 (작성 규칙은 CODEX.md)
-        ├── BUISNESS_RULE.md    # 내부 비즈니스 규칙 (철자 그대로 유지)
+        ├── docs
+        │   ├── API_SPEC.md       # 외부 API 계약 (작성 규칙은 CODEX.md)
+        │   ├── BUISNESS_RULE.md  # 내부 비즈니스 규칙 (철자 그대로 유지)
+        │   └── TEST.md           # 테스트 진행 기록 (테스트를 작성·실행했을 때)
         ├── controller  # XxxController
         ├── service     # XxxService
         ├── dto         # XxxRequest / XxxResponse (record)
@@ -72,7 +78,8 @@ com.jamkkanjeju.server
         └── config      # 도메인 전용 설정이 있을 때만 (예: auth/config/SecurityConfig, JwtConfig)
 ```
 
-- 도메인 전용 보조 컴포넌트는 역할 이름으로 하위 패키지를 만든다. (예: `auth/jwt/JwtTokenProvider`, `auth/jwt/TokenHasher`)
+- 도메인 전용 보조 컴포넌트는 역할 이름으로 하위 패키지를 만든다.
+  (예: `auth/jwt/JwtTokenProvider`, `auth/jwt/TokenHasher`, `auth/security/JwtAuthenticationFilter`)
 - 필요 없는 하위 패키지는 미리 만들지 않는다.
 
 ## 엔티티 규칙
@@ -133,7 +140,10 @@ com.jamkkanjeju.server
 - 도메인 오류 코드는 `domain/<도메인>/exception/<도메인>ErrorCode` enum이 `ErrorCode`를 구현해 정의한다.
   `code`는 enum 이름, `message`와 HTTP 상태는 `API_SPEC.md`의 오류 응답과 **문자 그대로** 일치시킨다.
 - 공통 오류(`CommonErrorCode`): `INVALID_REQUEST`(400, 검증 실패·JSON 파싱 실패·파라미터 누락/타입 오류),
-  `INTERNAL_SERVER_ERROR`(500, 처리되지 않은 예외). `GlobalExceptionHandler`가 자동 변환하므로 서비스에서 직접 던질 필요 없다.
+  `UNAUTHORIZED`(401, 토큰 없이 인증 필요 API 호출), `FORBIDDEN`(403, 권한 부족),
+  `INTERNAL_SERVER_ERROR`(500, 처리되지 않은 예외). `GlobalExceptionHandler`/시큐리티 핸들러가 자동 변환하므로 서비스에서 직접 던질 필요 없다.
+- `GlobalExceptionHandler`는 `AccessDeniedException`/`AuthenticationException`을 다시 던진다.
+  (`Exception` 핸들러가 500으로 바꾸지 않고 시큐리티의 EntryPoint/AccessDeniedHandler가 응답하도록)
 - 404/405/415 같은 Spring MVC 예외는 해당 상태 코드와 `HttpStatus` 이름을 code로 응답한다.
 
 ### 보안 / 인증
@@ -142,8 +152,32 @@ com.jamkkanjeju.server
   인증 없이 호출 가능한 API는 `requestMatchers(...).permitAll()`에 추가한다. 그 외는 모두 인증 필요.
 - JWT: 액세스 토큰(`type=access`, `role`), 리프레시 토큰(`type=refresh`, `jti`). 생성은 `JwtTokenProvider`.
 - 리프레시 토큰은 원문 대신 SHA-256 hex(`TokenHasher`)를 `refresh_token.token_hash`에 저장한다.
-- 인증 필요한 API를 처음 구현할 때 JWT 인증 필터(Authorization: Bearer 검증, `type=access` 확인)와
-  401/403 JSON 응답(EntryPoint/AccessDeniedHandler)을 추가하고 이 절을 갱신한다. — **아직 미구현**
+- JWT 인증 필터(`auth/security/JwtAuthenticationFilter`): `Authorization: Bearer <액세스 토큰>`을
+  `JwtTokenProvider.parseAccessToken`으로 검증(서명·만료·`type=access`)하고 SecurityContext에 `AuthUser(userId, role)`와
+  `ROLE_<role>` 권한을 넣는다. 빈으로 등록하지 않고 `SecurityConfig`에서 `new`로 생성한다. (빈이면 서블릿 필터로 중복 등록됨)
+  - 토큰 오류가 있어도 필터는 응답하지 않고 요청 속성에 오류 코드만 남긴다 → permitAll API는 그대로 통과.
+  - 인증 필요 API에서 인증이 없으면 `JsonAuthenticationEntryPoint`가 401: 토큰 없음 `UNAUTHORIZED`,
+    잘못된 토큰 `INVALID_TOKEN`, 만료 `EXPIRED_TOKEN` (`AuthErrorCode`). 권한 부족은 `JsonAccessDeniedHandler`가 403 `FORBIDDEN`.
+    이 4개 코드는 확정되었고, 외부 계약은 `auth/docs/API_SPEC.md`의 "공통 인증 오류", 내부 규칙은 `auth/docs/BUISNESS_RULE.md`의
+    "액세스 토큰 인증"에 있다. 인증이 필요한 API의 명세에는 이 오류를 반복하지 않고 공통 인증 오류를 참조한다.
+  - 컨트롤러에서 로그인 사용자는 `@AuthenticationPrincipal AuthUser authUser`로 받는다. 관리자 전용은 `@PreAuthorize("hasRole('ADMIN')")`.
+  - 필터는 DB에서 사용자 상태를 다시 조회하지 않는다. (정지·탈퇴 즉시 차단이 필요하면 정책을 정해 추가)
+
+## 테스트
+
+사용자가 요청할 때 작성한다. 작성·실행 후에는 도메인의 `docs/TEST.md`에 진행 방식과 결과를 기록한다.
+
+`TEST.md`는 **간결하게** 쓴다. 케이스를 하나하나 나열하지 않는다. (예시: `auth/docs/TEST.md`)
+
+- 들어갈 내용: 실행일과 전체 결과, 진행 방식(단위/통합을 어떻게 했는지 표 한 개),
+  테스트 클래스별 결과(검증 내용 한 줄 + 개수 + 결과 표 한 개), 테스트 중 발견하고 수정한 점. 실행 방법은 적지 않는다.
+- 서식: 미리보기가 깨지지 않도록 단순하게 쓴다. 코드 스팬 안에 `<`, `>`, `{`, `}`나 앞뒤 공백을 넣지 않고,
+  `→`, `≈`, `—` 같은 특수 기호 대신 ASCII 문자를 쓴다.
+
+- **모듈 단위 테스트**: 스프링·DB 없이 JUnit 5 + AssertJ + Mockito. 시각은 `Clock.fixed`. 공통 픽스처는 `<도메인>/support/`.
+- **통합 테스트**: `<도메인>/integration/`. `@SpringBootTest` + `@AutoConfigureMockMvc`(`org.springframework.boot.webmvc.test.autoconfigure`)
+  + `@Transactional`(테스트마다 롤백). 실제 MySQL을 쓰므로 `MYSQL_*` 환경변수 필요. JWT 설정은 `@SpringBootTest(properties=...)`로 고정.
+- 인증 필요 API가 없을 때 필터 검증은 테스트 안의 `@TestConfiguration`으로 등록한 프로브 컨트롤러를 쓴다. (예: `JwtAuthenticationIntegrationTest`)
 
 ## 문서 작성 규칙
 
@@ -153,4 +187,5 @@ com.jamkkanjeju.server
 
 | 도메인 | API | 엔드포인트 | 비고 |
 | --- | --- | --- | --- |
-| auth | 로그인 | `POST /api/v2/auth/login` | 테스트 코드 미작성 |
+| auth | 로그인 | `POST /api/v2/auth/login` | 단위·통합 테스트 완료 (`auth/docs/TEST.md`) |
+| auth | JWT 인증 필터 | (전역) | 401/403 JSON 응답 포함, 테스트 완료 |

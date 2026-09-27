@@ -154,3 +154,65 @@ Status Code : `500 Internal Server Error`
   "message": "서버 내부 오류가 발생했습니다."
 }
 ```
+
+---
+
+# 공통 인증 오류
+
+인증이 필요한 모든 API에 공통으로 적용되는 오류 응답이다. 인증이 필요한 API는 `Authorization` 헤더에 로그인 응답의 `accessToken`을 `Bearer {accessToken}` 형식으로 담아 호출한다.
+
+로그인 API처럼 인증 없이 호출하는 API에는 적용되지 않는다.
+
+### 오류 응답 데이터
+
+#### 인증 정보 없음
+
+Status Code : `401 Unauthorized`
+
+`Authorization` 헤더 없이 인증이 필요한 API를 호출한 경우
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "인증이 필요합니다."
+}
+```
+
+#### 유효하지 않은 토큰
+
+Status Code : `401 Unauthorized`
+
+토큰이 변조되었거나 형식이 올바르지 않은 경우, `Bearer` 방식이 아닌 경우, 액세스 토큰이 아닌 토큰(리프레시 토큰 등)으로 호출한 경우
+
+```json
+{
+  "code": "INVALID_TOKEN",
+  "message": "유효하지 않은 토큰입니다."
+}
+```
+
+#### 만료된 토큰
+
+Status Code : `401 Unauthorized`
+
+액세스 토큰의 유효기간이 지난 경우
+
+```json
+{
+  "code": "EXPIRED_TOKEN",
+  "message": "만료된 토큰입니다."
+}
+```
+
+#### 권한 없음
+
+Status Code : `403 Forbidden`
+
+인증은 되었지만 API를 호출할 권한이 없는 경우 (예: `USER` 권한으로 관리자 전용 API 호출)
+
+```json
+{
+  "code": "FORBIDDEN",
+  "message": "접근 권한이 없습니다."
+}
+```
