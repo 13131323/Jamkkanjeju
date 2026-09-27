@@ -1,5 +1,20 @@
 # Jamkkanjeju Server
 
+## 필수 환경변수
+
+애플리케이션 실행 전 JWT 서명에 사용할 32바이트 이상의 키를 Base64로 인코딩하여 `JWT_SECRET_KEY` 환경변수에 설정해야 합니다.
+
+```bash
+openssl rand -base64 32
+```
+
+생성한 값은 로컬 환경변수 또는 프로젝트 루트의 `.env` 파일에 다음과 같이 설정합니다. 실제 비밀키는 Git에 커밋하지 않습니다.
+
+```dotenv
+JWT_SECRET_KEY=생성한_Base64_문자열
+```
+
+
 ## 1. Docker 실행 방법
 프로젝트 루트 디렉터리에서 아래 명령어를 실행합니다.
 (docker desktop 설치를 추천합니다.)

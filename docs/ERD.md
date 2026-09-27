@@ -2,20 +2,36 @@
 erDiagram
 USER {
 	bigint id PK "NOT NULL"
-	bigint onboarding_result_id FK "NOT NULL"
+	bigint onboarding_result_id FK
 	varchar_20 nickname
 	int point "NOT NULL, DEFAULT: 0, CHECK: >= 0"
 	int target_step "NOT NULL, DEFAULT: 10000, CHECK: >= 0"
-	char_64 access_token_hash UK "NOT NULL"
+	varchar_255 email UK "NOT NULL"
+	varchar_255 password_hash "NOT NULL"
+	varchar_20 role "NOT NULL, DEFAULT: USER, Enum: USER, ADMIN"
+	varchar_20 status "NOT NULL, DEFAULT: ACTIVE, Enum: ACTIVE, SUSPENDED, WITHDRAWN"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	
-	UNIQUE(access_token_hash)
+	UNIQUE(email)
+}
+
+REFRESH_TOKEN {
+	bigint id PK "NOT NULL"
+	bigint user_id FK "NOT NULL"
+	char_64 token_hash UK "NOT NULL"
+	datetime expires_at "NOT NULL"
+	datetime revoked_at
+	varchar_255 device_info
+	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+
+	UNIQUE(token_hash)
 }
 
 EXPECTATION {
     bigint id PK "NOT NULL"
-    varchar_20 expectation_type "NOT NULL"
+    varchar_20 expectation_type "NOT NULL, Enum: PHOTO, LOCAL, NATURE, CULTURE, CAFE, WALKING"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -24,7 +40,7 @@ EXPECTATION {
 
 TRANSPORTATION {
     bigint id PK "NOT NULL"
-    varchar_20 transportation_type "NOT NULL"
+    varchar_20 transportation_type "NOT NULL, Enum: WALK, BUS, CAR, BICYCLE"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -33,7 +49,7 @@ TRANSPORTATION {
 
 TRAVEL_STYLE {
     bigint id PK "NOT NULL"
-    varchar_20 travel_style_type "NOT NULL"
+    varchar_20 travel_style_type "NOT NULL, Enum: RIGHT_HERE, NEAR_AROUND, NEAR_DESTINATION"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     
@@ -410,6 +426,7 @@ USER ||--o| USER_TRAVEL_STYLE : selects
 TRAVEL_STYLE ||--o{ USER_TRAVEL_STYLE : selected_by
 
 USER ||--|| USER_SETTING : has
+USER ||--o{ REFRESH_TOKEN : has
 USER ||--o{ STEP_REWARD : receives
 USER ||--o{ VISITED_LOCATION : visits
 USER ||--o{ GPS : records

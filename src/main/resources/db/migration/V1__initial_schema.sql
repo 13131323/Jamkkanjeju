@@ -16,23 +16,46 @@ CREATE TABLE `onboarding_result` (
 ) ENGINE = InnoDB;
 
 CREATE TABLE `user` (
-    `id`                   BIGINT      NOT NULL AUTO_INCREMENT,
-    `onboarding_result_id` BIGINT      NOT NULL,
-    `nickname`             VARCHAR(20) NULL,
-    `point`                INT         NOT NULL DEFAULT 0,
-    `target_step`          INT         NOT NULL DEFAULT 10000,
-    `access_token_hash`    CHAR(64)    NOT NULL,
-    `created_at`           DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`           DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `id`                   BIGINT       NOT NULL AUTO_INCREMENT,
+    `onboarding_result_id` BIGINT       NULL,
+    `nickname`             VARCHAR(20)  NULL,
+    `point`                INT          NOT NULL DEFAULT 0,
+    `target_step`          INT          NOT NULL DEFAULT 10000,
+    `email`                VARCHAR(255) NOT NULL,
+    `password_hash`        VARCHAR(255) NOT NULL,
+    `role`                 VARCHAR(20)  NOT NULL DEFAULT 'USER',
+    `status`               VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
+    `created_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_access_token_hash` (`access_token_hash`),
+    UNIQUE KEY `uk_user_email` (`email`),
     CONSTRAINT `chk_user_point_nonnegative`
         CHECK (`point` >= 0),
     CONSTRAINT `chk_user_target_step_nonnegative`
         CHECK (`target_step` >= 0),
+    CONSTRAINT `chk_user_role_enum`
+        CHECK (`role` IN ('USER', 'ADMIN')),
+    CONSTRAINT `chk_user_status_enum`
+        CHECK (`status` IN ('ACTIVE', 'SUSPENDED', 'WITHDRAWN')),
     CONSTRAINT `fk_user_onboarding_result`
         FOREIGN KEY (`onboarding_result_id`) REFERENCES `onboarding_result` (`id`)
         ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE `refresh_token` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`     BIGINT       NOT NULL,
+    `token_hash`  CHAR(64)     NOT NULL,
+    `expires_at`  DATETIME     NOT NULL,
+    `revoked_at`  DATETIME     NULL,
+    `device_info` VARCHAR(255) NULL,
+    `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_refresh_token_hash` (`token_hash`),
+    CONSTRAINT `fk_refresh_token_user`
+        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+        ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 CREATE TABLE `expectation` (
@@ -41,7 +64,16 @@ CREATE TABLE `expectation` (
     `created_at`       DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`       DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_expectation_type` (`expectation_type`)
+    UNIQUE KEY `uk_expectation_type` (`expectation_type`),
+    CONSTRAINT `chk_expectation_type_enum`
+        CHECK (`expectation_type` IN (
+            'PHOTO',
+            'LOCAL',
+            'NATURE',
+            'CULTURE',
+            'CAFE',
+            'WALKING'
+        ))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `transportation` (
@@ -50,7 +82,14 @@ CREATE TABLE `transportation` (
     `created_at`          DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`          DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_transportation_type` (`transportation_type`)
+    UNIQUE KEY `uk_transportation_type` (`transportation_type`),
+    CONSTRAINT `chk_transportation_type_enum`
+        CHECK (`transportation_type` IN (
+            'WALK',
+            'BUS',
+            'CAR',
+            'BICYCLE'
+        ))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `travel_style` (
@@ -59,7 +98,13 @@ CREATE TABLE `travel_style` (
     `created_at`        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`        DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_travel_style_type` (`travel_style_type`)
+    UNIQUE KEY `uk_travel_style_type` (`travel_style_type`),
+    CONSTRAINT `chk_travel_style_type_enum`
+        CHECK (`travel_style_type` IN (
+            'RIGHT_HERE',
+            'NEAR_AROUND',
+            'NEAR_DESTINATION'
+        ))
 ) ENGINE = InnoDB;
 
 CREATE TABLE `user_expectation` (
