@@ -39,6 +39,13 @@ app:
     access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION}
     refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION}
 
+  dev-auth:
+    # 개발 편의용 자동 로그인. 켜면 Authorization 헤더 없이 호출할 때 아래 사용자로 인증된다.
+    # 운영에서는 절대 켜지 않는다. (기본값 false)
+    enabled: ${DEV_AUTH_ENABLED:false}
+    user-id: ${DEV_AUTH_USER_ID:1}
+    role: ${DEV_AUTH_ROLE:USER}
+
 springdoc:
   swagger-ui:
     path: /docs   # http://localhost:8080/docs 로 Swagger UI 접속

@@ -43,6 +43,7 @@ JWT_SECRET_KEY=$(openssl rand -base64 32) JWT_ACCESS_TOKEN_EXPIRATION=30m JWT_RE
 Swagger UI는 앱 실행 후 `http://localhost:<포트>/docs` (`springdoc.swagger-ui.path`), OpenAPI JSON은 `/v3/api-docs` (springdoc-openapi 3.1.1).
 인증이 필요한 API는 Swagger 우측 상단 Authorize에 로그인 응답의 `accessToken`을 넣고 호출한다.
 두 경로는 `SecurityConfig`에서 permitAll이다.
+매번 Authorize 하기 번거로우면 `DEV_AUTH_ENABLED=true`로 띄운다 (아래 "개발용 자동 로그인").
 
 엔티티 매핑이 스키마와 맞는지는 같은 환경변수로 `./mvnw test`(컨텍스트 로딩 테스트)를 돌려 확인한다
 (`ddl-auto: validate`라서 매핑이 틀리면 컨텍스트 로딩이 실패한다).
@@ -152,6 +153,21 @@ com.jamkkanjeju.server
   인증 없이 호출 가능한 API는 `requestMatchers(...).permitAll()`에 추가한다. 그 외는 모두 인증 필요.
 - JWT: 액세스 토큰(`type=access`, `role`), 리프레시 토큰(`type=refresh`, `jti`). 생성은 `JwtTokenProvider`.
 - 리프레시 토큰은 원문 대신 SHA-256 hex(`TokenHasher`)를 `refresh_token.token_hash`에 저장한다.
+
+#### 개발용 자동 로그인 (`app.dev-auth`)
+
+API를 만들면서 Swagger로 바로 호출해 보려고, 토큰 없이도 고정 사용자로 인증되게 하는 장치.
+`DevAuthenticationFilter`(`auth/security`) + `DevAuthProperties`(`auth/config`), `SecurityConfig`에서 켜져 있을 때만 등록한다.
+
+```bash
+DEV_AUTH_ENABLED=true DEV_AUTH_USER_ID=1 DEV_AUTH_ROLE=USER   # 나머지는 기본값
+```
+
+- **기본값은 `false`.** 운영에서는 절대 켜지 않는다. 켜져서 실행되면 시작 로그에 WARN이 남는다.
+- `Authorization` 헤더가 **아예 없을 때만** 동작한다. 그래서 토큰을 보내면 실제 로그인 흐름이, 잘못된 토큰을 보내면 401이 그대로 확인된다.
+- 단, "토큰 없음 → 401"은 이 설정이 켜진 동안 확인할 수 없다. 그 케이스를 볼 때는 꺼야 한다.
+- `DEV_AUTH_USER_ID`로 지정한 사용자가 **DB에 실제로 있어야 한다.** FK가 걸린 API는 없는 사용자면 실패한다.
+- 통합 테스트에는 쓰지 않는다. 테스트는 이 설정과 무관하게(기본값 false) 실제 토큰으로 검증한다.
 - JWT 인증 필터(`auth/security/JwtAuthenticationFilter`): `Authorization: Bearer <액세스 토큰>`을
   `JwtTokenProvider.parseAccessToken`으로 검증(서명·만료·`type=access`)하고 SecurityContext에 `AuthUser(userId, role)`와
   `ROLE_<role>` 권한을 넣는다. 빈으로 등록하지 않고 `SecurityConfig`에서 `new`로 생성한다. (빈이면 서블릿 필터로 중복 등록됨)
