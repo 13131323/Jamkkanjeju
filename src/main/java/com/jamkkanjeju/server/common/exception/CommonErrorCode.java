@@ -26,7 +26,7 @@ public enum CommonErrorCode implements ErrorCode {
     @Override
     public String code() {
         return name();
-    }
+    }    // name은 java enum의 내장 메서드로, enum 상수의 이름을 반환. ex) INVALID_REQUEST 상수의 name()은 "INVALID_REQUEST"를 반환.
 
     @Override
     public String message() {
