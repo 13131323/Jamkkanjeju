@@ -1,4 +1,4 @@
-﻿INSERT INTO `expectation` (`expectation_type`)
+INSERT INTO `expectation` (`expectation_type`)
 VALUES
     ('PHOTO'),
     ('LOCAL'),

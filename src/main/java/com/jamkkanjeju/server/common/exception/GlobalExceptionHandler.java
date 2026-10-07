@@ -15,7 +15,7 @@
     import org.springframework.web.method.annotation.HandlerMethodValidationException;
     import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-    @Slf4j      // logger를 만들어주는 lobok annotation. log.debug(), log.info() 등으로 로그를 찍을 수 있음.
+    @Slf4j      // logger를 만들어주는 lombok annotation. log.debug(), log.info() 등으로 로그를 찍을 수 있음.
     @RestControllerAdvice       // @RestController에서 발생하는 예외를 공통으로 처리하는 클래스.
     public class GlobalExceptionHandler {
 
@@ -57,15 +57,16 @@
                     && frameworkError.getStatusCode().is4xxClientError()) {
                 HttpStatusCode status = frameworkError.getStatusCode();
                 HttpStatus resolved = HttpStatus.resolve(status.value());
+                // httpstatus를 resolve해서 code를 가져오고, 없으면 그냥 status code를 string으로 변환해서 code로 사용
                 String code = resolved != null ? resolved.name() : String.valueOf(status.value());
                 return ResponseEntity.status(status).body(new ErrorResponse(code, "요청을 처리할 수 없습니다."));
             }
 
-            log.error("Unhandled exception", exception);
-            return toResponse(CommonErrorCode.INTERNAL_SERVER_ERROR);
+            log.error("Unhandled exception", exception);    // 던진 에러 메시지를 여기서 출력하고
+            return toResponse(CommonErrorCode.INTERNAL_SERVER_ERROR);   // 응답으로는 정해놓은 500 응답만 보낸다.
         }
 
-            private ResponseEntity<ErrorResponse> toResponse(ErrorCode errorCode) {
+        private ResponseEntity<ErrorResponse> toResponse(ErrorCode errorCode) {
             return ResponseEntity.status(errorCode.status()).body(ErrorResponse.of(errorCode));
         }
     }
