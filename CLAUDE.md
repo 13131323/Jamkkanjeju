@@ -16,7 +16,6 @@
 
 ## 빌드 / 실행 규칙
 
-- 터미널 빌드 시 `JAVA_HOME`이 JDK 8을 가리킬 수 있다. `~/.jdks/ms-21*`을 찾아 `JAVA_HOME="<경로>" ./mvnw ...`로 실행한다. 환경변수 자체는 고치지 않는다.
 - `-o`(오프라인) 옵션은 쓰지 않는다.
 - DB는 Docker MySQL을 쓴다. 앱/테스트 실행에는 `MYSQL_*`, `JWT_SECRET_KEY`, `JWT_ACCESS_TOKEN_EXPIRATION`, `JWT_REFRESH_TOKEN_EXPIRATION` 환경변수가 필요하다.
 - Swagger UI는 `/docs`. 개발용 자동 로그인은 `DEV_AUTH_ENABLED=true`(기본 false, 운영 금지, 테스트에서는 끈다).
@@ -40,7 +39,7 @@ com.jamkkanjeju.server
 1. 도메인의 `API_SPEC.md`, `BUISNESS_RULE.md`를 읽는다. 없으면 문서부터 작성하고 사용자 확인을 받는다.
 2. 필요한 컬럼이 엔티티/마이그레이션에 있는지 확인한다.
 3. repository -> exception -> dto -> service -> controller 순으로 구현하고, 보안 설정(permitAll 등)도 같이 반영한다.
-4. 최소 `./mvnw compile`로 검증한다. 테스트 코드는 사용자가 요청할 때 작성한다.
+4. 최소 `./mvnw compile`로 검증한다. 테스트 코드는 사용자가 도메인의 `docs/TEST.md`에 테스트 계획을 작성하면 그 계획에 맞춰 작성하고 실행한다.
 5. 문서와 다르게 결정한 점이 생기면 사용자에게 알린다.
 
 ## 스키마 / 엔티티 구현 규칙
@@ -60,6 +59,7 @@ com.jamkkanjeju.server
 - 입력값 정규화(trim, 소문자화 등)는 compact constructor에서 한다.
 - 응답은 `of(...)` / `from(entity)` 팩토리로 만들고, 엔티티를 직접 노출하지 않는다.
 - 중첩 객체는 nested record, enum은 `String`(`name()`)으로 응답한다.
+- DTO의 내부 계산용 공개 메서드(`isXxx()` 포함)가 JSON/API 필드가 아니면 `@JsonIgnore`와 `@Schema(hidden = true)`를 함께 붙여 Jackson 변환과 Swagger 스키마에서 제외한다.
 
 ## 서비스 로직 구현 규칙
 
@@ -94,4 +94,6 @@ com.jamkkanjeju.server
 - 통합 테스트: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional`, 실제 MySQL 사용. JWT 설정은 `properties`로 고정한다.
 - 인증은 `@WithMockUser`가 동작하지 않으므로 `JwtTokenProvider`로 발급한 실제 토큰을 헤더로 보낸다.
 - 검증용 엔드포인트가 필요하면 테스트 안의 `@TestConfiguration` 컨트롤러를 쓴다.
-- 작성/실행 후 도메인의 `docs/TEST.md`에 간결하게 기록한다. (실행일/전체 결과, 진행 방식 표, 클래스별 결과 표, 발견/수정 사항. 실행 방법과 개별 케이스 나열은 적지 않는다.)
+- 테스트 계획은 사용자가 도메인의 `docs/TEST.md`에 작성한다. Claude는 계획의 테스트 클래스명, 검증 항목, 실행 순서를 그대로 따라 테스트를 작성하고 실행한다. 계획에 없는 케이스를 추가하거나 계획이 모호하면 사용자에게 먼저 묻는다.
+- 실행 후 `TEST.md`의 사용자 계획 내용은 지우거나 바꾸지 않고, 상태/실행일/전체 결과, 클래스별 결과 표(`## 결과`), 발견/수정 사항(`## 발견하고 수정한 점`)만 실제 결과로 갱신한다. 계획과 다르게 구현한 점(케이스 병합·분리 등)도 발견/수정 사항에 적는다.
+- 계획 없이 테스트를 요청받으면 `TEST.md`를 위 형식(진행 방식 표, 클래스별 결과 표, 발견/수정 사항)으로 간결하게 작성한다. 실행 방법은 적지 않는다.

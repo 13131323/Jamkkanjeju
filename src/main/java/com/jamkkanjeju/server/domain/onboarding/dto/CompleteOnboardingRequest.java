@@ -1,8 +1,10 @@
 package com.jamkkanjeju.server.domain.onboarding.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.jamkkanjeju.server.domain.onboarding.entity.ExpectationType;
 import com.jamkkanjeju.server.domain.onboarding.entity.TransportationType;
 import com.jamkkanjeju.server.domain.onboarding.entity.TravelStyleType;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -20,6 +22,8 @@ public record CompleteOnboardingRequest(
 ) {
 
     /** 선택 필드가 하나도 없으면 "나중에 할게요" 요청이다. */
+    @JsonIgnore
+    @Schema(hidden = true)
     public boolean isSkipped() {
         return expectations == null && transportation == null && travelStyle == null;
     }
