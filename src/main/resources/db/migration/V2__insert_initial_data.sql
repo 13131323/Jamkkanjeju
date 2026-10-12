@@ -1,4 +1,4 @@
-﻿INSERT INTO `expectation` (`expectation_type`)
+INSERT INTO `expectation` (`expectation_type`)
 VALUES
     ('PHOTO'),
     ('LOCAL'),
@@ -32,6 +32,13 @@ VALUES
     ('카페 수집가', '제주의 개성 있는 카페를 찾아 향긋한 음료와 창밖 풍경을 여행 기록으로 모으는 여행자입니다.', '["CAFE", "제주카페", "감성여행"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/005.png'),
     ('올레길 산책가', '천천히 걸으며 돌담과 바닷길의 풍경을 살피고 발걸음마다 새로운 제주를 발견하는 여행자입니다.', '["WALKING", "올레길", "걷기여행"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/006.png'),
     ('여행자', '제주를 자유롭게 돌아다니는 여행자입니다.', '["#TRAVELER", "#자유여행", "#좋은시간"]', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/004.png');
+
+
+INSERT INTO `user`
+    (`id`, `onboarding_result_id`, `nickname`, `email`, `password_hash`, `role`, `status`)
+VALUES
+    (1, NULL, '테스트 사용자', '12345678@gmail.com',
+     '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE');
 
 -- ---------------------------------------------------------------------
 -- AR_CHARACTER

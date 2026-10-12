@@ -9,7 +9,7 @@ public class BusinessException extends RuntimeException {
     private final ErrorCode errorCode;
 
     public BusinessException(ErrorCode errorCode) {
-        super(errorCode.message());
+        super(errorCode.message());      // RuntimeException이 원래 가지고 있는 예외 메시지 기능까지 정상적으로 쓰기 위해 호출
         this.errorCode = errorCode;
     }
 }

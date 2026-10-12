@@ -75,7 +75,7 @@ SELECT DATABASE();
 SHOW TABLES;
 ```
 
-또한 테스트용 mockup 데이터는 scripts/data_init.sql 파일에 정의되어 있습니다.
+기본 데이터(온보딩 기준 데이터, 미션 등)는 Flyway 마이그레이션 src/main/resources/db/migration/V2__insert_initial_data.sql로 앱 실행 시 자동으로 들어갑니다.
 
 
 MySQL CLI를 종료하려면 아래 명령어를 입력합니다.

@@ -74,4 +74,9 @@ public class User extends BaseTimeEntity {
         this.role = role == null ? UserRole.USER : role;
         this.status = status == null ? UserStatus.ACTIVE : status;
     }
+
+    /** 온보딩 결과를 배정한다. 기존 결과가 있으면 교체한다. */
+    public void assignOnboardingResult(OnboardingResult onboardingResult) {
+        this.onboardingResult = onboardingResult;
+    }
 }
