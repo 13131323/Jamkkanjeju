@@ -52,6 +52,28 @@ com.jamkkanjeju.server
 - JSON 컬럼은 `@JdbcTypeCode(SqlTypes.JSON)`, `CHAR(n)`은 `@JdbcTypeCode(SqlTypes.CHAR)`.
 - DDL에 `CHECK ... IN (...)`이 있는 컬럼만 enum(`@Enumerated(STRING)`)으로 매핑한다.
 
+## 레포지토리 구현 규칙
+
+- 특정 API 전용 조건을 쿼리에 박지 말고, 다른 기능에서도 쓸 수 있게 범용적으로 조회한다. (예: 완료 여부 같은 판정 기준은 쿼리가 아닌 서비스의 공통 컴포넌트에 둔다.)
+- 레포지토리 메서드마다 Javadoc 주석으로 다음을 적는다.
+  - 결과: 어떤 행이 어떤 형태로 나오는지, 함께 로딩되는 연관 엔티티, 결과가 없을 때의 값
+  - 사용: 어떤 API(`METHOD /경로`)의 어떤 응답 필드를 구성하려고 쓰는지, 서비스에서 결과를 어떻게 가공하는지
+- 상속받은 기본 메서드(`count()` 등)만 쓰는 레포지토리는 인터페이스 Javadoc에 같은 형식으로 적는다.
+- 예시:
+
+```java
+/**
+ * 결과: 사용자({@code userId})의 보물찾기 진행도 전체 목록(진행 중·완료 모두). 미션당 최대 한 건이다.
+ * 각 원소는 {@code treasureMission.mission.missionType}(유형·이름·단계)과 {@code treasureMission.location}
+ * (장소명·좌표, 없으면 null)이 함께 로딩되어 있고, 진행도가 없으면 빈 목록이다.
+ * 사용: 홈 조회({@code GET /api/v2/users/me/home}) 응답에서 두 곳에 쓴다.
+ * {@code progressMission}의 TREASURE 항목은 IN_PROGRESS인 진행도로 구성하고,
+ * {@code missionRecommend}의 TREASURE 후보에서는 완료한 진행도의 미션을 제외한다.
+ */
+@EntityGraph(attributePaths = {"treasureMission.mission.missionType", "treasureMission.location"})
+List<TreasureMissionProgress> findAllByUserId(Long userId);
+```
+
 ## DTO 구현 규칙
 
 - `record`로 만들고 이름은 `<동작>Request` / `<동작>Response`.
