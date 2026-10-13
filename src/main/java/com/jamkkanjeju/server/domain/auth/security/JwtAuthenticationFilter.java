@@ -18,15 +18,10 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/**
- * {@code Authorization: Bearer <액세스 토큰>} 헤더를 검증해 SecurityContext에 {@link AuthUser}를 넣는다.
- *
- * <p>토큰이 없거나 잘못돼도 여기서 바로 응답하지 않는다. 인증 없이 호출 가능한 API(permitAll)는 그대로 통과하고,
- * 인증이 필요한 API는 {@link JsonAuthenticationEntryPoint}가 401로 응답한다. 이때 쓸 오류 코드는
- * {@link #AUTH_ERROR_ATTRIBUTE} 요청 속성으로 넘긴다.
- *
- * <p>Spring Boot가 서블릿 필터로 자동 등록하지 않도록 빈으로 만들지 않고 SecurityConfig에서 직접 생성한다.
- */
+/** 요청의 액세스 토큰으로 사용자를 인증하는 필터이다. */
+// 토큰이 없거나 잘못돼도 여기서 바로 응답하지 않는다. 인증 없이 호출 가능한 API(permitAll)는 그대로 통과하고,
+// 인증이 필요한 API는 JsonAuthenticationEntryPoint가 401로 응답한다. 이때 쓸 오류 코드는 AUTH_ERROR_ATTRIBUTE 요청 속성으로 넘긴다.
+// Spring Boot가 서블릿 필터로 자동 등록하지 않도록 빈으로 만들지 않고 SecurityConfig에서 직접 생성한다.
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
@@ -36,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
 
+    /** Authorization 헤더가 있으면 인증을 시도한 뒤 다음 필터로 넘긴다. */
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
@@ -48,6 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /** 헤더의 액세스 토큰을 검증해 인증 사용자로 등록하고, 실패하면 오류 코드를 요청에 남긴다. */
     private void authenticate(HttpServletRequest request, String header) {
         if (!header.startsWith(BEARER_PREFIX) || header.length() == BEARER_PREFIX.length()) {
             request.setAttribute(AUTH_ERROR_ATTRIBUTE, AuthErrorCode.INVALID_TOKEN);

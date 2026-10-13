@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자의 위치를 저장 시각과 함께 기록한 GPS 위치 기록이다. */
 @Entity
 @Getter
 @Table(name = "gps")

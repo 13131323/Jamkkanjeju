@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** 로그인 등 사용자 인증 처리를 담당한다. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -30,9 +31,10 @@ public class AuthService {
     private final TokenHasher tokenHasher;
     private final Clock clock;
 
-    /** 처리 순서는 domain/auth/BUISNESS_RULE.md 6절을 따른다. 이메일 정규화는 {@link LoginRequest}에서 끝난 상태다. */
+    /** 이메일·비밀번호를 확인하고 액세스·리프레시 토큰을 발급한다. */
     @Transactional
     public LoginResponse login(LoginRequest request) {
+        // 이메일 정규화는 LoginRequest에서 끝난 상태다.
         User user = userRepository.findByEmail(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPasswordHash()))
                 .orElseThrow(() -> new BusinessException(AuthErrorCode.INVALID_CREDENTIALS));
@@ -52,6 +54,7 @@ public class AuthService {
         return LoginResponse.of(accessToken, refreshToken, user);
     }
 
+    /** 로그인할 수 있는 계정 상태인지 확인한다. */
     private void validateLoginable(User user) {
         switch (user.getStatus()) {
             case ACTIVE -> {

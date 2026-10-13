@@ -22,7 +22,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 팀 단위 협동 미션 진행 상태. team_token 으로 팀원이 합류한다. */
+/** 한 팀이 협동 미션을 몇 단계까지 진행했고 완료했는지 나타내는 팀 단위 진행 기록이다. 팀 토큰으로 팀원이 합류한다. */
 @Entity
 @Getter
 @Table(
@@ -59,6 +59,7 @@ public class CooperativeMissionProgress extends BaseTimeEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    /** 팀의 협동 미션 진행 기록을 생성한다. 값을 주지 않으면 첫 단계부터 진행 중 상태로 시작한다. */
     @Builder
     private CooperativeMissionProgress(CooperativeMission cooperativeMission, Integer currentStep,
                                        MissionProgressStatus missionStatus, String teamToken,
@@ -70,12 +71,14 @@ public class CooperativeMissionProgress extends BaseTimeEntity {
         this.completedAt = completedAt;
     }
 
+    /** 협동 미션을 다음 단계로 진행한다. 마지막 단계에서는 더 넘어가지 않는다. */
     public void moveToNextStep() {
         if (currentStep < LAST_STEP) {
             this.currentStep++;
         }
     }
 
+    /** 팀의 협동 미션 진행을 완료 처리하고 완료 시각을 기록한다. */
     public void complete(LocalDateTime completedAt) {
         this.missionStatus = MissionProgressStatus.COMPLETED;
         this.completedAt = completedAt;

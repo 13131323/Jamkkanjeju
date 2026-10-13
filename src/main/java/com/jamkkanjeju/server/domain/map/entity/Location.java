@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 방문 판정과 미션·방명록·쿠폰의 기준이 되는 관광지 장소이다. */
 @Entity
 @Getter
 @Table(

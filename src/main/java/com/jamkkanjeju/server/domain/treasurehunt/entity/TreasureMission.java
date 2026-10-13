@@ -22,7 +22,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** mission 과 PK(mission_id)를 공유하는 보물찾기 미션 상세 */
+/**
+ * 보물찾기(AR 캐릭터) 미션의 장소, 찾아야 할 보물 수, 보상, 활성화 상태를 담는 미션 상세이다.
+ * 공통 미션({@link Mission})과 PK를 공유한다.
+ */
 @Entity
 @Getter
 @Table(name = "treasure_mission")
@@ -61,6 +64,7 @@ public class TreasureMission extends BaseTimeEntity {
     @JoinColumn(name = "coupon_id")
     private Coupon coupon;
 
+    /** 보물찾기 미션 상세를 생성한다. */
     @Builder
     private TreasureMission(Mission mission, Location location, int itemTotalCount,
                             MissionActivationStatus status, ArCharacter arCharacter,
@@ -74,6 +78,7 @@ public class TreasureMission extends BaseTimeEntity {
         this.coupon = coupon;
     }
 
+    /** 보물찾기 미션의 활성화 상태(ACTIVE/INACTIVE)를 변경한다. */
     public void changeStatus(MissionActivationStatus status) {
         this.status = status;
     }

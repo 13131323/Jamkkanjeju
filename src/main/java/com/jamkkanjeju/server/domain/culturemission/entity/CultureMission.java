@@ -21,7 +21,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** mission 과 PK(mission_id)를 공유하는 문화 미션 상세 */
+/**
+ * 퀴즈를 풀어 제주 문화를 알아가는 문화 미션의 활성화 상태와 완료 보상을 담는다.
+ * 공통 미션({@link Mission})과 PK 를 공유한다.
+ */
 @Entity
 @Getter
 @Table(name = "culture_mission")
@@ -55,6 +58,7 @@ public class CultureMission extends BaseTimeEntity {
     @JoinColumn(name = "coupon_id")
     private Coupon coupon;
 
+    /** 공통 미션에 연결된 문화 미션을 활성화 상태·보상과 함께 생성한다. */
     @Builder
     private CultureMission(Mission mission, MissionActivationStatus status,
                            ArCharacter arCharacter, Integer point, Coupon coupon) {
@@ -65,6 +69,7 @@ public class CultureMission extends BaseTimeEntity {
         this.coupon = coupon;
     }
 
+    /** 문화 미션의 활성화 상태를 변경한다. */
     public void changeStatus(MissionActivationStatus status) {
         this.status = status;
     }

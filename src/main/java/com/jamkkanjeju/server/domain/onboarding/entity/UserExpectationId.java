@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자 여행 기대 항목의 복합 키(사용자·여행 기대 항목)이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

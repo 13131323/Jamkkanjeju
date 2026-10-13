@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** 협동 미션에서 팀원에게 배정되는 역할 카드 */
+/** 협동 미션에서 팀원에게 배정되어 맡을 역할과 찾아야 할 대상을 알려 주는 역할 카드이다. */
 @Entity
 @Getter
 @Table(name = "cooperative_role_card")

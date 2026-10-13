@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자가 방문한 관광지와 마지막 방문 시각을 나타내는 방문 기록이다. 사용자와 장소 조합당 한 건이다. */
 @Entity
 @Getter
 @Table(
@@ -48,6 +49,7 @@ public class VisitedLocation extends BaseTimeEntity {
     @Column(name = "last_visited_at", nullable = false)
     private LocalDateTime lastVisitedAt;
 
+    /** 같은 장소를 다시 방문했을 때 마지막 방문 시각을 갱신한다. */
     public void updateLastVisitedAt(LocalDateTime visitedAt) {
         this.lastVisitedAt = visitedAt;
     }

@@ -21,8 +21,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 방명록 공통 정보. 장소 방명록/길 위 방명록은 guestbook_id 를 PK 로 공유하는
- * location_guestbook / road_guestbook 에 나뉘어 저장된다.
+ * 장소 방명록과 길바닥 방명록이 함께 쓰는 방명록 공통 내용(작성자, 글·사진·음성, 날씨 등)이다.
+ * 유형별 정보는 이 방명록과 PK를 공유하는 {@link LocationGuestbook} / {@link RoadGuestbook}에 나뉘어 저장된다.
  */
 @Entity
 @Getter

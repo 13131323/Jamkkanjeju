@@ -17,8 +17,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 모든 미션의 공통 식별자. 실제 미션 정보는 mission_id 를 PK 로 공유하는
- * culture_mission / cooperative_mission / treasure_mission 에 나뉘어 저장된다.
+ * 문화·협동·보물찾기 미션을 하나의 미션으로 묶어 식별하고 미션 유형을 연결하는 공통 미션이다.
+ * 유형별 상세 미션(문화/협동/보물찾기)이 이 미션의 PK 를 공유한다.
  */
 @Entity
 @Getter

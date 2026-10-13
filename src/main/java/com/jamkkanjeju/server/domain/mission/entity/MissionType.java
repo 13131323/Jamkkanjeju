@@ -19,6 +19,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/** 미션 유형(문화·협동·보물찾기)별 이름, 설명, 진행 단계 안내를 담는 미션 유형 정보이다. */
 @Entity
 @Getter
 @Table(

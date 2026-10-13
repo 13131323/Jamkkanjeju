@@ -17,7 +17,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 보물찾기 아이템별 발견 여부 (PK: treasure_mission_progress_id, item_index) */
+/**
+ * 보물찾기 진행 기록 안에서 보물 아이템 하나의 발견 여부와 발견 시각을 나타낸다.
+ * 진행 기록과 아이템 순번 조합으로 식별한다.
+ */
 @Entity
 @Getter
 @Table(name = "treasure_mission_progress_item")
@@ -39,6 +42,7 @@ public class TreasureMissionProgressItem extends BaseTimeEntity {
     @Column(name = "found_at")
     private LocalDateTime foundAt;
 
+    /** 보물 아이템의 발견 기록을 생성한다. 상태를 지정하지 않으면 미발견으로 시작한다. */
     @Builder
     private TreasureMissionProgressItem(TreasureMissionProgress treasureMissionProgress,
                                         Integer itemIndex, TreasureItemStatus itemStatus,
@@ -49,10 +53,12 @@ public class TreasureMissionProgressItem extends BaseTimeEntity {
         this.foundAt = foundAt;
     }
 
+    /** 진행 기록 안에서 이 보물 아이템의 순번을 반환한다. */
     public Integer getItemIndex() {
         return id.getItemIndex();
     }
 
+    /** 보물 아이템을 찾은 상태로 바꾸고 발견 시각을 기록한다. */
     public void markFound(LocalDateTime foundAt) {
         this.itemStatus = TreasureItemStatus.FOUND;
         this.foundAt = foundAt;

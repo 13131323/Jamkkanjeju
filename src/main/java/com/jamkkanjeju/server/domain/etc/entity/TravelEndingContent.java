@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자의 여행을 마무리하는 엔딩 콘텐츠 이미지를 저장한 기록이다. */
 @Entity
 @Getter
 @Table(name = "travel_ending_content")

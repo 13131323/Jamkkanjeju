@@ -20,6 +20,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 협동 미션 팀에 초대되거나 합류한 사용자와 그 팀 내 역할(방장/팀원)을 나타내는 참가자이다. */
 @Entity
 @Getter
 @Table(
@@ -55,6 +56,7 @@ public class CooperativeMissionParticipant extends BaseTimeEntity {
     @Column(name = "joined_at")
     private LocalDateTime joinedAt;
 
+    /** 협동 미션 팀 참가자를 생성한다. 상태를 주지 않으면 수락 대기 상태로 시작한다. */
     @Builder
     private CooperativeMissionParticipant(CooperativeMissionProgress cooperativeMissionProgress,
                                           User user, ParticipantStatus participantStatus,
@@ -66,6 +68,7 @@ public class CooperativeMissionParticipant extends BaseTimeEntity {
         this.joinedAt = joinedAt;
     }
 
+    /** 팀 합류를 수락 처리하고 합류 시각을 기록한다. */
     public void accept(LocalDateTime joinedAt) {
         this.participantStatus = ParticipantStatus.ACCEPTED;
         this.joinedAt = joinedAt;

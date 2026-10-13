@@ -15,16 +15,19 @@
     import org.springframework.web.method.annotation.HandlerMethodValidationException;
     import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+    /** 컨트롤러에서 발생한 예외를 공통 오류 응답으로 변환한다. */
     @Slf4j      // logger를 만들어주는 lombok annotation. log.debug(), log.info() 등으로 로그를 찍을 수 있음.
     @RestControllerAdvice       // @RestController에서 발생하는 예외를 공통으로 처리하는 클래스.
     public class GlobalExceptionHandler {
 
+        /** 비즈니스 규칙 위반 예외를 해당 오류 코드의 응답으로 변환한다. */
         @ExceptionHandler(BusinessException.class)
         public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException exception) {
             return toResponse(exception.getErrorCode());
         }
 
-        /** Bean Validation 실패, JSON 파싱 실패, 파라미터 누락·타입 불일치는 모두 INVALID_REQUEST로 응답한다. */
+        /** 잘못된 요청 예외를 INVALID_REQUEST 응답으로 변환한다. */
+        // Bean Validation 실패, JSON 파싱 실패, 파라미터 누락·타입 불일치가 모두 여기에 해당한다.
         @ExceptionHandler({
                 MethodArgumentNotValidException.class,
                 HandlerMethodValidationException.class,
@@ -38,19 +41,16 @@
             return toResponse(CommonErrorCode.INVALID_REQUEST);
         }
 
-        /**
-         * 메서드 보안(@PreAuthorize 등)에서 난 인증·인가 예외는 아래 Exception 핸들러가 500으로 바꾸지 않도록 다시 던진다.
-         * Spring Security의 ExceptionTranslationFilter가 받아 EntryPoint(401) / AccessDeniedHandler(403)로 응답한다.
-         */
+        /** 인증·인가 예외를 Spring Security가 처리하도록 넘긴다. */
+        // 메서드 보안(@PreAuthorize 등)에서 난 인증·인가 예외는 아래 Exception 핸들러가 500으로 바꾸지 않도록 다시 던진다.
+        // Spring Security의 ExceptionTranslationFilter가 받아 EntryPoint(401) / AccessDeniedHandler(403)로 응답한다.
         @ExceptionHandler({AccessDeniedException.class, AuthenticationException.class})
         public void rethrowSecurityException(RuntimeException exception) {
             throw exception;
         }
 
-        /**
-         * 404, 405, 415 등 Spring MVC가 상태 코드를 정해 둔 예외는 그 상태 코드를 유지하고,
-         * 나머지는 모두 500으로 응답한다.
-         */
+        /** 그 밖의 처리되지 않은 예외를 오류 응답으로 변환한다. */
+        // 404, 405, 415 등 Spring MVC가 상태 코드를 정해 둔 예외는 그 상태 코드를 유지하고, 나머지는 모두 500으로 응답한다.
         @ExceptionHandler(Exception.class)
         public ResponseEntity<ErrorResponse> handleException(Exception exception) {
             if (exception instanceof org.springframework.web.ErrorResponse frameworkError
@@ -66,6 +66,7 @@
             return toResponse(CommonErrorCode.INTERNAL_SERVER_ERROR);   // 응답으로는 정해놓은 500 응답만 보낸다.
         }
 
+        /** 오류 코드를 HTTP 상태와 본문을 갖춘 응답으로 만든다. */
         private ResponseEntity<ErrorResponse> toResponse(ErrorCode errorCode) {
             return ResponseEntity.status(errorCode.status()).body(ErrorResponse.of(errorCode));
         }

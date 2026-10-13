@@ -1,6 +1,6 @@
 package com.jamkkanjeju.server.domain.mission.entity;
 
-/** culture_mission / cooperative_mission / treasure_mission 의 status */
+/** 미션을 사용자에게 노출·진행 가능하게 할지 나타내는 활성화 상태이다. */
 public enum MissionActivationStatus {
     ACTIVE,
     INACTIVE

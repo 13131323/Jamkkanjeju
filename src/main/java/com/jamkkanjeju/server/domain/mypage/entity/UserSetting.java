@@ -16,6 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자의 알림 설정(푸시 알림, 주변 미션 알림)이다. 사용자와 PK를 공유한다. */
 @Entity
 @Getter
 @Table(name = "user_setting")
@@ -37,6 +38,7 @@ public class UserSetting extends BaseTimeEntity {
     @Column(name = "near_mission_notification", nullable = false)
     private boolean nearMissionNotification = true;
 
+    /** 사용자 설정을 생성한다. 알림 값을 지정하지 않으면 켜진 상태로 시작한다. */
     @Builder
     private UserSetting(User user, Boolean pushNotification, Boolean nearMissionNotification) {
         this.user = user;
@@ -44,6 +46,7 @@ public class UserSetting extends BaseTimeEntity {
         this.nearMissionNotification = nearMissionNotification == null || nearMissionNotification;
     }
 
+    /** 푸시 알림과 주변 미션 알림 설정을 변경한다. */
     public void update(boolean pushNotification, boolean nearMissionNotification) {
         this.pushNotification = pushNotification;
         this.nearMissionNotification = nearMissionNotification;

@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 문화 미션 보상 지급 상태를 사용자와 문화 미션으로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

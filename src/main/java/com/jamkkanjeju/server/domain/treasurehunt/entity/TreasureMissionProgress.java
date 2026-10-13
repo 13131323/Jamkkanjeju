@@ -23,6 +23,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자가 보물찾기 미션에서 보물을 몇 개 찾았는지와 완료 여부를 나타내는 진행 기록이다. */
 @Entity
 @Getter
 @Table(
@@ -57,6 +58,7 @@ public class TreasureMissionProgress extends BaseTimeEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    /** 보물찾기 진행 기록을 생성한다. 찾은 개수와 상태를 지정하지 않으면 0개, 진행 중으로 시작한다. */
     @Builder
     private TreasureMissionProgress(TreasureMission treasureMission, User user,
                                     Integer foundItemCount, MissionProgressStatus missionStatus,
@@ -68,10 +70,12 @@ public class TreasureMissionProgress extends BaseTimeEntity {
         this.completedAt = completedAt;
     }
 
+    /** 보물을 하나 찾았을 때 찾은 보물 개수를 1 늘린다. */
     public void increaseFoundItemCount() {
         this.foundItemCount++;
     }
 
+    /** 보물찾기 미션을 완료 상태로 바꾸고 완료 시각을 기록한다. */
     public void complete(LocalDateTime completedAt) {
         this.missionStatus = MissionProgressStatus.COMPLETED;
         this.completedAt = completedAt;

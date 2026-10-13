@@ -17,6 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 미션 보상으로 지급되며 연결된 장소에서 쓰는 쿠폰이다. */
 @Entity
 @Getter
 @Table(name = "coupon")

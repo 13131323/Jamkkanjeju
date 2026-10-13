@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** 문화 미션 퀴즈 (PK: culture_mission_id, quiz_index) */
+/** 문화 미션에서 순서대로 출제되는 퀴즈 한 문항(문제·보기·정답·힌트·해설)이다. 문화 미션과 퀴즈 순번으로 식별한다. */
 @Entity
 @Getter
 @Table(name = "culture_mission_quiz")
@@ -52,6 +52,7 @@ public class CultureMissionQuiz extends BaseTimeEntity {
     @Column(name = "explanation", length = 500)
     private String explanation;
 
+    /** 문화 미션의 지정한 순번에 해당하는 퀴즈 문항을 생성한다. */
     @Builder
     private CultureMissionQuiz(CultureMission cultureMission, Integer quizIndex, String imgUrl,
                                String question, List<String> options, String answer,
@@ -66,6 +67,7 @@ public class CultureMissionQuiz extends BaseTimeEntity {
         this.explanation = explanation;
     }
 
+    /** 문화 미션 안에서 이 퀴즈의 출제 순번을 반환한다. */
     public Integer getQuizIndex() {
         return id.getQuizIndex();
     }

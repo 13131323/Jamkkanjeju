@@ -10,6 +10,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 걸음 수 보상 지급 기록을 사용자와 날짜로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

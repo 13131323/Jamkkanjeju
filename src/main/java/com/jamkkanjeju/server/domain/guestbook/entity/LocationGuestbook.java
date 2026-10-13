@@ -17,7 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** guestbook 과 PK 를 공유하는 장소 방명록 */
+/** 방문한 관광지에 남기는 장소 방명록이다. 방명록 공통 내용({@link Guestbook})과 PK를 공유한다. */
 @Entity
 @Getter
 @Table(name = "location_guestbook")
@@ -42,6 +42,7 @@ public class LocationGuestbook extends BaseTimeEntity {
     @JoinColumn(name = "mission_id")
     private Mission mission;
 
+    /** 장소 방명록을 생성한다. */
     @Builder
     private LocationGuestbook(Guestbook guestbook, VisitedLocation visitedLocation, Mission mission) {
         this.guestbook = guestbook;

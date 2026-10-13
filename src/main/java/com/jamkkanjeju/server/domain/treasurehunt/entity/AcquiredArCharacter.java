@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자가 획득한 AR 캐릭터를 나타내는 획득 기록이다. */
 @Entity
 @Getter
 @Table(

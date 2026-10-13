@@ -19,7 +19,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * 방명록 좋아요 (PK: guestbook_id, user_id).
+ * 사용자가 방명록에 누른 좋아요이다. 방명록과 사용자 조합당 한 건이다.
  * 이 테이블만 updated_at 이 없어 BaseTimeEntity 를 상속하지 않는다.
  */
 @Entity
@@ -46,6 +46,7 @@ public class GuestbookLike {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    /** 사용자의 방명록 좋아요를 생성한다. */
     @Builder
     private GuestbookLike(Guestbook guestbook, User user) {
         this.id = new GuestbookLikeId(guestbook.getId(), user.getId());

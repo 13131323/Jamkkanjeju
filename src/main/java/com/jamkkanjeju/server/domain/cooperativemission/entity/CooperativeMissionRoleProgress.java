@@ -20,7 +20,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 참가자별 역할 카드 수행 상태 (PK: participant_id, role_card_id) */
+/** 팀 참가자가 배정받은 역할 카드의 임무를 인증 사진으로 완수했는지 나타내는 역할 수행 기록이다. 참가자와 역할 카드 쌍으로 식별한다. */
 @Entity
 @Getter
 @Table(name = "cooperative_mission_role_progress")
@@ -51,6 +51,7 @@ public class CooperativeMissionRoleProgress extends BaseTimeEntity {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    /** 참가자에게 역할 카드를 배정한 수행 기록을 생성한다. 상태를 주지 않으면 진행 중으로 시작한다. */
     @Builder
     private CooperativeMissionRoleProgress(CooperativeMissionParticipant participant,
                                            CooperativeRoleCard roleCard, String itemImgUrl,
@@ -64,6 +65,7 @@ public class CooperativeMissionRoleProgress extends BaseTimeEntity {
         this.completedAt = completedAt;
     }
 
+    /** 인증 사진을 제출해 역할 카드 임무를 완료 처리하고 완료 시각을 기록한다. */
     public void complete(String itemImgUrl, LocalDateTime completedAt) {
         this.itemImgUrl = itemImgUrl;
         this.progressStatus = MissionProgressStatus.COMPLETED;

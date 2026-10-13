@@ -7,12 +7,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** JWT 서명에 쓸 비밀 키를 준비하는 설정이다. */
 @Configuration
 @EnableConfigurationProperties(JwtProperties.class)
 public class JwtConfig {
 
     private static final int MINIMUM_KEY_SIZE_BYTES = 32;
 
+    /** 설정된 비밀 키를 검증해 JWT 서명용 키로 등록한다. */
     @Bean
     public SecretKey jwtSigningKey(JwtProperties properties) {
         byte[] keyBytes;

@@ -15,7 +15,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** user - expectation N:M 연결 테이블 (PK: user_id, expectation_id) */
+/** 사용자가 온보딩에서 선택한 여행 기대 항목을 나타낸다. 사용자당 여러 개를 가질 수 있다. */
 @Entity
 @Getter
 @Table(name = "user_expectation")
@@ -35,6 +35,7 @@ public class UserExpectation extends BaseTimeEntity {
     @JoinColumn(name = "expectation_id", nullable = false)
     private Expectation expectation;
 
+    /** 사용자와 여행 기대 항목으로 선택 내역을 생성한다. */
     @Builder
     private UserExpectation(User user, Expectation expectation) {
         this.id = new UserExpectationId(user.getId(), expectation.getId());

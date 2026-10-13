@@ -16,7 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 사용자가 획득한 쿠폰 (PK: coupon_id, user_id) */
+/** 사용자가 쿠폰을 획득했음을 나타내는 획득 기록이다. 쿠폰과 사용자 조합당 한 건이다. */
 @Entity
 @Getter
 @Table(name = "acquired_coupon")
@@ -39,6 +39,7 @@ public class AcquiredCoupon extends BaseTimeEntity {
     @Column(name = "acquired_at", nullable = false)
     private LocalDateTime acquiredAt;
 
+    /** 사용자의 쿠폰 획득 기록을 생성한다. */
     @Builder
     private AcquiredCoupon(Coupon coupon, User user, LocalDateTime acquiredAt) {
         this.id = new AcquiredCouponId(coupon.getId(), user.getId());

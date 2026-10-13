@@ -14,7 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** guestbook 과 PK 를 공유하는 길 위 방명록 */
+/** 사용자가 직접 이름 붙인 길 위의 위치에 남기는 길바닥 방명록이다. 방명록 공통 내용({@link Guestbook})과 PK를 공유한다. */
 @Entity
 @Getter
 @Table(name = "road_guestbook")
@@ -40,6 +40,7 @@ public class RoadGuestbook extends BaseTimeEntity {
     @Column(name = "longitude", nullable = false)
     private double longitude;
 
+    /** 길바닥 방명록을 생성한다. */
     @Builder
     private RoadGuestbook(Guestbook guestbook, String locationAlias,
                           double latitude, double longitude) {

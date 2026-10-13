@@ -19,6 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 서비스 사용자 계정이다. */
 @Entity
 @Getter
 @Table(
@@ -61,6 +62,7 @@ public class User extends BaseTimeEntity {
     @Column(name = "status", nullable = false, length = 20)
     private UserStatus status;
 
+    /** 사용자 계정을 생성하고, 지정하지 않은 값은 기본값으로 채운다. */
     @Builder
     private User(OnboardingResult onboardingResult, String nickname, Integer point,
                  Integer targetStep, String email, String passwordHash,
@@ -75,7 +77,8 @@ public class User extends BaseTimeEntity {
         this.status = status == null ? UserStatus.ACTIVE : status;
     }
 
-    /** 온보딩 결과를 배정한다. 기존 결과가 있으면 교체한다. */
+    /** 사용자에게 온보딩 결과를 배정한다. */
+    // 기존 결과가 있으면 교체한다.
     public void assignOnboardingResult(OnboardingResult onboardingResult) {
         this.onboardingResult = onboardingResult;
     }

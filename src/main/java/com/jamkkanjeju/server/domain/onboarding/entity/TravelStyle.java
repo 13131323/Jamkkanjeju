@@ -16,6 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 온보딩에서 선택할 수 있는 여행 방식 기준 데이터이다. */
 @Entity
 @Getter
 @Table(

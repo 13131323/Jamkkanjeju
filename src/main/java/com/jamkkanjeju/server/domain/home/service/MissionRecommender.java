@@ -23,10 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 홈 추천 미션 선정. 홈 서비스의 데이터 조합 로직과 분리한다. (BUISNESS_RULE.md 3절)
- * 유형별로 최대 한 건씩 보물찾기, 협동, 문화 순서로 담고, 후보가 없는 유형은 뺀다.
- */
+/** 홈 화면에 노출할 추천 미션을 미션 유형별로 한 건씩 고른다. */
 @Component
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -38,6 +35,8 @@ public class MissionRecommender {
     private final TravelEstimator travelEstimator;
 
     /**
+     * 요청 위치를 기준으로 보물찾기·협동·문화 추천 미션 목록을 만든다. 사용자가 완료한 미션은 추천하지 않는다.
+     *
      * @param completedTreasureMissionIds    사용자가 완료한 보물찾기 미션 ID (추천에서 제외)
      * @param completedCooperativeMissionIds 사용자가 완료한 협동 미션 ID (추천에서 제외)
      */
@@ -72,6 +71,7 @@ public class MissionRecommender {
         return recommends;
     }
 
+    /** 후보 미션 중 요청 위치에서 가장 가까운 미션을 찾는다. */
     private <T> Optional<T> findNearest(List<T> candidates, Function<T, Location> locationOf,
                                         double latitude, double longitude) {
         return candidates.stream().min(Comparator.comparingDouble(candidate -> {
@@ -80,6 +80,7 @@ public class MissionRecommender {
         }));
     }
 
+    /** 추천으로 고른 미션을 홈 응답 항목으로 만든다. */
     private MissionRecommendInfo toRecommend(Mission mission, Location location, double latitude, double longitude) {
         TravelEstimate estimate = travelEstimator.estimate(latitude, longitude, location);
         return MissionRecommendInfo.of(mission, location, estimate.distanceMeter(), estimate.durationMinutes());

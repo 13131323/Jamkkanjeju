@@ -22,7 +22,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** mission 과 PK(mission_id)를 공유하는 협동 미션 상세 */
+/**
+ * 팀원이 역할을 나눠 함께 수행하는 협동 미션의 장소, 활성화 상태, 완료 보상을 담는다.
+ * 공통 미션({@link Mission})과 PK 를 공유한다.
+ */
 @Entity
 @Getter
 @Table(name = "cooperative_mission")
@@ -57,6 +60,7 @@ public class CooperativeMission extends BaseTimeEntity {
     @JoinColumn(name = "coupon_id")
     private Coupon coupon;
 
+    /** 공통 미션에 연결된 협동 미션을 장소·활성화 상태·보상과 함께 생성한다. */
     @Builder
     private CooperativeMission(Mission mission, Location location, MissionActivationStatus status,
                                ArCharacter arCharacter, Integer point, Coupon coupon) {
@@ -68,6 +72,7 @@ public class CooperativeMission extends BaseTimeEntity {
         this.coupon = coupon;
     }
 
+    /** 협동 미션의 활성화 상태를 변경한다. */
     public void changeStatus(MissionActivationStatus status) {
         this.status = status;
     }

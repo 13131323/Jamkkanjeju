@@ -1,6 +1,6 @@
 package com.jamkkanjeju.server.domain.onboarding.entity;
 
-/** travel_style.travel_style_type */
+/** 여행 방식의 종류를 구분한다. */
 public enum TravelStyleType {
     RIGHT_HERE,
     NEAR_AROUND,

@@ -2,7 +2,7 @@ package com.jamkkanjeju.server.common.exception;
 
 import org.springframework.http.HttpStatus;
 
-/** 특정 도메인에 속하지 않는 공통 오류 */
+/** 특정 도메인에 속하지 않는 공통 오류 코드를 정의한다. */
 public enum CommonErrorCode implements ErrorCode {
 
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "요청값이 올바르지 않습니다."),
@@ -13,21 +13,25 @@ public enum CommonErrorCode implements ErrorCode {
     private final HttpStatus status;
     private final String message;
 
+    /** 오류의 HTTP 상태와 메시지를 지정한다. */
     CommonErrorCode(HttpStatus status, String message) {
         this.status = status;
         this.message = message;
     }
 
+    /** 오류 응답의 HTTP 상태를 반환한다. */
     @Override
     public HttpStatus status() {
         return status;
     }
 
+    /** 오류 응답의 code 값을 반환한다. */
     @Override
     public String code() {
         return name();
     }    // name은 java enum의 내장 메서드로, enum 상수의 이름을 반환. ex) INVALID_REQUEST 상수의 name()은 "INVALID_REQUEST"를 반환.
 
+    /** 오류 응답의 message 값을 반환한다. */
     @Override
     public String message() {
         return message;

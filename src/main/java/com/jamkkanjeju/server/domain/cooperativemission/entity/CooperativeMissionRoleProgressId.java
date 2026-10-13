@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 역할 수행 기록을 참가자와 역할 카드로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

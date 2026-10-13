@@ -16,7 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 문화 미션 보상 지급 여부 (PK: user_id, culture_mission_id) */
+/** 사용자가 문화 미션 완료 보상을 받았는지 기록하는 보상 지급 상태이다. 사용자와 문화 미션 쌍으로 식별한다. */
 @Entity
 @Getter
 @Table(name = "culture_mission_reward_status")
@@ -36,6 +36,7 @@ public class CultureMissionRewardStatus extends MissionRewardStatus {
     @JoinColumn(name = "culture_mission_id", nullable = false)
     private CultureMission cultureMission;
 
+    /** 사용자의 문화 미션 보상 지급 상태를 아직 아무 보상도 받지 않은 상태로 생성한다. */
     @Builder
     private CultureMissionRewardStatus(User user, CultureMission cultureMission) {
         this.id = new CultureMissionRewardStatusId(user.getId(), cultureMission.getMissionId());

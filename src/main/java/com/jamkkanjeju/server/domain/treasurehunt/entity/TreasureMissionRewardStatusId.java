@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 보물찾기 미션 보상 지급 기록을 미션과 사용자로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

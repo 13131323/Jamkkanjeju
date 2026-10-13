@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/** 홈 화면에 필요한 추천 미션, 진행 중인 미션, 방명록 개수, 캐릭터 이미지를 한 번에 조회한다. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -47,10 +48,7 @@ public class HomeService {
     private final GuestbookCounter guestbookCounter;
     private final TravelEstimator travelEstimator;
 
-    /**
-     * 처리 순서는 domain/home/docs/BUISNESS_RULE.md를 따른다.
-     * 요청 위치 검증(1절)은 {@link GetHomeRequest}에서 끝난 상태이고, 읽기 전용으로 처리한다(9절).
-     */
+    /** 현재 사용자와 요청 위치를 기준으로 홈 조회 응답을 구성한다. */
     public GetHomeResponse getHome(Long userId, GetHomeRequest request) {
         // 1. 현재 사용자 확인
         User user = userRepository.findById(userId)
@@ -80,7 +78,7 @@ public class HomeService {
         return GetHomeResponse.of(missionRecommend, progressMission, guestbookCount, user.getOnboardingResult());
     }
 
-    /** 문화: 장소 없음, totalStep = 퀴즈 개수, currentStep = current_quiz_index */
+    /** 사용자가 진행 중인 문화 미션을 홈 응답 항목으로 만든다. */
     private List<ProgressMissionInfo> cultureProgressMissions(Long userId) {
         List<CultureMissionProgress> progresses = cultureMissionProgressRepository
                 .findAllByUserIdAndMissionStatus(userId, MissionProgressStatus.IN_PROGRESS);
@@ -102,7 +100,7 @@ public class HomeService {
                 .toList();
     }
 
-    /** 보물찾기: totalStep = item_total_count, currentStep = found_item_count */
+    /** 사용자가 진행 중인 보물찾기 미션을 홈 응답 항목으로 만든다. */
     private List<ProgressMissionInfo> treasureProgressMissions(List<TreasureMissionProgress> progresses,
                                                                double latitude, double longitude) {
         return progresses.stream()
@@ -118,7 +116,7 @@ public class HomeService {
                 .toList();
     }
 
-    /** 협동: 팀 진행도 기준, totalStep = MISSION_TYPE.steps 개수, currentStep = 팀 current_step */
+    /** 사용자가 참가한 팀이 진행 중인 협동 미션을 홈 응답 항목으로 만든다. */
     private List<ProgressMissionInfo> cooperativeProgressMissions(List<CooperativeMissionParticipant> participants,
                                                                   double latitude, double longitude) {
         return participants.stream()
@@ -128,6 +126,7 @@ public class HomeService {
                 .toList();
     }
 
+    /** 협동 미션 팀 진행도 하나를 홈 응답 항목으로 바꾼다. */
     private ProgressMissionInfo toCooperativeProgressMission(CooperativeMissionProgress progress,
                                                              double latitude, double longitude) {
         CooperativeMission cooperativeMission = progress.getCooperativeMission();

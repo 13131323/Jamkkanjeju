@@ -16,7 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 보물찾기 미션 보상 지급 여부 (PK: treasure_mission_id, user_id) */
+/** 사용자가 보물찾기 미션 보상을 받았는지 나타내는 지급 기록이다. 미션과 사용자 조합당 한 건이다. */
 @Entity
 @Getter
 @Table(name = "treasure_mission_reward_status")
@@ -36,6 +36,7 @@ public class TreasureMissionRewardStatus extends MissionRewardStatus {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /** 사용자의 보물찾기 미션 보상 지급 기록을 생성한다. */
     @Builder
     private TreasureMissionRewardStatus(TreasureMission treasureMission, User user) {
         this.id = new TreasureMissionRewardStatusId(treasureMission.getMissionId(), user.getId());

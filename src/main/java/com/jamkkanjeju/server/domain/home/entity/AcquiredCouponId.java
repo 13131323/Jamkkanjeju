@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 쿠폰 획득 기록을 쿠폰과 사용자로 식별하는 복합 키이다. */
 @Embeddable     // 이 클래스의 필드들을 다른 엔티티에 포함해서 매핑할 수 있다는 뜻
 @Getter
 @EqualsAndHashCode          // equals, hashCode 메서드 자동 생성

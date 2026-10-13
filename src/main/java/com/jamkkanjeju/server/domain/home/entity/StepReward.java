@@ -17,7 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 하루 걸음수 목표 달성 보상 지급 이력 (PK: user_id, reward_date) */
+/** 사용자가 하루 걸음 수 목표를 달성해 받은 보상 지급 기록이다. 사용자와 날짜 조합당 한 건이다. */
 @Entity
 @Getter
 @Table(name = "step_reward")
@@ -38,6 +38,7 @@ public class StepReward extends BaseTimeEntity {
     @Column(name = "steps_count", nullable = false)
     private int stepsCount;
 
+    /** 특정 날짜의 걸음 수 보상 지급 기록을 생성한다. */
     @Builder
     private StepReward(User user, LocalDate rewardDate, LocalDateTime rewardedAt, int stepsCount) {
         this.id = new StepRewardId(user.getId(), rewardDate);
@@ -46,6 +47,7 @@ public class StepReward extends BaseTimeEntity {
         this.stepsCount = stepsCount;
     }
 
+    /** 보상 지급 기준 날짜를 반환한다. */
     public LocalDate getRewardDate() {
         return id.getRewardDate();
     }

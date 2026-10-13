@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/** 온보딩 완료 시 사용자에게 배정하는 여행자 유형 결과이다. */
 @Entity
 @Getter
 @Table(name = "onboarding_result")

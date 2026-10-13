@@ -17,17 +17,20 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/** 인증이 필요한 API 범위, 인증 필터, 인증·인가 오류 응답 등 보안 정책을 구성한다. */
 @Slf4j
 @Configuration
 @EnableMethodSecurity
 @EnableConfigurationProperties(DevAuthProperties.class)
 public class SecurityConfig {
 
+    /** 비밀번호 해시 비교에 쓸 인코더를 등록한다. */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
+    /** JWT 기반 무상태 인증과 API별 접근 허용 범위를 적용한 보안 필터 체인을 등록한다. */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtTokenProvider jwtTokenProvider,

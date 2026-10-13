@@ -6,6 +6,7 @@ import com.jamkkanjeju.server.domain.mission.entity.MissionType;
 import com.jamkkanjeju.server.domain.onboarding.entity.OnboardingResult;
 import java.util.List;
 
+/** 홈 조회 응답. 추천 미션, 진행 중인 미션, 방명록 개수, 캐릭터 이미지를 담는다. */
 public record GetHomeResponse(
         List<MissionRecommendInfo> missionRecommend,
         List<ProgressMissionInfo> progressMission,
@@ -13,7 +14,7 @@ public record GetHomeResponse(
         String characterImgUrl
 ) {
 
-    /** 온보딩 결과가 없으면 characterImgUrl은 null이다. */
+    /** 홈 조회 응답을 만든다. 캐릭터 이미지는 사용자의 온보딩 결과 이미지를 쓴다. */
     public static GetHomeResponse of(List<MissionRecommendInfo> missionRecommend,
                                      List<ProgressMissionInfo> progressMission,
                                      long guestbookCount,
@@ -26,7 +27,7 @@ public record GetHomeResponse(
         );
     }
 
-    /** 장소가 없는 미션(location == null)은 장소명, 좌표, 거리, 예상 소요 시간이 모두 null이다. */
+    /** 홈에 노출할 추천 미션 한 건. */
     public record MissionRecommendInfo(
             Long missionId,
             String missionType,
@@ -37,6 +38,7 @@ public record GetHomeResponse(
             Integer durationMinutes
     ) {
 
+        /** 추천 미션 항목을 만든다. 장소가 없는 미션은 장소와 거리 정보를 비워 둔다. */
         public static MissionRecommendInfo of(Mission mission, Location location,
                                               Integer distanceMeter, Integer durationMinutes) {
             MissionType missionType = mission.getMissionType();
@@ -52,7 +54,7 @@ public record GetHomeResponse(
         }
     }
 
-    /** 장소가 없는 미션(location == null)은 장소명, 거리, 예상 소요 시간이 모두 null이다. */
+    /** 사용자가 진행 중인 미션 한 건과 그 진행 단계. */
     public record ProgressMissionInfo(
             Long missionId,
             String missionType,
@@ -64,6 +66,7 @@ public record GetHomeResponse(
             int currentStep
     ) {
 
+        /** 진행 중인 미션 항목을 만든다. 장소가 없는 미션은 장소와 거리 정보를 비워 둔다. */
         public static ProgressMissionInfo of(Mission mission, Location location,
                                              Integer distanceMeter, Integer durationMinutes,
                                              int totalStep, int currentStep) {
@@ -81,11 +84,13 @@ public record GetHomeResponse(
         }
     }
 
+    /** 추천 미션 장소의 좌표. */
     public record LocationInfo(
             double lat,
             double lng
     ) {
 
+        /** 장소의 위도·경도로 좌표 항목을 만든다. */
         public static LocationInfo from(Location location) {
             return new LocationInfo(location.getLatitude(), location.getLongitude());
         }

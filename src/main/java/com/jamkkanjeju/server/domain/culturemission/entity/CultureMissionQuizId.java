@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 문화 미션 퀴즈를 문화 미션과 퀴즈 순번으로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

@@ -18,6 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 사용자가 AR 캐릭터와 함께 찍어 저장한 사진이다. */
 @Entity
 @Getter
 @Table(name = "picture_with_character")

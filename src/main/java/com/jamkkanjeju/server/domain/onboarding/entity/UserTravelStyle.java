@@ -17,7 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** PK가 user_id 단일이라 사용자당 여행 스타일 1개만 가진다. */
+/** 사용자가 온보딩에서 선택한 여행 방식을 나타낸다. 사용자당 하나만 가진다. */
 @Entity
 @Getter
 @Table(name = "user_travel_style")
@@ -37,12 +37,14 @@ public class UserTravelStyle extends BaseTimeEntity {
     @JoinColumn(name = "travel_style_id", nullable = false)
     private TravelStyle travelStyle;
 
+    /** 사용자와 여행 방식으로 선택 내역을 생성한다. */
     @Builder
     private UserTravelStyle(User user, TravelStyle travelStyle) {
         this.user = user;
         this.travelStyle = travelStyle;
     }
 
+    /** 사용자가 선택한 여행 방식을 변경한다. */
     public void changeTravelStyle(TravelStyle travelStyle) {
         this.travelStyle = travelStyle;
     }

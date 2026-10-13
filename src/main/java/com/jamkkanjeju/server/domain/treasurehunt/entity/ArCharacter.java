@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/** 보물찾기 미션 보상으로 얻을 수 있는 AR 캐릭터(이름·스토리·이미지 등)이다. */
 @Entity
 @Getter
 @Table(name = "ar_character")

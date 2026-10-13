@@ -16,7 +16,7 @@ import javax.crypto.SecretKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** 액세스·리프레시 JWT 생성과 검증. Claim 구성은 domain/auth/docs/BUISNESS_RULE.md 3절을 따른다. */
+/** 액세스·리프레시 토큰을 발급하고 액세스 토큰을 검증한다. */
 @Component
 @RequiredArgsConstructor
 public class JwtTokenProvider {
@@ -30,6 +30,7 @@ public class JwtTokenProvider {
     private final JwtProperties jwtProperties;
     private final Clock clock;
 
+    /** 사용자의 액세스 토큰을 발급한다. */
     public IssuedToken createAccessToken(User user) {
         Instant issuedAt = now();
         Instant expiresAt = issuedAt.plus(jwtProperties.accessTokenExpiration());
@@ -46,6 +47,7 @@ public class JwtTokenProvider {
         return new IssuedToken(token, issuedAt, expiresAt);
     }
 
+    /** 사용자의 리프레시 토큰을 발급한다. */
     public IssuedToken createRefreshToken(User user) {
         Instant issuedAt = now();
         Instant expiresAt = issuedAt.plus(jwtProperties.refreshTokenExpiration());
@@ -63,7 +65,7 @@ public class JwtTokenProvider {
     }
 
     /**
-     * 액세스 토큰의 서명·만료·{@code type} Claim을 검증하고 사용자 정보를 꺼낸다.
+     * 액세스 토큰을 검증하고 인증된 사용자 정보를 꺼낸다.
      *
      * @throws io.jsonwebtoken.ExpiredJwtException 만료된 토큰
      * @throws JwtException 서명 불일치, 형식 오류, 액세스 토큰이 아닌 경우 등 그 밖의 검증 실패
@@ -89,8 +91,9 @@ public class JwtTokenProvider {
         }
     }
 
-    /** JWT의 iat/exp는 초 단위이므로 응답·DB에 쓰는 시각도 초 단위로 맞춘다. */
+    /** 토큰 발급 기준 현재 시각을 구한다. */
     private Instant now() {
+        // JWT의 iat/exp는 초 단위이므로 응답·DB에 쓰는 시각도 초 단위로 맞춘다.
         return clock.instant().truncatedTo(ChronoUnit.SECONDS);
     }
 }

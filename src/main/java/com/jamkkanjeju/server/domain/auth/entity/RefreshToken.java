@@ -19,6 +19,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+/** 사용자에게 발급한 리프레시 토큰의 저장 기록이다. */
 @Entity
 @Getter
 @Table(
@@ -52,6 +53,7 @@ public class RefreshToken extends BaseTimeEntity {
     @Column(name = "device_info", length = 255)
     private String deviceInfo;
 
+    /** 리프레시 토큰 기록을 생성한다. */
     @Builder
     private RefreshToken(User user, String tokenHash, LocalDateTime expiresAt,
                          LocalDateTime revokedAt, String deviceInfo) {
@@ -62,6 +64,7 @@ public class RefreshToken extends BaseTimeEntity {
         this.deviceInfo = deviceInfo;
     }
 
+    /** 리프레시 토큰을 폐기 상태로 만든다. */
     public void revoke(LocalDateTime revokedAt) {
         this.revokedAt = revokedAt;
     }

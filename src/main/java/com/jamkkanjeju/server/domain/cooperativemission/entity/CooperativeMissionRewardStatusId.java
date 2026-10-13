@@ -9,6 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/** 협동 미션 보상 지급 상태를 협동 미션과 사용자로 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode

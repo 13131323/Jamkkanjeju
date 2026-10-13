@@ -17,7 +17,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** PK가 user_id 단일이라 사용자당 이동수단 1개만 가진다. */
+/** 사용자가 온보딩에서 선택한 이동 수단을 나타낸다. 사용자당 하나만 가진다. */
 @Entity
 @Getter
 @Table(name = "user_transportation")
@@ -37,12 +37,14 @@ public class UserTransportation extends BaseTimeEntity {
     @JoinColumn(name = "transportation_id", nullable = false)
     private Transportation transportation;
 
+    /** 사용자와 이동 수단으로 선택 내역을 생성한다. */
     @Builder
     private UserTransportation(User user, Transportation transportation) {
         this.user = user;
         this.transportation = transportation;
     }
 
+    /** 사용자가 선택한 이동 수단을 변경한다. */
     public void changeTransportation(Transportation transportation) {
         this.transportation = transportation;
     }
