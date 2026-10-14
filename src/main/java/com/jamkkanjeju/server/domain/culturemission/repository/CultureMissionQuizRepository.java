@@ -24,6 +24,14 @@ public interface CultureMissionQuizRepository extends JpaRepository<CultureMissi
             """)
     List<QuizCount> countByCultureMissionIds(@Param("cultureMissionIds") Collection<Long> cultureMissionIds);
 
+    /**
+     * 결과: 문화 미션({@code missionId})의 퀴즈 전체 목록을 퀴즈 번호 오름차순으로 정렬한 것.
+     * 연관 엔티티는 함께 로딩하지 않으며, 퀴즈가 없으면 빈 목록이다.
+     * 사용: 문화 미션 시작/이어하기({@code POST /api/v2/culture-missions/{missionId}/progress}) 응답의
+     * {@code quizDetails}를 이 순서 그대로 구성하고, 목록 크기를 {@code quizCount}로 쓴다.
+     */
+    List<CultureMissionQuiz> findAllByIdCultureMissionIdOrderByIdQuizIndexAsc(Long missionId);
+
     interface QuizCount {
 
         Long getCultureMissionId();

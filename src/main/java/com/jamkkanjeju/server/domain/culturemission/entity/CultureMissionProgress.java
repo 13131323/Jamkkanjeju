@@ -88,4 +88,12 @@ public class CultureMissionProgress extends BaseTimeEntity {
         this.missionStatus = MissionProgressStatus.COMPLETED;
         this.lastCompletedAt = completedAt;
     }
+
+    /** 완료한 문화 미션을 첫 퀴즈부터 다시 풀 수 있게 진행 상태를 되돌린다. */
+    public void restart() {
+        this.missionStatus = MissionProgressStatus.IN_PROGRESS;
+        this.currentQuizIndex = 1;
+        this.correctCount = 0;
+        // 마지막 완료 시각은 이전 완료 기록이므로 재시작해도 지우지 않는다.
+    }
 }

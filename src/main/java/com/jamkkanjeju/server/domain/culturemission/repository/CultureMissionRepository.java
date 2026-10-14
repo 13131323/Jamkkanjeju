@@ -1,11 +1,19 @@
 package com.jamkkanjeju.server.domain.culturemission.repository;
 
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
+import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+/**
+ * 문화 미션을 조회하는 레포지토리이다.
+ * 결과: 상속받은 {@code findById(missionId)}는 공통 미션 ID와 같은 ID의 문화 미션 한 건이며
+ * 연관 엔티티는 함께 로딩하지 않고, 없으면 빈 {@code Optional}이다.
+ * 사용: {@code findById(missionId)}는 문화 미션 시작/이어하기({@code POST /api/v2/culture-missions/{missionId}/progress})에서
+ * 요청한 미션을 확인하는 데 쓰고, 없으면 {@code CULTURE_MISSION_NOT_FOUND}, 비활성이면 {@code CULTURE_MISSION_INACTIVE}로 처리한다.
+ */
 public interface CultureMissionRepository extends JpaRepository<CultureMission, Long> {
 
     /**
@@ -16,4 +24,6 @@ public interface CultureMissionRepository extends JpaRepository<CultureMission, 
      */
     @EntityGraph(attributePaths = "mission.missionType")
     List<CultureMission> findAllByStatus(MissionActivationStatus status);
+
+    Long mission(Mission mission);
 }
