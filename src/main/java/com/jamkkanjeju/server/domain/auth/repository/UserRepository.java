@@ -12,6 +12,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 문화 미션 시작/이어하기({@code POST /api/v2/culture-missions/{cultureMissionId}/progress})에서 로그인 사용자를 확인하는 데 쓰고,
  * 없으면 서비스가 {@code UNAUTHORIZED}로 처리한다. 온보딩 완료는 조회한 사용자에게 온보딩 결과를 배정해 응답을 만들고,
  * 홈 조회는 사용자의 온보딩 결과로 캐릭터 이미지를 구성하며, 문화 미션 시작은 새 진행도의 사용자로 연결한다.
+ * 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})도 같은 방식으로 사용자를 확인하고,
+ * 완료 보상으로 포인트를 지급하면 조회한 사용자의 포인트에 누적한다.
  */
 public interface UserRepository extends JpaRepository<User, Long> {
 

@@ -32,4 +32,16 @@ public interface CultureMissionProgressRepository extends JpaRepository<CultureM
      * 응답의 {@code cultureMissionProgressId}와 {@code currentQuizNumber}를 이 진행도로 구성한다.
      */
     Optional<CultureMissionProgress> findByUserIdAndCultureMissionMissionId(Long userId, Long missionId);
+
+    /**
+     * 결과: 진행도 ID({@code id})가 사용자({@code userId}) 소유이고 진행 상태가 {@code missionStatus}인 진행도 한 건.
+     * 문화 미션과 그 보상 정보({@code cultureMission.arCharacter}, {@code cultureMission.coupon.location})가 함께 로딩되어 있고,
+     * 없거나 다른 사용자 것이거나 상태가 다르면 빈 {@code Optional}이다.
+     * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})에서
+     * IN_PROGRESS로 조회해 없으면 {@code CULTURE_MISSION_PROGRESS_NOT_FOUND}로 처리하고, 채점 결과로 퀴즈 번호·정답 수·완료 상태를 갱신한다.
+     * 완료 시 미션의 보상 정보로 응답의 {@code reward}를 구성한다.
+     */
+    @EntityGraph(attributePaths = {"cultureMission.arCharacter", "cultureMission.coupon.location"})
+    Optional<CultureMissionProgress> findByIdAndUserIdAndMissionStatus(Long id, Long userId,
+                                                                      MissionProgressStatus missionStatus);
 }
