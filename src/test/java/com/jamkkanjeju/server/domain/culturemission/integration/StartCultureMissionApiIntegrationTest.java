@@ -281,15 +281,15 @@ class StartCultureMissionApiIntegrationTest {
 
         assertThat(body).containsOnlyKeys("cultureMissionProgressId", "quizCount", "currentQuizNumber", "quizDetails");
         List<Map<String, Object>> details = JsonPath.parse(body).read("$.quizDetails");
-        assertThat(details.getFirst()).containsOnlyKeys("quizIndex", "imgUrl", "question", "options", "answer",
-                "hint", "explanation");
+        // 정답(answer)과 해설(explanation)은 진행도 저장 API의 채점 응답에서만 제공한다.
+        assertThat(details.getFirst()).containsOnlyKeys("quizIndex", "imgUrl", "question", "options", "hint");
         assertThat(details.getFirst().get("question")).isEqualTo("객관식 문제 1");
         assertThat(details.getFirst().get("options")).isEqualTo(List.of("하르방", "하라범", "하르봉", "하르범"));
-        assertThat(details.getFirst().get("answer")).isEqualTo("하르방");
+        assertThat(details.getFirst().get("hint")).isEqualTo("힌트 1");
     }
 
     @Test
-    void 주관식_선택지와_없는_이미지_힌트_해설은_필드를_빼지_않고_null로_반환한다() throws Exception {
+    void 주관식_선택지와_없는_이미지_힌트는_필드를_빼지_않고_null로_반환한다() throws Exception {
         User user = saveUser("cm-it@example.com");
         CultureMission mission = cultureMission(MissionActivationStatus.ACTIVE, 0);
         shortAnswerQuiz(mission, 1);
@@ -298,12 +298,10 @@ class StartCultureMissionApiIntegrationTest {
         Map<String, Object> detail = JsonPath.parse(responseBody(start(user, mission.getMissionId())
                 .andExpect(status().isCreated()))).read("$.quizDetails[0]");
 
-        assertThat(detail).containsKeys("options", "imgUrl", "hint", "explanation");
+        assertThat(detail).containsKeys("options", "imgUrl", "hint");
         assertThat(detail.get("options")).isNull();
         assertThat(detail.get("imgUrl")).isNull();
         assertThat(detail.get("hint")).isNull();
-        assertThat(detail.get("explanation")).isNull();
-        assertThat(detail.get("answer")).isEqualTo("많이");
     }
 
     @Test

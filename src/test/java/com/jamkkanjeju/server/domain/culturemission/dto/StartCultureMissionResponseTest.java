@@ -42,7 +42,7 @@ class StartCultureMissionResponseTest {
     }
 
     @Test
-    void 문제_번호_이미지_질문_선택지_정답_힌트_해설을_그대로_옮긴다() {
+    void 문제_번호_이미지_질문_선택지_힌트를_그대로_옮긴다() {
         QuizDetail detail = StartCultureMissionResponse.of(progress,
                 List.of(multipleChoiceQuiz(cultureMission, 1)), false).quizDetails().getFirst();
 
@@ -50,28 +50,24 @@ class StartCultureMissionResponseTest {
         assertThat(detail.imgUrl()).isEqualTo("https://example.com/quiz-1.png");
         assertThat(detail.question()).isEqualTo("객관식 문제 1");
         assertThat(detail.options()).containsExactly("하르방", "하라범", "하르봉", "하르범");
-        assertThat(detail.answer()).isEqualTo("하르방");
         assertThat(detail.hint()).isEqualTo("힌트 1");
-        assertThat(detail.explanation()).isEqualTo("해설 1");
     }
 
     @Test
-    void 주관식_선택지와_없는_이미지_힌트_해설은_null로_둔다() {
+    void 주관식_선택지와_없는_이미지_힌트는_null로_둔다() {
         QuizDetail detail = StartCultureMissionResponse.of(progress,
                 List.of(shortAnswerQuiz(cultureMission, 1)), false).quizDetails().getFirst();
 
         assertThat(detail.options()).isNull();
         assertThat(detail.imgUrl()).isNull();
         assertThat(detail.hint()).isNull();
-        assertThat(detail.explanation()).isNull();
     }
 
     @Test
-    void 객관식과_주관식_모두_정답을_문자열로_반환한다() {
-        List<QuizDetail> details = StartCultureMissionResponse.of(progress, List.of(
-                multipleChoiceQuiz(cultureMission, 1),
-                shortAnswerQuiz(cultureMission, 2)), false).quizDetails();
-
-        assertThat(details).extracting(QuizDetail::answer).containsExactly("하르방", "많이");
+    void 문제_항목에_정답과_해설을_담지_않는다() {
+        assertThat(QuizDetail.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .containsExactly("quizIndex", "imgUrl", "question", "options", "hint")
+                .doesNotContain("answer", "explanation");
     }
 }

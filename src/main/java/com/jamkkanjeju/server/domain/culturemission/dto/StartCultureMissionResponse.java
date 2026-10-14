@@ -28,15 +28,13 @@ public record StartCultureMissionResponse(
         );
     }
 
-    /** 사용자가 풀 문화 미션 문제 한 건과 정답·힌트·해설. */
+    /** 사용자가 풀 문화 미션 문제 한 건. 정답과 해설은 채점 전이므로 담지 않는다. */
     public record QuizDetail(
             int quizIndex,
             String imgUrl,
             String question,
             List<String> options,
-            String answer,
-            String hint,
-            String explanation
+            String hint
     ) {
 
         /** 퀴즈 엔티티로 문제 항목을 만든다. 주관식이면 선택지는 null이다. */
@@ -46,9 +44,7 @@ public record StartCultureMissionResponse(
                     quiz.getImgUrl(),
                     quiz.getQuestion(),
                     quiz.getOptions() != null ? List.copyOf(quiz.getOptions()) : null,
-                    quiz.getAnswer(),
-                    quiz.getHint(),
-                    quiz.getExplanation()
+                    quiz.getHint()
             );
         }
     }

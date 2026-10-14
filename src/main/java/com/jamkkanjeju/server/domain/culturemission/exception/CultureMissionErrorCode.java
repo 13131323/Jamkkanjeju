@@ -7,7 +7,9 @@ import org.springframework.http.HttpStatus;
 public enum CultureMissionErrorCode implements ErrorCode {
 
     CULTURE_MISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "문화 미션을 찾을 수 없습니다."),
-    CULTURE_MISSION_INACTIVE(HttpStatus.NOT_FOUND, "비활성화된 문화 미션입니다.");
+    CULTURE_MISSION_INACTIVE(HttpStatus.NOT_FOUND, "비활성화된 문화 미션입니다."),
+    CULTURE_MISSION_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 문화 미션 진행도를 찾을 수 없습니다."),
+    CULTURE_MISSION_QUIZ_INDEX_MISMATCH(HttpStatus.CONFLICT, "현재 풀어야 하는 퀴즈 번호와 일치하지 않습니다.");
 
     private final HttpStatus status;
     private final String message;
