@@ -303,7 +303,7 @@ Status Code : `200 OK`
 | `nextLocation.locationTitle` | string | 다음 장소명 |
 | `nextLocation.locationImageUrl` | string, null | 다음 장소 이미지 URL. 이미지를 제공하지 못하면 `null` |
 | `nextLocation.distanceMeter` | number | 요청 위치에서 다음 장소까지의 직선거리(m) |
-| `nextLocation.mission` | object, null | 다음 장소에서 수행할 미션. 연결된 미션이 없으면 `null` |
+| `nextLocation.mission` | object, null | 다음 장소에서 수행할 활성 미션. 연결된 활성 미션이 없으면 `null` |
 | `nextLocation.mission.id` | integer | 다음 미션의 공통 미션 ID |
 | `nextLocation.mission.missionType` | string | 다음 미션 유형. `CULTURE \| COOPERATIVE \| TREASURE` |
 | `reward` | object, null | 이번 요청으로 실제 지급된 보상 정보. 진행 중이면 `null`, 완료되면 객체 |

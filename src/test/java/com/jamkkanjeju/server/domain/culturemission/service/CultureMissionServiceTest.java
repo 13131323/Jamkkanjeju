@@ -14,10 +14,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.jamkkanjeju.server.common.client.TourApiClient;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
+import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
 import com.jamkkanjeju.server.domain.culturemission.dto.StartCultureMissionResponse;
 import com.jamkkanjeju.server.domain.culturemission.dto.StartCultureMissionResponse.QuizDetail;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
@@ -27,8 +29,11 @@ import com.jamkkanjeju.server.domain.culturemission.exception.CultureMissionErro
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionProgressRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionRepository;
+import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
+import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,6 +58,16 @@ class CultureMissionServiceTest {
     private CultureMissionProgressRepository cultureMissionProgressRepository;
     @Mock
     private CultureMissionQuizRepository cultureMissionQuizRepository;
+    @Mock
+    private CooperativeMissionRepository cooperativeMissionRepository;
+    @Mock
+    private TreasureMissionRepository treasureMissionRepository;
+    @Mock
+    private CultureMissionRewardGranter cultureMissionRewardGranter;
+    @Mock
+    private NextLocationRecommender nextLocationRecommender;
+    @Mock
+    private TourApiClient tourApiClient;
 
     private CultureMissionService cultureMissionService;
     private User user;
@@ -62,7 +77,9 @@ class CultureMissionServiceTest {
     @BeforeEach
     void setUp() {
         cultureMissionService = new CultureMissionService(userRepository, cultureMissionRepository,
-                cultureMissionProgressRepository, cultureMissionQuizRepository);
+                cultureMissionProgressRepository, cultureMissionQuizRepository,
+                cooperativeMissionRepository, treasureMissionRepository, cultureMissionRewardGranter,
+                nextLocationRecommender, tourApiClient, Clock.systemDefaultZone());
         user = activeUser(USER_ID);
         activeMission = cultureMission(MISSION_ID, MissionActivationStatus.ACTIVE);
         quizzes = List.of(multipleChoiceQuiz(activeMission, 1), shortAnswerQuiz(activeMission, 2));

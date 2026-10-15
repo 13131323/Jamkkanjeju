@@ -19,11 +19,11 @@ public interface CooperativeMissionRepository extends JpaRepository<CooperativeM
     List<CooperativeMission> findAllByStatusAndLocationIsNotNull(MissionActivationStatus status);
 
     /**
-     * 결과: 장소({@code locationId})에 연결된 협동 미션 전체 목록(활성 상태 무관). 각 원소는 {@code mission.missionType}이
-     * 함께 로딩되어 있고, 연결된 미션이 없으면 빈 목록이다.
+     * 결과: 장소({@code locationId})에 연결되고 활성 상태가 {@code status}인 협동 미션 전체 목록.
+     * 각 원소는 {@code mission.missionType}이 함께 로딩되어 있고, 해당하는 미션이 없으면 빈 목록이다.
      * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})의 완료 응답에서
-     * 추천 장소의 보물찾기 미션 목록과 합쳐 하나를 무작위로 골라 {@code nextLocation.mission}을 구성한다.
+     * 추천 장소의 ACTIVE 보물찾기 미션 목록과 합쳐 하나를 무작위로 골라 {@code nextLocation.mission}을 구성한다.
      */
     @EntityGraph(attributePaths = "mission.missionType")
-    List<CooperativeMission> findAllByLocationId(Long locationId);
+    List<CooperativeMission> findAllByLocationIdAndStatus(Long locationId, MissionActivationStatus status);
 }

@@ -89,6 +89,14 @@ public class CultureMissionProgress extends BaseTimeEntity {
         this.lastCompletedAt = completedAt;
     }
 
+    /** 마지막 퀴즈의 채점 결과를 반영해 문화 미션을 완료한다. 퀴즈 번호는 마지막 번호를 유지한다. */
+    public void completeLastQuiz(boolean correct, LocalDateTime completedAt) {
+        if (correct) {
+            this.correctCount++;
+        }
+        complete(completedAt);
+    }
+
     /** 완료한 문화 미션을 첫 퀴즈부터 다시 풀 수 있게 진행 상태를 되돌린다. */
     public void restart() {
         this.missionStatus = MissionProgressStatus.IN_PROGRESS;
