@@ -40,6 +40,8 @@ public interface CultureMissionProgressRepository extends JpaRepository<CultureM
      * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})에서
      * IN_PROGRESS로 조회해 없으면 {@code CULTURE_MISSION_PROGRESS_NOT_FOUND}로 처리하고, 채점 결과로 퀴즈 번호·정답 수·완료 상태를 갱신한다.
      * 완료 시 미션의 보상 정보로 응답의 {@code reward}를 구성한다.
+     * 문화 미션 중단({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress/stop})에서도
+     * IN_PROGRESS로 조회하고, 비활성 여부를 검증한 뒤 즉시 완료 처리하여 저장된 정답 수로 보상을 지급한다.
      */
     @EntityGraph(attributePaths = {"cultureMission.arCharacter", "cultureMission.coupon.location"})
     Optional<CultureMissionProgress> findByIdAndUserIdAndMissionStatus(Long id, Long userId,

@@ -70,3 +70,4 @@ management:
 logging:
   level:
     org.hibernate.SQL: off
+    com.jamkkanjeju.server.common.client.TourApiClient: debug

@@ -43,6 +43,8 @@ public interface CultureMissionQuizRepository extends JpaRepository<CultureMissi
      * 결과: 문화 미션({@code missionId})의 퀴즈 개수. 퀴즈가 없으면 0이다.
      * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})에서
      * 제출한 번호가 마지막 문제인지 판단해 진행 중·완료를 나누고, 응답의 {@code quizCount}로 쓴다.
+     * 문화 미션 중단({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress/stop})에서도
+     * 응답의 {@code quizCount}를 구성하는 데 사용한다. 중단에서는 마지막 문제 여부를 판단하지 않는다.
      */
     long countByIdCultureMissionId(Long missionId);
 

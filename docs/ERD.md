@@ -123,6 +123,16 @@ MISSION {
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
 
+MISSION_REWARD_STATUS {
+    bigint mission_id PK, FK "NOT NULL"
+    bigint user_id PK, FK "NOT NULL"
+    boolean ar_character_reward_granted "NOT NULL, DEFAULT: FALSE"
+    boolean point_reward_granted "NOT NULL, DEFAULT: FALSE"
+    boolean coupon_reward_granted "NOT NULL, DEFAULT: FALSE"
+    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+}
+
 LOCATION {
 	bigint id PK "NOT NULL"
 	bigint content_id "NOT NULL"
@@ -199,16 +209,6 @@ CULTURE_MISSION_QUIZ {
 
 }
 
-CULTURE_MISSION_REWARD_STATUS {
-    bigint user_id PK, FK "NOT NULL"
-    bigint culture_mission_id PK, FK "NOT NULL"
-    boolean ar_character_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean point_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean coupon_reward_granted "NOT NULL, DEFAULT: FALSE"
-    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-}
-
 CULTURE_MISSION_PROGRESS {
     bigint id PK "NOT NULL"
 	bigint culture_mission_id FK "NOT NULL"
@@ -230,16 +230,6 @@ COOPERATIVE_MISSION {
 	bigint ar_character_id FK
 	int point "CHECK: >= 0"
 	bigint coupon_id FK
-    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-}
-
-COOPERATIVE_MISSION_REWARD_STATUS {
-    bigint cooperative_mission_id PK, FK "NOT NULL"
-    bigint user_id PK, FK "NOT NULL"
-    boolean ar_character_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean point_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean coupon_reward_granted "NOT NULL, DEFAULT: FALSE"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
@@ -299,16 +289,6 @@ TREASURE_MISSION {
 	bigint coupon_id FK
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-}
-
-TREASURE_MISSION_REWARD_STATUS {
-    bigint treasure_mission_id PK, FK "NOT NULL"
-    bigint user_id PK, FK "NOT NULL"
-    boolean ar_character_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean point_reward_granted "NOT NULL, DEFAULT: FALSE"
-    boolean coupon_reward_granted "NOT NULL, DEFAULT: FALSE"
-    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
-    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
 
 TREASURE_MISSION_PROGRESS {
@@ -430,11 +410,9 @@ USER ||--o{ REFRESH_TOKEN : has
 USER ||--o{ STEP_REWARD : receives
 USER ||--o{ VISITED_LOCATION : visits
 USER ||--o{ GPS : records
-USER ||--o{ CULTURE_MISSION_REWARD_STATUS : receives
+USER ||--o{ MISSION_REWARD_STATUS : receives
 USER ||--o{ CULTURE_MISSION_PROGRESS : progresses
-USER ||--o{ COOPERATIVE_MISSION_REWARD_STATUS : receives
 USER ||--o{ COOPERATIVE_MISSION_PARTICIPANT : joins
-USER ||--o{ TREASURE_MISSION_REWARD_STATUS : receives
 USER ||--o{ TREASURE_MISSION_PROGRESS : progresses
 USER o|--o{ GUESTBOOK : writes
 USER ||--o{ GUESTBOOK_LIKE : likes
@@ -451,6 +429,7 @@ LOCATION o|--o{ TREASURE_MISSION : hosts
 VISITED_LOCATION o|--o{ LOCATION_GUESTBOOK : referenced_by
 
 MISSION_TYPE ||--o{ MISSION : categorizes
+MISSION ||--o{ MISSION_REWARD_STATUS : tracks
 MISSION ||--o| CULTURE_MISSION : has_detail
 MISSION ||--o| COOPERATIVE_MISSION : has_detail
 MISSION ||--o| TREASURE_MISSION : has_detail
@@ -468,16 +447,13 @@ COUPON o|--o{ TREASURE_MISSION : rewards
 COUPON ||--o{ ACQUIRED_COUPON : acquired_as
 
 CULTURE_MISSION ||--|{ CULTURE_MISSION_QUIZ : contains
-CULTURE_MISSION ||--o{ CULTURE_MISSION_REWARD_STATUS : tracks
 CULTURE_MISSION ||--o{ CULTURE_MISSION_PROGRESS : tracks
 
-COOPERATIVE_MISSION ||--o{ COOPERATIVE_MISSION_REWARD_STATUS : tracks
 COOPERATIVE_MISSION ||--o{ COOPERATIVE_MISSION_PROGRESS : tracks
 COOPERATIVE_MISSION_PROGRESS ||--|{ COOPERATIVE_MISSION_PARTICIPANT : has
 COOPERATIVE_MISSION_PARTICIPANT ||--o{ COOPERATIVE_MISSION_ROLE_PROGRESS : progresses
 COOPERATIVE_ROLE_CARD ||--o{ COOPERATIVE_MISSION_ROLE_PROGRESS : assigned_as
 
-TREASURE_MISSION ||--o{ TREASURE_MISSION_REWARD_STATUS : tracks
 TREASURE_MISSION ||--o{ TREASURE_MISSION_PROGRESS : tracks
 TREASURE_MISSION_PROGRESS ||--|{ TREASURE_MISSION_PROGRESS_ITEM : contains
 

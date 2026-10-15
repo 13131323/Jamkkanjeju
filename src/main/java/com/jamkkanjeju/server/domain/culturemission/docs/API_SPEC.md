@@ -504,3 +504,225 @@ Status Code : `404 Not Found`
 }
 ```
 
+---
+
+# 문화 미션 중단 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 문화 미션 중단 |
+| HTTP 메서드 | `PATCH` |
+| 도메인 | `CULTURE_MISSION` |
+| 엔드포인트 | `/api/v2/culture-missions/{cultureMissionProgressId}/progress/stop` |
+
+### API 설명
+
+사용자가 문화 미션을 끝까지 풀지 않고 중단할 때 호출한다.
+
+인증된 사용자의 진행 중인 문화 미션만 중단할 수 있다. 중단한 미션도 완료로 취급하며, 중단 시점까지 저장된 정답 개수를 기준으로 보상을 지급하고 다음 추천 장소를 함께 반환한다.
+
+보상은 진행도 저장 API의 완료 처리와 동일하게 AR 캐릭터, 포인트, 쿠폰 순서로 정답 하나당 항목 하나를 지급한다. 같은 사용자와 같은 문화 미션에서 이전에 지급받은 항목은 제외하며, 남은 보상보다 많이 지급하지 않는다.
+
+이번 요청으로 실제 지급된 보상만 응답에 포함한다. 지급할 보상이 없어도 중단은 정상 처리되며, 보상 객체의 각 항목을 `null`로 반환한다.
+
+다음 추천 장소는 항상 객체로 반환한다. 장소 이미지를 제공하지 못하면 이미지 URL만 `null`로 반환하고, 연결된 활성 미션이 없으면 미션 정보는 `null`로 반환한다.
+
+답변을 제출하거나 채점하는 요청이 아니므로 정답 여부·정답·해설과 현재 퀴즈 번호는 응답에 포함하지 않는다.
+
+비활성화된 문화 미션은 중단할 수 없다. 진행 도중 비활성화된 경우에도 동일하게 적용한다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+
+---
+
+### 요청 Query
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `latitude` | number | 필수 | 사용자 현재 위치의 위도. -90 이상 90 이하 |
+| `longitude` | number | 필수 | 사용자 현재 위치의 경도. -180 이상 180 이하 |
+
+---
+
+### 요청 Path
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `cultureMissionProgressId` | integer | 필수 | 중단할 문화 미션 진행도 ID. 시작/이어하기 응답으로 받은 값을 전달한다. 미션 ID와 구분 |
+
+요청 예시:
+
+```http
+PATCH /api/v2/culture-missions/31/progress/stop?latitude=33.5572&longitude=126.7591
+Authorization: Bearer {accessToken}
+```
+
+---
+
+### 요청 Body
+
+없음
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `200 OK`
+
+문화 미션을 정상적으로 중단하고 완료 처리한 경우
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `missionProgressStatus` | string | 문화 미션 진행 상태. 항상 `COMPLETED` |
+| `quizCount` | integer | 문화 미션의 전체 문제 수 |
+| `correctNumber` | integer | 중단 시점까지 저장된 정답 개수 |
+| `nextLocation` | object | 다음 추천 장소 정보 |
+| `nextLocation.id` | integer | 다음 장소 ID |
+| `nextLocation.locationTitle` | string | 다음 장소명 |
+| `nextLocation.locationImageUrl` | string, null | 다음 장소 이미지 URL. 이미지를 제공하지 못하면 `null` |
+| `nextLocation.distanceMeter` | number | 요청 위치에서 다음 장소까지의 직선거리(m) |
+| `nextLocation.mission` | object, null | 다음 장소에서 수행할 활성 미션. 연결된 활성 미션이 없으면 `null` |
+| `nextLocation.mission.id` | integer | 다음 미션의 공통 미션 ID |
+| `nextLocation.mission.missionType` | string | 다음 미션 유형. `CULTURE \| COOPERATIVE \| TREASURE` |
+| `reward` | object | 이번 중단 요청으로 실제 지급된 보상 정보 |
+| `reward.arCharacter` | object, null | 이번 요청으로 지급된 AR 캐릭터. 지급되지 않았으면 `null` |
+| `reward.arCharacter.id` | integer | AR 캐릭터 ID |
+| `reward.arCharacter.name` | string | AR 캐릭터 이름 |
+| `reward.arCharacter.imageUrl` | string | AR 캐릭터 이미지 URL |
+| `reward.point` | integer, null | 이번 요청으로 지급된 포인트. 지급되지 않았으면 `null` |
+| `reward.coupon` | object, null | 이번 요청으로 지급된 쿠폰. 지급되지 않았으면 `null` |
+| `reward.coupon.couponLocation` | string, null | 쿠폰 사용처. 연결된 장소가 없으면 `null` |
+| `reward.coupon.couponPrice` | integer | 쿠폰 금액 |
+
+아래는 저장된 정답 개수가 1이며 이전에 지급받은 보상이 없어 AR 캐릭터를 지급한 예시다.
+
+```json
+{
+  "missionProgressStatus": "COMPLETED",
+  "quizCount": 3,
+  "correctNumber": 1,
+  "nextLocation": {
+    "id": 39,
+    "locationTitle": "한담 해안 산책로",
+    "locationImageUrl": "https://example.com/locations/handam.jpg",
+    "distanceMeter": 4200,
+    "mission": {
+      "id": 342,
+      "missionType": "TREASURE"
+    }
+  },
+  "reward": {
+    "arCharacter": {
+      "id": 7,
+      "name": "돌담이",
+      "imageUrl": "https://example.com/characters/stone-spirit.png"
+    },
+    "point": null,
+    "coupon": null
+  }
+}
+```
+
+이전에 AR 캐릭터를 지급받은 사용자가 정답 1개로 중단하면 이번에는 포인트만 지급될 수 있다. 정답이 0개이거나 모든 보상을 이미 지급받았다면 보상 객체의 모든 항목을 `null`로 반환한다.
+
+---
+
+### 오류 응답 데이터
+
+#### 요청값 검증 실패
+
+Status Code : `400 Bad Request`
+
+필수 Query가 누락되었거나 Path·Query의 형식이 올바르지 않은 경우, 위도·경도가 허용 범위를 벗어난 경우
+
+```json
+{
+  "code": "INVALID_REQUEST",
+  "message": "요청값이 올바르지 않습니다."
+}
+```
+
+#### 인증 정보 없음
+
+Status Code : `401 Unauthorized`
+
+`Authorization` 헤더 없이 호출한 경우 또는 인증 정보에 해당하는 사용자가 존재하지 않는 경우
+
+```json
+{
+  "code": "UNAUTHORIZED",
+  "message": "인증이 필요합니다."
+}
+```
+
+#### 유효하지 않은 토큰
+
+Status Code : `401 Unauthorized`
+
+토큰이 변조되었거나 형식이 올바르지 않은 경우, 리프레시 토큰으로 호출한 경우
+
+```json
+{
+  "code": "INVALID_TOKEN",
+  "message": "유효하지 않은 토큰입니다."
+}
+```
+
+#### 만료된 토큰
+
+Status Code : `401 Unauthorized`
+
+액세스 토큰의 유효기간이 지난 경우
+
+```json
+{
+  "code": "EXPIRED_TOKEN",
+  "message": "만료된 토큰입니다."
+}
+```
+
+#### 서버 오류
+
+Status Code : `500 Internal Server Error`
+
+문화 미션 중단 처리 중 예기치 않은 오류가 발생한 경우
+
+```json
+{
+  "code": "INTERNAL_SERVER_ERROR",
+  "message": "서버 내부 오류가 발생했습니다."
+}
+```
+
+#### 문화 미션 진행도 없음
+
+Status Code : `404 Not Found`
+
+요청한 진행도가 존재하지 않거나 다른 사용자의 진행도인 경우, 이미 완료된 진행도인 경우
+
+```json
+{
+  "code": "CULTURE_MISSION_PROGRESS_NOT_FOUND",
+  "message": "진행 중인 문화 미션 진행도를 찾을 수 없습니다."
+}
+```
+
+#### 비활성화된 문화 미션
+
+Status Code : `404 Not Found`
+
+진행도에 해당하는 문화 미션의 상태가 `INACTIVE`인 경우. 진행 도중 비활성화된 경우도 포함한다.
+
+```json
+{
+  "code": "CULTURE_MISSION_INACTIVE",
+  "message": "비활성화된 문화 미션입니다."
+}
+```
+

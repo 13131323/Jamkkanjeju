@@ -1,0 +1,16 @@
+package com.jamkkanjeju.server.domain.mission.repository;
+
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+/**
+ * 결과: {@code findById(new MissionRewardStatusId(missionId, userId))}는 공통 미션·사용자별 지급 상태 한 건이며,
+ * 없으면 빈 {@code Optional}이다. 미션과 사용자는 LAZY이며 함께 로딩하지 않는다.
+ * {@code save(rewardStatus)}는 저장한 지급 상태를 반환한다.
+ * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})과
+ * 중단({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress/stop})의 보상 지급 시
+ * 기존 지급 항목을 제외하고 새 지급 여부를 저장한다. 실제 지급 항목으로 응답의 {@code reward}를 구성한다.
+ */
+public interface MissionRewardStatusRepository extends JpaRepository<MissionRewardStatus, MissionRewardStatusId> {
+}

@@ -2,9 +2,9 @@ package com.jamkkanjeju.server.domain.culturemission.service;
 
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
-import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionRewardStatus;
-import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionRewardStatusId;
-import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
 import com.jamkkanjeju.server.domain.home.entity.AcquiredCoupon;
 import com.jamkkanjeju.server.domain.home.entity.AcquiredCouponId;
 import com.jamkkanjeju.server.domain.home.entity.Coupon;
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class CultureMissionRewardGranter {
 
-    private final CultureMissionRewardStatusRepository cultureMissionRewardStatusRepository;
+    private final MissionRewardStatusRepository missionRewardStatusRepository;
     private final AcquiredArCharacterRepository acquiredArCharacterRepository;
     private final AcquiredCouponRepository acquiredCouponRepository;
     private final Clock clock;
@@ -35,8 +35,8 @@ public class CultureMissionRewardGranter {
      * 지급할 보상이 없으면 모든 항목이 null이다.
      */
     public GrantedReward grant(User user, CultureMission cultureMission, int correctCount) {
-        Optional<CultureMissionRewardStatus> savedStatus = cultureMissionRewardStatusRepository
-                .findById(new CultureMissionRewardStatusId(user.getId(), cultureMission.getMissionId()));
+        Optional<MissionRewardStatus> savedStatus = missionRewardStatusRepository
+                .findById(new MissionRewardStatusId(cultureMission.getMissionId(), user.getId()));
 
         List<RewardItem> candidates = candidates(cultureMission, savedStatus.orElse(null));
         int grantCount = Math.min(correctCount, candidates.size());
@@ -44,9 +44,9 @@ public class CultureMissionRewardGranter {
             return GrantedReward.NONE;
         }
 
-        CultureMissionRewardStatus rewardStatus = savedStatus.orElseGet(() -> CultureMissionRewardStatus.builder()
+        MissionRewardStatus rewardStatus = savedStatus.orElseGet(() -> MissionRewardStatus.builder()
                 .user(user)
-                .cultureMission(cultureMission)
+                .mission(cultureMission.getMission())
                 .build());
         ArCharacter grantedArCharacter = null;
         Integer grantedPoint = null;
@@ -69,12 +69,12 @@ public class CultureMissionRewardGranter {
             }
         }
         // 지급 여부를 모두 반영한 뒤 저장해야 새 기록에도 지급 상태가 함께 저장된다.
-        cultureMissionRewardStatusRepository.save(rewardStatus);
+        missionRewardStatusRepository.save(rewardStatus);
         return new GrantedReward(grantedArCharacter, grantedPoint, grantedCoupon);
     }
 
     /** 미션에 설정되어 있고 아직 지급하지 않은 보상 항목을 AR 캐릭터, 포인트, 쿠폰 순서로 고른다. */
-    private List<RewardItem> candidates(CultureMission cultureMission, CultureMissionRewardStatus rewardStatus) {
+    private List<RewardItem> candidates(CultureMission cultureMission, MissionRewardStatus rewardStatus) {
         List<RewardItem> candidates = new ArrayList<>();
         if (cultureMission.getArCharacter() != null
                 && (rewardStatus == null || !rewardStatus.isArCharacterRewardGranted())) {

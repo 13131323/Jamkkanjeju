@@ -1,4 +1,4 @@
-package com.jamkkanjeju.server.domain.treasurehunt.entity;
+package com.jamkkanjeju.server.domain.mission.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
@@ -9,17 +9,17 @@ import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 보물찾기 미션 보상 지급 기록을 미션과 사용자로 식별하는 복합 키이다. */
+/** 공통 미션 ID와 사용자 ID로 보상 지급 상태를 식별하는 복합 키이다. */
 @Embeddable
 @Getter
 @EqualsAndHashCode
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
-public class TreasureMissionRewardStatusId implements Serializable {
+public class MissionRewardStatusId implements Serializable {
 
-    @Column(name = "treasure_mission_id")
-    private Long treasureMissionId;
+    @Column(name = "mission_id", nullable = false)
+    private Long missionId;
 
-    @Column(name = "user_id")
+    @Column(name = "user_id", nullable = false)
     private Long userId;
 }

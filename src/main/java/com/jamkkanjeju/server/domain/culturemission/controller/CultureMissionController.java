@@ -5,6 +5,8 @@ import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgre
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressRequest;
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressResponse;
 import com.jamkkanjeju.server.domain.culturemission.dto.StartCultureMissionResponse;
+import com.jamkkanjeju.server.domain.culturemission.dto.StopCultureMissionLocationRequest;
+import com.jamkkanjeju.server.domain.culturemission.dto.StopCultureMissionResponse;
 import com.jamkkanjeju.server.domain.culturemission.service.CultureMissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -51,5 +53,15 @@ public class CultureMissionController {
             @Valid @RequestBody SaveCultureMissionProgressRequest request) {
         return cultureMissionService.saveCultureMissionProgress(
                 authUser.userId(), cultureMissionProgressId, location, request);
+    }
+
+    /** 로그인한 사용자의 문화 미션을 중단하고 완료 상태, 다음 장소와 지급 보상을 반환한다. */
+    @Operation(summary = "문화 미션 중단")
+    @PatchMapping("/{cultureMissionProgressId}/progress/stop")
+    public StopCultureMissionResponse stopCultureMission(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cultureMissionProgressId,
+            @Valid @ParameterObject @ModelAttribute StopCultureMissionLocationRequest location) {
+        return cultureMissionService.stopCultureMission(authUser.userId(), cultureMissionProgressId, location);
     }
 }

@@ -1,5 +1,8 @@
 package com.jamkkanjeju.server.domain.culturemission.service;
 
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
+
 import static com.jamkkanjeju.server.domain.auth.support.AuthFixtures.activeUser;
 import static com.jamkkanjeju.server.domain.culturemission.support.CultureMissionFixtures.cultureMission;
 import static org.assertj.core.api.Assertions.*;
@@ -7,7 +10,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.culturemission.entity.*;
-import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
 import com.jamkkanjeju.server.domain.home.entity.*;
 import com.jamkkanjeju.server.domain.home.repository.AcquiredCouponRepository;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -26,7 +29,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 /** 보상 순서·개수 제한과 재도전 이력 및 획득 기록 중복 방지를 검증한다. */
 @ExtendWith(MockitoExtension.class)
 class CultureMissionRewardGranterTest {
-    @Mock CultureMissionRewardStatusRepository statuses;
+    @Mock MissionRewardStatusRepository statuses;
     @Mock AcquiredArCharacterRepository characters;
     @Mock AcquiredCouponRepository coupons;
     final Clock clock=Clock.fixed(Instant.parse("2026-10-15T03:00:00Z"),ZoneId.of("Asia/Seoul"));
@@ -50,7 +53,7 @@ class CultureMissionRewardGranterTest {
         assertThat(reward.coupon()).isEqualTo(count>=3?coupon:null);
         assertThat(user.getPoint()).isEqualTo(count>=2?120:20);
         if(count==0) { verifyNoInteractions(characters,coupons);verify(statuses,never()).save(any());return; }
-        var status=ArgumentCaptor.forClass(CultureMissionRewardStatus.class);
+        var status=ArgumentCaptor.forClass(MissionRewardStatus.class);
         verify(statuses).save(status.capture());
         assertThat(status.getValue().isArCharacterRewardGranted()).isTrue();
         assertThat(status.getValue().isPointRewardGranted()).isEqualTo(count>=2);
@@ -66,9 +69,9 @@ class CultureMissionRewardGranterTest {
         } else verifyNoInteractions(coupons);
     }
     @Test void retrySkipsPreviouslyGrantedCharacterAndPreservesItsFlag() {
-        var status=CultureMissionRewardStatus.builder().user(user).cultureMission(mission).build();
+        var status=MissionRewardStatus.builder().user(user).mission(mission.getMission()).build();
         status.grantArCharacterReward();
-        when(statuses.findById(new CultureMissionRewardStatusId(15L,31L))).thenReturn(Optional.of(status));
+        when(statuses.findById(new MissionRewardStatusId(31L,15L))).thenReturn(Optional.of(status));
         var reward=granter.grant(user,mission,1);
         assertThat(reward.point()).isEqualTo(100);assertThat(reward.arCharacter()).isNull();
         assertThat(reward.coupon()).isNull();assertThat(status.isArCharacterRewardGranted()).isTrue();
@@ -76,9 +79,9 @@ class CultureMissionRewardGranterTest {
         verifyNoInteractions(characters,coupons);
     }
     @Test void noRemainingRewardsDoesNotWriteOrPay() {
-        var status=CultureMissionRewardStatus.builder().user(user).cultureMission(mission).build();
+        var status=MissionRewardStatus.builder().user(user).mission(mission.getMission()).build();
         status.grantArCharacterReward();status.grantPointReward();status.grantCouponReward();
-        when(statuses.findById(new CultureMissionRewardStatusId(15L,31L))).thenReturn(Optional.of(status));
+        when(statuses.findById(new MissionRewardStatusId(31L,15L))).thenReturn(Optional.of(status));
         assertThat(granter.grant(user,mission,3)).isEqualTo(CultureMissionRewardGranter.GrantedReward.NONE);
         assertThat(user.getPoint()).isZero();verifyNoInteractions(characters,coupons);verify(statuses,never()).save(any());
     }
@@ -95,7 +98,7 @@ class CultureMissionRewardGranterTest {
         when(coupons.existsById(new AcquiredCouponId(10L,15L))).thenReturn(true);
         assertThat(granter.grant(user,mission,1).coupon()).isSameAs(coupon);
         verify(coupons,never()).save(any());
-        var status=ArgumentCaptor.forClass(CultureMissionRewardStatus.class);verify(statuses).save(status.capture());
+        var status=ArgumentCaptor.forClass(MissionRewardStatus.class);verify(statuses).save(status.capture());
         assertThat(status.getValue().isCouponRewardGranted()).isTrue();
     }
 }

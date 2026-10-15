@@ -312,6 +312,23 @@ CREATE TABLE `mission` (
         ON DELETE RESTRICT
 ) ENGINE = InnoDB;
 
+CREATE TABLE `mission_reward_status` (
+    `mission_id`                  BIGINT   NOT NULL,
+    `user_id`                     BIGINT   NOT NULL,
+    `ar_character_reward_granted` BOOLEAN  NOT NULL DEFAULT FALSE,
+    `point_reward_granted`        BOOLEAN  NOT NULL DEFAULT FALSE,
+    `coupon_reward_granted`       BOOLEAN  NOT NULL DEFAULT FALSE,
+    `created_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`mission_id`, `user_id`),
+    CONSTRAINT `fk_mission_reward_status_user`
+        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
+        ON DELETE CASCADE,
+    CONSTRAINT `fk_mission_reward_status_mission`
+        FOREIGN KEY (`mission_id`) REFERENCES `mission` (`id`)
+        ON DELETE CASCADE
+) ENGINE = InnoDB;
+
 -- ---------------------------------------------------------------------
 -- 문화 미션
 -- ---------------------------------------------------------------------
@@ -357,23 +374,6 @@ CREATE TABLE `culture_mission_quiz` (
     CONSTRAINT `chk_culture_mission_quiz_options_schema`
         CHECK (`options` IS NULL OR JSON_SCHEMA_VALID('{"type":"array","items":{"type":"string"}}', `options`)),
     CONSTRAINT `fk_culture_mission_quiz_culture_mission`
-        FOREIGN KEY (`culture_mission_id`) REFERENCES `culture_mission` (`mission_id`)
-        ON DELETE CASCADE
-) ENGINE = InnoDB;
-
-CREATE TABLE `culture_mission_reward_status` (
-    `user_id`                     BIGINT   NOT NULL,
-    `culture_mission_id`          BIGINT   NOT NULL,
-    `ar_character_reward_granted` BOOLEAN  NOT NULL DEFAULT FALSE,
-    `point_reward_granted`        BOOLEAN  NOT NULL DEFAULT FALSE,
-    `coupon_reward_granted`       BOOLEAN  NOT NULL DEFAULT FALSE,
-    `created_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`user_id`, `culture_mission_id`),
-    CONSTRAINT `fk_culture_mission_reward_status_user`
-        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE CASCADE,
-    CONSTRAINT `fk_culture_mission_reward_status_culture_mission`
         FOREIGN KEY (`culture_mission_id`) REFERENCES `culture_mission` (`mission_id`)
         ON DELETE CASCADE
 ) ENGINE = InnoDB;
@@ -434,23 +434,6 @@ CREATE TABLE `cooperative_mission` (
     CONSTRAINT `fk_cooperative_mission_coupon`
         FOREIGN KEY (`coupon_id`) REFERENCES `coupon` (`id`)
         ON DELETE SET NULL
-) ENGINE = InnoDB;
-
-CREATE TABLE `cooperative_mission_reward_status` (
-    `cooperative_mission_id`      BIGINT   NOT NULL,
-    `user_id`                     BIGINT   NOT NULL,
-    `ar_character_reward_granted` BOOLEAN  NOT NULL DEFAULT FALSE,
-    `point_reward_granted`        BOOLEAN  NOT NULL DEFAULT FALSE,
-    `coupon_reward_granted`       BOOLEAN  NOT NULL DEFAULT FALSE,
-    `created_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`cooperative_mission_id`, `user_id`),
-    CONSTRAINT `fk_cooperative_mission_reward_status_cooperative_mission`
-        FOREIGN KEY (`cooperative_mission_id`) REFERENCES `cooperative_mission` (`mission_id`)
-        ON DELETE CASCADE,
-    CONSTRAINT `fk_cooperative_mission_reward_status_user`
-        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 CREATE TABLE `cooperative_mission_progress` (
@@ -560,23 +543,6 @@ CREATE TABLE `treasure_mission` (
     CONSTRAINT `fk_treasure_mission_coupon`
         FOREIGN KEY (`coupon_id`) REFERENCES `coupon` (`id`)
         ON DELETE SET NULL
-) ENGINE = InnoDB;
-
-CREATE TABLE `treasure_mission_reward_status` (
-    `treasure_mission_id`         BIGINT   NOT NULL,
-    `user_id`                     BIGINT   NOT NULL,
-    `ar_character_reward_granted` BOOLEAN  NOT NULL DEFAULT FALSE,
-    `point_reward_granted`        BOOLEAN  NOT NULL DEFAULT FALSE,
-    `coupon_reward_granted`       BOOLEAN  NOT NULL DEFAULT FALSE,
-    `created_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `updated_at`                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (`treasure_mission_id`, `user_id`),
-    CONSTRAINT `fk_treasure_mission_reward_status_treasure_mission`
-        FOREIGN KEY (`treasure_mission_id`) REFERENCES `treasure_mission` (`mission_id`)
-        ON DELETE CASCADE,
-    CONSTRAINT `fk_treasure_mission_reward_status_user`
-        FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
-        ON DELETE CASCADE
 ) ENGINE = InnoDB;
 
 CREATE TABLE `treasure_mission_progress` (

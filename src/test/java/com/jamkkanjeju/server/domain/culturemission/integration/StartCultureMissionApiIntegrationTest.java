@@ -14,8 +14,8 @@ import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionProgress;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionQuiz;
-import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionRewardStatus;
-import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionRewardStatusId;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository;
 import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -150,7 +150,7 @@ class StartCultureMissionApiIntegrationTest {
         User user = saveUser("cm-it@example.com");
         CultureMission mission = cultureMission(MissionActivationStatus.ACTIVE, 3);
         progress(user, mission, MissionProgressStatus.COMPLETED, 3, 3, LAST_COMPLETED_AT);
-        CultureMissionRewardStatus reward = CultureMissionRewardStatus.builder().user(user).cultureMission(mission).build();
+        MissionRewardStatus reward = MissionRewardStatus.builder().user(user).mission(mission.getMission()).build();
         reward.grantArCharacterReward();
         reward.grantPointReward();
         reward.grantCouponReward();
@@ -160,8 +160,8 @@ class StartCultureMissionApiIntegrationTest {
         start(user, mission.getMissionId()).andExpect(status().isOk());
         flushAndClear();
 
-        CultureMissionRewardStatus reloaded = entityManager.find(CultureMissionRewardStatus.class,
-                new CultureMissionRewardStatusId(user.getId(), mission.getMissionId()));
+        MissionRewardStatus reloaded = entityManager.find(MissionRewardStatus.class,
+                new MissionRewardStatusId(mission.getMissionId(), user.getId()));
         assertThat(reloaded).isNotNull();
         assertThat(reloaded.isArCharacterRewardGranted()).isTrue();
         assertThat(reloaded.isPointRewardGranted()).isTrue();

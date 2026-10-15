@@ -91,8 +91,8 @@ class SaveCultureMissionProgressApiIntegrationTest {
     }
     private void reload() { em.flush();em.clear(); }
     private CultureMissionProgress progress(Data d) { return em.find(CultureMissionProgress.class,d.progress().getId()); }
-    private CultureMissionRewardStatus rewardStatus(Data d) {
-        return em.find(CultureMissionRewardStatus.class,new CultureMissionRewardStatusId(d.user().getId(),d.mission().getMissionId()));
+    private MissionRewardStatus rewardStatus(Data d) {
+        return em.find(MissionRewardStatus.class,new MissionRewardStatusId(d.mission().getMissionId(), d.user().getId()));
     }
     private long acquired(String entity,Data d) {
         return em.createQuery("select count(a) from "+entity+" a where a.user.id=:id",Long.class)
@@ -245,7 +245,7 @@ class SaveCultureMissionProgressApiIntegrationTest {
             // 커밋해 준비한 이 테스트의 데이터만 FK 순서대로 정리한다.
             jdbc.update("delete from acquired_ar_character where user_id=?",d.user().getId());
             jdbc.update("delete from acquired_coupon where user_id=?",d.user().getId());
-            jdbc.update("delete from culture_mission_reward_status where user_id=?",d.user().getId());
+            jdbc.update("delete from mission_reward_status where user_id=?",d.user().getId());
             jdbc.update("delete from culture_mission_progress where user_id=?",d.user().getId());
             jdbc.update("delete from culture_mission_quiz where culture_mission_id=?",d.mission().getMissionId());
             jdbc.update("delete from culture_mission where mission_id=?",d.mission().getMissionId());

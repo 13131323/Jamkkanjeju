@@ -13,6 +13,8 @@ import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgre
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressResponse.NextMission;
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressResponse.Reward;
 import com.jamkkanjeju.server.domain.culturemission.dto.StartCultureMissionResponse;
+import com.jamkkanjeju.server.domain.culturemission.dto.StopCultureMissionLocationRequest;
+import com.jamkkanjeju.server.domain.culturemission.dto.StopCultureMissionResponse;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionProgress;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionQuiz;
@@ -182,5 +184,53 @@ public class CultureMissionService {
             return null;
         }
         return NextMission.from(candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())));
+    }
+
+    /** 진행 중인 문화 미션을 즉시 완료하고, 저장된 정답 수로 보상을 지급하여 다음 장소와 함께 반환한다. */
+    @Transactional
+    public StopCultureMissionResponse stopCultureMission(Long userId, Long progressId,
+                                                          StopCultureMissionLocationRequest location) {
+        // 1. 현재 사용자 확인
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2. 진행도와 문화 미션 확인
+        CultureMissionProgress progress = cultureMissionProgressRepository
+                .findByIdAndUserIdAndMissionStatus(progressId, userId, MissionProgressStatus.IN_PROGRESS)
+                .orElseThrow(() -> new BusinessException(CultureMissionErrorCode.CULTURE_MISSION_PROGRESS_NOT_FOUND));
+        CultureMission cultureMission = progress.getCultureMission();
+        if (cultureMission.getStatus() == MissionActivationStatus.INACTIVE) {
+            throw new BusinessException(CultureMissionErrorCode.CULTURE_MISSION_INACTIVE);
+        }
+
+        // 3. 즉시 완료 처리. 퀴즈 번호와 정답 수는 변경하지 않는다.
+        progress.complete(LocalDateTime.now(clock));
+
+        // 4. 보상 지급. 진행도 저장과 같은 지급 순서와 중복 방지 규칙을 사용한다.
+        GrantedReward grantedReward = cultureMissionRewardGranter.grant(user, cultureMission, progress.getCorrectCount());
+
+        // 5. 다음 장소 추천. 실패하면 완료 처리와 보상 지급도 함께 롤백된다.
+        RecommendedLocation recommended = nextLocationRecommender
+                .recommend(location.latitude(), location.longitude())
+                .orElseThrow(() -> new IllegalStateException(
+                        "문화 미션 중단 후 추천 가능한 장소가 없습니다."
+                        + " userId=" + userId
+                        + ", progressId=" + progressId
+                ));
+        Location nextLocation = recommended.location();
+        String locationImageUrl = tourApiClient.getLocationImageUrl(nextLocation.getContentId());
+        NextMission nextMission = pickNextMission(nextLocation.getId());
+
+        // 6. 응답 구성. 중단은 채점하지 않으므로 정답 여부·정답·해설을 포함하지 않는다.
+        int quizCount = Math.toIntExact(cultureMissionQuizRepository.countByIdCultureMissionId(cultureMission.getMissionId()));
+        return StopCultureMissionResponse.of(
+                progress, quizCount,
+                StopCultureMissionResponse.NextLocation.of(
+                        nextLocation, locationImageUrl, recommended.distanceMeter(),
+                        nextMission != null
+                                ? new StopCultureMissionResponse.NextMission(nextMission.id(), nextMission.missionType())
+                                : null),
+                StopCultureMissionResponse.Reward.of(
+                        grantedReward.arCharacter(), grantedReward.point(), grantedReward.coupon()));
     }
 }
