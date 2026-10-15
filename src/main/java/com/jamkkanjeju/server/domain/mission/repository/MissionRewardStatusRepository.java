@@ -11,6 +11,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})과
  * 중단({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress/stop})의 보상 지급 시
  * 기존 지급 항목을 제외하고 새 지급 여부를 저장한다. 실제 지급 항목으로 응답의 {@code reward}를 구성한다.
+ * 미션 홈 조회({@code GET /api/v2/missions/{missionId}})에서는 같은 {@code findById}로 사용자별 지급 여부를 확인해
+ * {@code remainingReward}에서 이미 지급된 항목을 null로 구성한다. 기록이 없어도 생성하거나 저장하지 않는다.
  */
 public interface MissionRewardStatusRepository extends JpaRepository<MissionRewardStatus, MissionRewardStatusId> {
 }

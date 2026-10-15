@@ -155,33 +155,9 @@ Status Code : `200 OK`
 
 ### 오류 응답 데이터
 
-인증·인가 오류(401/403)는 [공통 인증 오류](../../auth/docs/API_SPEC.md#공통-인증-오류)를 따른다.
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
 
-#### 요청값 검증 실패
-
-Status Code : `400 Bad Request`
-
-`missionId`를 정수로 변환할 수 없거나 지원하는 정수 범위를 벗어난 경우
-
-```json
-{
-  "code": "INVALID_REQUEST",
-  "message": "요청값이 올바르지 않습니다."
-}
-```
-
-#### 서버 오류
-
-Status Code : `500 Internal Server Error`
-
-미션 홈 정보 조회 중 예기치 않은 오류가 발생한 경우
-
-```json
-{
-  "code": "INTERNAL_SERVER_ERROR",
-  "message": "서버 내부 오류가 발생했습니다."
-}
-```
+`missionId`를 정수로 변환할 수 없거나 지원하는 정수 범위를 벗어난 경우 공통 요청값 검증 실패에 해당한다.
 
 #### 미션 없음
 
