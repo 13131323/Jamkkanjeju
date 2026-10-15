@@ -572,6 +572,8 @@ CREATE TABLE `treasure_mission_progress_item` (
     `treasure_mission_progress_id` BIGINT      NOT NULL,
     `item_index`                   INT         NOT NULL,
     `item_status`                  VARCHAR(20) NOT NULL COMMENT 'UNFOUND, FOUND',
+    `longitude`                    DOUBLE      NOT NULL,
+    `latitude`                     DOUBLE      NOT NULL,
     `found_at`                     DATETIME    NULL,
     `created_at`                   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`                   DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -580,6 +582,10 @@ CREATE TABLE `treasure_mission_progress_item` (
         CHECK (`item_index` >= 0),
     CONSTRAINT `chk_treasure_mission_progress_item_status_enum`
         CHECK (`item_status` IN ('UNFOUND', 'FOUND')),
+    CONSTRAINT `chk_treasure_mission_progress_item_longitude_range`
+        CHECK (`longitude` BETWEEN -180 AND 180),
+    CONSTRAINT `chk_treasure_mission_progress_item_latitude_range`
+        CHECK (`latitude` BETWEEN -90 AND 90),
     CONSTRAINT `fk_treasure_mission_progress_item_progress`
         FOREIGN KEY (`treasure_mission_progress_id`) REFERENCES `treasure_mission_progress` (`id`)
         ON DELETE CASCADE

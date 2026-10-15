@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.mission.integration;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static com.jamkkanjeju.server.domain.auth.support.AuthFixtures.activeUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
@@ -55,7 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
 })
 @AutoConfigureMockMvc
 @Transactional
-class GetMissionHomeApiIntegrationTest {
+class GetMissionHomeApiIntegrationTest extends MySqlIntegrationTestSupport {
 
     private static final String URL = "/api/v2/missions/{missionId}";
     private static final Instant NOW = Instant.parse("2026-10-15T03:00:00Z");

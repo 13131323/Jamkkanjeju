@@ -143,6 +143,10 @@ List<TreasureMissionProgress> findAllByUserId(Long userId);
 - 테스트는 `TEST.md` 파일을 먼저 읽고 구현한다.
 - 단위 테스트: 스프링/DB 없이 JUnit 5 + AssertJ + Mockito, 시각은 `Clock.fixed`, 공통 픽스처는 `<도메인>/support/`.
 - 통합 테스트: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional`, 실제 MySQL 사용. JWT 설정은 `properties`로 고정한다.
+- 모든 DB 통합 테스트와 컨텍스트 로딩 테스트는 `src/test/java/com/jamkkanjeju/server/support/MySqlIntegrationTestSupport`를 직접 또는 공통 부모를 통해 상속한다. 개발 DB(`tour`)나 고정 테스트 DB에 직접 연결하지 않는다.
+- 테스트 JVM의 실행 한 번에 `tour_test_<UUID>` 임시 DB 하나를 생성해 전체 통합 테스트가 공유한다. Flyway로 최신 마이그레이션을 적용하고, 테스트 종료 시 스프링 컨텍스트·연결을 닫은 뒤 임시 DB와 해당 DB 접근 권한을 자동 제거한다. 단위 테스트만 실행하면 DB를 생성하지 않는다.
+- 임시 DB의 MySQL 접속은 `TEST_MYSQL_HOST`(기본 localhost), `TEST_MYSQL_PORT`(기본 `MYSQL_HOST_PORT` 또는 3306)를 사용한다. 생성·삭제에는 `TEST_MYSQL_ADMIN_USER`(기본 root)와 `MYSQL_ROOT_PASSWORD`, 테스트 연결에는 `MYSQL_USER`(기본 tour)와 `MYSQL_PASSWORD`가 필요하다. DB 생성이 실패해도 개발 DB로 대체하지 않는다.
+- 테스트별 준비 데이터의 롤백·직접 정리 규칙은 그대로 유지한다. JVM 강제 종료·MySQL 중단으로 자동 정리가 불가능하면 남은 임시 DB 이름을 확인해 보고하고, 개발 DB·볼륨은 삭제하지 않는다.
 - 인증은 `@WithMockUser`가 동작하지 않으므로 `JwtTokenProvider`로 발급한 실제 토큰을 헤더로 보낸다.
 - 검증용 엔드포인트가 필요하면 테스트 안의 `@TestConfiguration` 컨트롤러를 쓴다.
 - 테스트 계획은 사용자가 도메인의 `docs/TEST.md`에 작성한다. Codex는 계획의 테스트 클래스명, 검증 항목, 실행 순서를 그대로 따라 테스트를 작성하고 실행한다. 계획에 없는 케이스를 추가하거나 계획이 모호하면 사용자에게 먼저 묻는다.

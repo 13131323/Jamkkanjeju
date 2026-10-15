@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.onboarding.integration;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,7 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 })
 @AutoConfigureMockMvc
 @Transactional
-class OnboardingApiIntegrationTest {
+class OnboardingApiIntegrationTest extends MySqlIntegrationTestSupport {
 
     private static final String URL = "/api/v2/users/me";
     private static final String DEFAULT_USER_TYPE = "여행자";

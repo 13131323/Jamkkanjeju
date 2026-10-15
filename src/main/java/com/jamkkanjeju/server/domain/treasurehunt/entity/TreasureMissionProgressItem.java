@@ -18,7 +18,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 보물찾기 진행 기록 안에서 보물 아이템 하나의 발견 여부와 발견 시각을 나타낸다.
+ * 보물찾기 진행 기록 안에서 보물 아이템 하나의 위치, 발견 여부와 발견 시각을 나타낸다.
  * 진행 기록과 아이템 순번 조합으로 식별한다.
  */
 @Entity
@@ -39,17 +39,27 @@ public class TreasureMissionProgressItem extends BaseTimeEntity {
     @Column(name = "item_status", nullable = false, length = 20)
     private TreasureItemStatus itemStatus;
 
+    /** 보물 아이템 위치의 경도이다. */
+    @Column(name = "longitude", nullable = false)
+    private double longitude;
+
+    /** 보물 아이템 위치의 위도이다. */
+    @Column(name = "latitude", nullable = false)
+    private double latitude;
+
     @Column(name = "found_at")
     private LocalDateTime foundAt;
 
-    /** 보물 아이템의 발견 기록을 생성한다. 상태를 지정하지 않으면 미발견으로 시작한다. */
+    /** 보물 아이템의 위치와 발견 기록을 생성한다. 상태를 지정하지 않으면 미발견으로 시작한다. */
     @Builder
     private TreasureMissionProgressItem(TreasureMissionProgress treasureMissionProgress,
                                         Integer itemIndex, TreasureItemStatus itemStatus,
-                                        LocalDateTime foundAt) {
+                                        double longitude, double latitude, LocalDateTime foundAt) {
         this.id = new TreasureMissionProgressItemId(treasureMissionProgress.getId(), itemIndex);
         this.treasureMissionProgress = treasureMissionProgress;
         this.itemStatus = itemStatus == null ? TreasureItemStatus.UNFOUND : itemStatus;
+        this.longitude = longitude;
+        this.latitude = latitude;
         this.foundAt = foundAt;
     }
 

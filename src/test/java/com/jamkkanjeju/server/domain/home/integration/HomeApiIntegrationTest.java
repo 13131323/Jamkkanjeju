@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.home.integration;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.nullValue;
@@ -73,7 +75,7 @@ import org.springframework.transaction.annotation.Transactional;
 })
 @AutoConfigureMockMvc
 @Transactional
-class HomeApiIntegrationTest {
+class HomeApiIntegrationTest extends MySqlIntegrationTestSupport {
 
     private static final String URL = "/api/v2/users/me/home";
     /** 테스트 요청 위치. 초기 데이터의 제주 장소와 수천 km 떨어져 있다. */
