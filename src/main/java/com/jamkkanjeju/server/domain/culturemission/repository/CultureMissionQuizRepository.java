@@ -8,6 +8,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * 문화 미션 퀴즈를 조회하는 레포지토리이다.
+ * 결과: 상속받은 {@code findById(new CultureMissionQuizId(missionId, quizIndex))}는 해당 미션의 해당 번호 퀴즈 한 건이며
+ * 연관 엔티티는 함께 로딩하지 않고, 없으면 빈 {@code Optional}이다.
+ * 사용: {@code findById}는 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})에서
+ * 진행도에 연결된 미션의 제출 번호 문제로만 채점하는 데 쓰고, 응답의 {@code isCorrect}, {@code answer}, {@code explanation}을 구성한다.
+ */
 public interface CultureMissionQuizRepository extends JpaRepository<CultureMissionQuiz, CultureMissionQuizId> {
 
     /**
@@ -32,6 +39,14 @@ public interface CultureMissionQuizRepository extends JpaRepository<CultureMissi
      */
     List<CultureMissionQuiz> findAllByIdCultureMissionIdOrderByIdQuizIndexAsc(Long missionId);
 
+    /**
+     * 결과: 문화 미션({@code missionId})의 퀴즈 개수. 퀴즈가 없으면 0이다.
+     * 사용: 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})에서
+     * 제출한 번호가 마지막 문제인지 판단해 진행 중·완료를 나누고, 응답의 {@code quizCount}로 쓴다.
+     */
+    long countByIdCultureMissionId(Long missionId);
+
+    //
     interface QuizCount {
 
         Long getCultureMissionId();

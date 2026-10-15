@@ -1,7 +1,6 @@
 package com.jamkkanjeju.server.domain.culturemission.repository;
 
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
-import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import java.util.List;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -25,5 +24,4 @@ public interface CultureMissionRepository extends JpaRepository<CultureMission, 
     @EntityGraph(attributePaths = "mission.missionType")
     List<CultureMission> findAllByStatus(MissionActivationStatus status);
 
-    Long mission(Mission mission);
 }
