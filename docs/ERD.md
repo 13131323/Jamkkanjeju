@@ -308,6 +308,8 @@ TREASURE_MISSION_PROGRESS_ITEM {
     bigint treasure_mission_progress_id PK, FK "NOT NULL"
     int item_index PK "NOT NULL, CHECK: >= 0"
     varchar_20 item_status "NOT NULL, Enum: UNFOUND, FOUND"
+    double longitude "NOT NULL, CHECK: -180 ~ 180"
+    double latitude "NOT NULL, CHECK: -90 ~ 90"
     datetime found_at
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"

@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.common.exception;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -44,7 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 })
 @AutoConfigureMockMvc
 @Import(GlobalExceptionHandlerIntegrationTest.ExceptionTestController.class)
-class GlobalExceptionHandlerIntegrationTest {
+class GlobalExceptionHandlerIntegrationTest extends MySqlIntegrationTestSupport {
 
     private static final String BASE_URL = "/test/exceptions";
 

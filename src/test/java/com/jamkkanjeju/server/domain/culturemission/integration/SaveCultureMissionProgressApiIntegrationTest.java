@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.culturemission.integration;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -46,7 +48,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 })
 @AutoConfigureMockMvc
 @Transactional
-class SaveCultureMissionProgressApiIntegrationTest {
+class SaveCultureMissionProgressApiIntegrationTest extends MySqlIntegrationTestSupport {
     static final String URL="/api/v2/culture-missions/{id}/progress";
     static final LocalDateTime PREVIOUS=LocalDateTime.of(2026,10,1,12,0);
     @Autowired MockMvc mvc;

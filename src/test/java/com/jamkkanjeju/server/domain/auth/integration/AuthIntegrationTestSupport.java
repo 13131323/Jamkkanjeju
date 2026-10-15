@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.auth.integration;
 
+import com.jamkkanjeju.server.support.MySqlIntegrationTestSupport;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 실제 MySQL(Flyway 스키마) + 전체 스프링 컨텍스트 + 시큐리티 필터 체인을 띄우는 통합 테스트의 공통 설정.
- * DB 접속 정보는 MYSQL_* 환경변수로, JWT 설정은 여기서 고정값으로 주입한다.
+ * DB는 공통 기반 클래스가 생성·정리하는 실행별 임시 DB를 사용하고, JWT 설정은 고정값으로 주입한다.
  * 각 테스트는 트랜잭션 안에서 실행되고 끝나면 롤백된다.
  */
 @SpringBootTest(properties = {
@@ -29,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 })
 @AutoConfigureMockMvc
 @Transactional
-abstract class AuthIntegrationTestSupport {
+abstract class AuthIntegrationTestSupport extends MySqlIntegrationTestSupport {
 
     protected static final String LOGIN_URL = "/api/v2/auth/login";
     protected static final String PASSWORD = "password123!";
