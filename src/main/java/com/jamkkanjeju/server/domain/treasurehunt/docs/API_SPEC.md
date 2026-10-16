@@ -445,3 +445,144 @@ Status Code : `409 Conflict`
   "message": "이미 찾은 보물입니다."
 }
 ```
+
+---
+
+# 보물찾기 중단 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 보물찾기 중단 |
+| HTTP 메서드 | `PATCH` |
+| 도메인 | `TREASURE_MISSION` |
+| 엔드포인트 | `/api/v2/treasure-missions/{treasureMissionProgressId}/progress/stop` |
+
+### API 설명
+
+사용자가 보물찾기 미션을 끝까지 진행하지 않고 중단할 때 호출한다.
+
+인증된 사용자의 진행 중인 보물찾기 미션만 중단할 수 있다. 남은 보물 개수와 관계없이 즉시 완료 처리하며, 중단한 미션도 완료한 미션으로 취급한다.
+
+중단 시점까지 저장된 보물 발견 정보는 유지한다. 아직 찾지 않은 보물을 발견 처리하거나 찾은 개수를 증가시키지 않는다.
+
+보상은 보물을 발견할 때 진행도 저장 API에서 지급하므로 중단 요청에서는 추가로 지급하지 않는다. 응답에는 `reward` 필드 자체를 포함하지 않는다.
+
+다음 추천 장소는 항상 객체로 반환한다. 현재 미션 장소도 추천 대상에서 제외하지 않으며, 사용자 위치에서 가장 가까운 장소를 추천한다. 장소 이미지를 제공하지 못하면 이미지 URL만 `null`, 연결된 활성 미션이 없으면 미션 정보는 `null`로 반환한다.
+
+비활성화된 보물찾기 미션은 중단할 수 없다. 진행 도중 비활성화된 경우에도 동일하게 적용한다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+
+---
+
+### 요청 Query
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `latitude` | number | 필수 | 사용자 현재 위치의 위도. -90 이상 90 이하 |
+| `longitude` | number | 필수 | 사용자 현재 위치의 경도. -180 이상 180 이하 |
+
+---
+
+### 요청 Path
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `treasureMissionProgressId` | integer | 필수 | 중단할 보물찾기 미션 진행도 ID. 시작/이어하기 응답으로 받은 값을 전달한다. 미션 ID와 구분 |
+
+요청 예시:
+
+```http
+PATCH /api/v2/treasure-missions/31/progress/stop?latitude=33.5572&longitude=126.7591
+Authorization: Bearer {accessToken}
+```
+
+---
+
+### 요청 Body
+
+없음
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `200 OK`
+
+보물찾기 미션을 정상적으로 중단하고 완료 처리한 경우
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `missionProgressStatus` | string | 보물찾기 진행 상태. 항상 `COMPLETED` |
+| `treasureCount` | integer | 해당 진행도에 실제 저장된 전체 보물 개수. 이미 찾은 보물도 포함 |
+| `foundTreasureIndexes` | integer[] | 중단 시점까지 저장된 발견 보물 번호 목록. 오름차순이며 찾은 보물이 없으면 빈 배열 |
+| `nextLocation` | object | 다음 추천 장소 정보 |
+| `nextLocation.id` | integer | 다음 장소 ID |
+| `nextLocation.locationTitle` | string | 다음 장소명 |
+| `nextLocation.locationImageUrl` | string, null | 다음 장소 이미지 URL. 이미지를 제공하지 못하면 `null` |
+| `nextLocation.distanceMeter` | number | 요청 위치에서 다음 장소까지의 직선거리(m) |
+| `nextLocation.mission` | object, null | 다음 장소에서 수행할 활성 미션. 연결된 활성 미션이 없으면 `null` |
+| `nextLocation.mission.id` | integer | 다음 미션의 공통 미션 ID |
+| `nextLocation.mission.missionType` | string | 다음 미션 유형. `CULTURE \| COOPERATIVE \| TREASURE` |
+
+보물 3개 중 2개를 찾은 상태에서 중단한 경우:
+
+```json
+{
+  "missionProgressStatus": "COMPLETED",
+  "treasureCount": 3,
+  "foundTreasureIndexes": [1, 2],
+  "nextLocation": {
+    "id": 39,
+    "locationTitle": "한담 해안 산책로",
+    "locationImageUrl": "https://example.com/locations/handam.jpg",
+    "distanceMeter": 4200,
+    "mission": {
+      "id": 342,
+      "missionType": "COOPERATIVE"
+    }
+  }
+}
+```
+
+찾은 보물이 없어도 중단할 수 있으며 `foundTreasureIndexes`는 빈 배열로 반환한다. 다음 장소에 연결된 활성 미션이 없으면 `nextLocation.mission`은 `null`이다. 이미지 조회 실패는 중단 요청을 실패시키지 않고 이미지 URL만 `null`로 반환한다.
+
+---
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
+
+Path의 타입이 올바르지 않거나 Query 좌표가 누락된 경우, 숫자가 아니거나 허용 범위를 벗어난 경우 공통 요청값 검증 실패에 해당한다.
+
+#### 보물찾기 미션 진행도 없음
+
+Status Code : `404 Not Found`
+
+요청한 진행도 ID에 해당하는 현재 사용자의 진행 중인 보물찾기 기록이 없는 경우. 존재하지 않는 진행도, 다른 사용자의 진행도 또는 이미 완료된 진행도에 중단을 요청한 경우를 포함한다.
+
+```json
+{
+  "code": "TREASURE_MISSION_PROGRESS_NOT_FOUND",
+  "message": "보물찾기 미션 진행도를 찾을 수 없습니다."
+}
+```
+
+#### 비활성화된 보물찾기 미션
+
+Status Code : `404 Not Found`
+
+중단하려는 진행도의 보물찾기 미션 상태가 `INACTIVE`인 경우
+
+```json
+{
+  "code": "TREASURE_MISSION_INACTIVE",
+  "message": "비활성화된 보물찾기 미션입니다."
+}
+```

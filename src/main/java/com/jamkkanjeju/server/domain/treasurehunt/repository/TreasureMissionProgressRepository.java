@@ -1,5 +1,6 @@
 package com.jamkkanjeju.server.domain.treasurehunt.repository;
 
+import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
 import java.util.List;
 import java.util.Optional;
@@ -29,4 +30,19 @@ public interface TreasureMissionProgressRepository extends JpaRepository<Treasur
      */
     @EntityGraph(attributePaths = "treasureMission.location")
     Optional<TreasureMissionProgress> findByUserIdAndTreasureMissionMissionId(Long userId, Long missionId);
+
+    /**
+     * 결과: 진행도 ID({@code id})가 사용자({@code userId}) 소유이고 진행 상태가 {@code missionStatus}인 진행도 한 건이다.
+     * 보물찾기 미션과 보상 정보({@code treasureMission.arCharacter}, {@code treasureMission.coupon.location})를
+     * 함께 로딩하며, 없거나 다른 사용자 소유이거나 상태가 다르면 빈 {@code Optional}이다.
+     * 사용: 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서
+     * IN_PROGRESS로 조회하고 서비스가 미션 활성 상태를 확인한다. 보물 발견에 따라 찾은 개수·완료 상태를 갱신하고,
+     * 미션의 보상 정보와 기존 지급 여부로 이번에 지급할 보상을 골라 응답의 {@code reward}를 구성한다.
+     * 보물찾기 중단({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress/stop})에서도
+     * IN_PROGRESS로 조회하고 비활성 여부를 검증한 뒤, 찾은 개수는 유지하면서 상태·완료 시각만 갱신한다.
+     * 중단에서는 함께 로딩된 보상 정보를 사용해 보상을 지급하지 않는다.
+     */
+    @EntityGraph(attributePaths = {"treasureMission.arCharacter", "treasureMission.coupon.location"})
+    Optional<TreasureMissionProgress> findByIdAndUserIdAndMissionStatus(Long id, Long userId,
+                                                                       MissionProgressStatus missionStatus);
 }

@@ -8,7 +8,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 진행도별 보물 아이템을 조회·저장·삭제하는 레포지토리이다. */
+/**
+ * 진행도별 보물 아이템을 조회·저장·삭제하는 레포지토리이다.
+ * 결과: 상속받은 {@code findById(new TreasureMissionProgressItemId(progressId, itemIndex))}는
+ * 해당 진행도의 해당 번호 보물 한 건이며, 연관 엔티티는 함께 로딩하지 않고 없으면 빈 {@code Optional}이다.
+ * 사용: 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서
+ * 사용자 소유 진행도를 확인한 뒤 보물 존재 여부·발견 여부를 검사한다. 서비스가 발견 상태·시각을 변경하고
+ * 기존 전체 목록 조회와 함께 응답의 {@code foundTreasureIndexes}를 구성한다.
+ */
 public interface TreasureMissionProgressItemRepository
         extends JpaRepository<TreasureMissionProgressItem, TreasureMissionProgressItemId> {
 
@@ -17,6 +24,10 @@ public interface TreasureMissionProgressItemRepository
      * 연관 엔티티는 함께 로딩하지 않으며, 아이템이 없으면 빈 목록이다.
      * 사용: 보물찾기 시작/이어하기({@code POST /api/v2/treasure-missions/{missionId}/progress})에서
      * 저장된 번호·좌표·발견 여부를 응답의 {@code treasureItems}로 변환한다.
+     * 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서는
+     * 서비스가 FOUND 아이템 번호를 추려 {@code foundTreasureIndexes}를 구성하고 전체 발견 여부로 완료를 판단한다.
+     * 보물찾기 중단({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress/stop})에서는
+     * 저장된 FOUND 아이템 번호만 추려 {@code foundTreasureIndexes}를 구성하며 아이템을 변경하지 않는다.
      */
     List<TreasureMissionProgressItem> findAllByIdTreasureMissionProgressIdOrderByIdItemIndexAsc(Long progressId);
 
@@ -25,6 +36,10 @@ public interface TreasureMissionProgressItemRepository
      * 발견 여부로 제한하지 않고 연관 엔티티를 로딩하지 않으며, 없으면 0이다.
      * 사용: 보물찾기 시작/이어하기({@code POST /api/v2/treasure-missions/{missionId}/progress}) 응답의
      * {@code treasureCount}를 구성한다. 서비스에서 int로 변환하며 상수나 미션 설정 개수로 대체하지 않는다.
+     * 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서도
+     * 같은 방식으로 실제 전체 개수를 조회해 {@code treasureCount}를 구성한다.
+     * 보물찾기 중단({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress/stop})에서도
+     * 발견 여부와 관계없는 실제 전체 개수를 응답의 {@code treasureCount}로 사용한다.
      */
     long countByIdTreasureMissionProgressId(Long progressId);
 

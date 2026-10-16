@@ -7,7 +7,10 @@ import org.springframework.http.HttpStatus;
 public enum TreasureHuntErrorCode implements ErrorCode {
 
     TREASURE_MISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "보물찾기 미션을 찾을 수 없습니다."),
-    TREASURE_MISSION_INACTIVE(HttpStatus.NOT_FOUND, "비활성화된 보물찾기 미션입니다.");
+    TREASURE_MISSION_INACTIVE(HttpStatus.NOT_FOUND, "비활성화된 보물찾기 미션입니다."),
+    TREASURE_MISSION_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "보물찾기 미션 진행도를 찾을 수 없습니다."),
+    TREASURE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "보물찾기 아이템을 찾을 수 없습니다."),
+    TREASURE_ITEM_ALREADY_FOUND(HttpStatus.CONFLICT, "이미 찾은 보물입니다.");
 
     private final HttpStatus status;
     private final String message;

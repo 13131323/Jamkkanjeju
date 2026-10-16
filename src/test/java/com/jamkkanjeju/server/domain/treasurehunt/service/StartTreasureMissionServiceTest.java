@@ -11,11 +11,17 @@ import com.jamkkanjeju.server.common.client.TourApiClient;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
+import com.jamkkanjeju.server.domain.mission.service.NextMissionSelector;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionLocationRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.*;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.*;
 import java.util.List;
 import java.util.Optional;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +40,9 @@ class StartTreasureMissionServiceTest {
     @Mock TreasureMissionProgressItemRepository items;
     @Mock TreasureItemCoordinateGenerator coordinates;
     @Mock TourApiClient tourApi;
+    @Mock MissionRewardGranter rewards;
+    @Mock NextLocationRecommender recommender;
+    @Mock NextMissionSelector nextMissions;
     TreasureMissionService service;
     final StartTreasureMissionLocationRequest request = new StartTreasureMissionLocationRequest(33.3, 126.3);
     final com.jamkkanjeju.server.domain.auth.entity.User user = activeUser(15L);
@@ -42,7 +51,8 @@ class StartTreasureMissionServiceTest {
     @BeforeEach
     void setUp() {
         mission = treasureMission(31L, null, 8);
-        service = new TreasureMissionService(users, missions, progresses, items, coordinates, tourApi);
+        service = new TreasureMissionService(users, missions, progresses, items, coordinates, tourApi,
+                rewards, recommender, nextMissions, Clock.fixed(Instant.parse("2026-10-16T03:00:00Z"), ZoneOffset.UTC));
     }
 
     @Test
