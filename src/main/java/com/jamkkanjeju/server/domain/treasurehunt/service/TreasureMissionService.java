@@ -23,6 +23,8 @@ import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionLocati
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionResponse.TreasureItem;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionResponse.TreasureItemLocation;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionLocationRequest;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureItemStatus;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMission;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
@@ -42,7 +44,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 사용자의 보물찾기를 시작·이어하기·재시작하고 보물 발견과 보상 지급, 완료 상태를 저장한다. */
+/** 사용자의 보물찾기를 시작·이어하기·재시작하고 보물 발견과 보상 지급, 완료·중단 상태를 저장한다. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -160,6 +162,54 @@ public class TreasureMissionService {
         return SaveTreasureMissionProgressResponse.completed(
                 progress, treasureCount, foundTreasureIndexes,
                 NextLocation.of(nextLocation, locationImageUrl, recommended.distanceMeter(), nextMission), reward);
+    }
+
+    /** 보물찾기를 즉시 완료 처리하고, 기존 발견 기록을 유지하며 추가 보상 없이 다음 장소를 반환한다. */
+    @Transactional
+    public StopTreasureMissionResponse stopTreasureMission(
+            Long userId, Long progressId, StopTreasureMissionLocationRequest location) {
+        // 1. 현재 사용자 확인
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2. 진행도와 보물찾기 미션 확인
+        TreasureMissionProgress progress = treasureMissionProgressRepository
+                .findByIdAndUserIdAndMissionStatus(progressId, userId, MissionProgressStatus.IN_PROGRESS)
+                .orElseThrow(() -> new BusinessException(TreasureHuntErrorCode.TREASURE_MISSION_PROGRESS_NOT_FOUND));
+        if (progress.getTreasureMission().getStatus() == MissionActivationStatus.INACTIVE) {
+            throw new BusinessException(TreasureHuntErrorCode.TREASURE_MISSION_INACTIVE);
+        }
+
+        // 3. 즉시 완료 처리. 찾은 개수와 아이템의 발견 상태·좌표는 변경하지 않는다.
+        progress.complete(LocalDateTime.now(clock));
+
+        // 4. 중단에서는 보상을 지급하지 않고 기존 지급 이력을 유지한다.
+
+        // 5. 다음 장소와 연결 미션 구성. 추천 장소가 없으면 완료 처리도 함께 롤백된다.
+        RecommendedLocation recommended = nextLocationRecommender
+                .recommend(location.latitude(), location.longitude())
+                .orElseThrow(() -> new IllegalStateException(
+                        "보물찾기 중단 후 추천 가능한 장소가 없습니다."
+                        + " userId=" + userId
+                        + ", progressId=" + progressId));
+        Location nextLocation = recommended.location();
+        String locationImageUrl = tourApiClient.getLocationImageUrl(nextLocation.getContentId());
+        StopTreasureMissionResponse.NextMission nextMission = nextMissionSelector.pick(nextLocation.getId())
+                .map(StopTreasureMissionResponse.NextMission::from)
+                .orElse(null);
+
+        // 6. 실제 전체 보물 수와 저장된 발견 번호를 구성한다. 응답에는 보상 필드를 포함하지 않는다.
+        int treasureCount = Math.toIntExact(treasureMissionProgressItemRepository
+                .countByIdTreasureMissionProgressId(progressId));
+        List<Integer> foundTreasureIndexes = treasureMissionProgressItemRepository
+                .findAllByIdTreasureMissionProgressIdOrderByIdItemIndexAsc(progressId).stream()
+                .filter(item -> item.getItemStatus() == TreasureItemStatus.FOUND)
+                .map(TreasureMissionProgressItem::getItemIndex)
+                .toList();
+        return StopTreasureMissionResponse.of(
+                progress, treasureCount, foundTreasureIndexes,
+                StopTreasureMissionResponse.NextLocation.of(
+                        nextLocation, locationImageUrl, recommended.distanceMeter(), nextMission));
     }
 
     /** 새 진행도의 ID를 확보한 뒤 사용자 중심의 새 보물 아이템을 저장한다. */

@@ -6,6 +6,8 @@ import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgres
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionLocationRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionResponse;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionLocationRequest;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.service.TreasureMissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -56,5 +58,15 @@ public class TreasureMissionController {
             @Valid @RequestBody SaveTreasureMissionProgressRequest request) {
         return treasureMissionService.saveTreasureMissionProgress(
                 authUser.userId(), treasureMissionProgressId, location, request);
+    }
+
+    /** 로그인한 사용자의 보물찾기를 중단하고 완료 상태와 기존 발견 기록, 다음 장소를 반환한다. */
+    @Operation(summary = "보물찾기 중단")
+    @PatchMapping("/{treasureMissionProgressId}/progress/stop")
+    public StopTreasureMissionResponse stopTreasureMission(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long treasureMissionProgressId,
+            @Valid @ParameterObject @ModelAttribute StopTreasureMissionLocationRequest location) {
+        return treasureMissionService.stopTreasureMission(authUser.userId(), treasureMissionProgressId, location);
     }
 }
