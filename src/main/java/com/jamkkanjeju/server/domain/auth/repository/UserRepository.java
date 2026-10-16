@@ -14,6 +14,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 홈 조회는 사용자의 온보딩 결과로 캐릭터 이미지를 구성하며, 문화 미션 시작은 새 진행도의 사용자로 연결한다.
  * 문화 미션 진행도 저장({@code PATCH /api/v2/culture-missions/{cultureMissionProgressId}/progress})도 같은 방식으로 사용자를 확인하고,
  * 완료 보상으로 포인트를 지급하면 조회한 사용자의 포인트에 누적한다.
+ * 보물찾기 시작/이어하기({@code POST /api/v2/treasure-missions/{missionId}/progress})도 같은 방식으로
+ * 사용자를 확인하고, 최초 진행도의 사용자로 연결한다.
  */
 public interface UserRepository extends JpaRepository<User, Long> {
 
