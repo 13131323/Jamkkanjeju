@@ -70,6 +70,13 @@ public class TreasureMissionProgress extends BaseTimeEntity {
         this.completedAt = completedAt;
     }
 
+    /** 기존 진행도 ID를 유지하면서 완료 상태와 찾은 개수를 초기화한다. */
+    public void restart() {
+        this.missionStatus = MissionProgressStatus.IN_PROGRESS;
+        this.foundItemCount = 0;
+        this.completedAt = null;
+    }
+
     /** 보물을 하나 찾았을 때 찾은 보물 개수를 1 늘린다. */
     public void increaseFoundItemCount() {
         this.foundItemCount++;

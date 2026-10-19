@@ -13,6 +13,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 기존 지급 항목을 제외하고 새 지급 여부를 저장한다. 실제 지급 항목으로 응답의 {@code reward}를 구성한다.
  * 미션 홈 조회({@code GET /api/v2/missions/{missionId}})에서는 같은 {@code findById}로 사용자별 지급 여부를 확인해
  * {@code remainingReward}에서 이미 지급된 항목을 null로 구성한다. 기록이 없어도 생성하거나 저장하지 않는다.
+ * 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서도
+ * 같은 조회·저장 메서드로 기지급 항목을 제외하고 이번 보물 발견의 지급 여부를 기록해 {@code reward}를 구성한다.
  */
 public interface MissionRewardStatusRepository extends JpaRepository<MissionRewardStatus, MissionRewardStatusId> {
 }

@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.*;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.culturemission.entity.*;
 import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import com.jamkkanjeju.server.domain.home.entity.*;
 import com.jamkkanjeju.server.domain.home.repository.AcquiredCouponRepository;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -36,7 +37,7 @@ class CultureMissionRewardGranterTest {
     CultureMissionRewardGranter granter;
     User user;CultureMission mission;ArCharacter character;Coupon coupon;
     @BeforeEach void setup() {
-        granter=new CultureMissionRewardGranter(statuses,characters,coupons,clock);
+        granter=new CultureMissionRewardGranter(new MissionRewardGranter(statuses,characters,coupons,clock));
         user=activeUser(15L);mission=cultureMission(31L,MissionActivationStatus.ACTIVE);
         character=ArCharacter.builder().id(9L).name("돌담이").imgUrl("character.png").build();
         coupon=Coupon.builder().id(10L).couponPrice(3000).build();

@@ -5,7 +5,6 @@ import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
-import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressLocationRequest;
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressRequest;
 import com.jamkkanjeju.server.domain.culturemission.dto.SaveCultureMissionProgressResponse;
@@ -27,16 +26,13 @@ import com.jamkkanjeju.server.domain.culturemission.service.CultureMissionReward
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender;
 import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender.RecommendedLocation;
-import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
-import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
+import com.jamkkanjeju.server.domain.mission.service.NextMissionSelector;
 import java.time.Clock;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,8 +47,7 @@ public class CultureMissionService {
     private final CultureMissionRepository cultureMissionRepository;
     private final CultureMissionProgressRepository cultureMissionProgressRepository;
     private final CultureMissionQuizRepository cultureMissionQuizRepository;
-    private final CooperativeMissionRepository cooperativeMissionRepository;
-    private final TreasureMissionRepository treasureMissionRepository;
+    private final NextMissionSelector nextMissionSelector;
     private final CultureMissionRewardGranter cultureMissionRewardGranter;
     private final NextLocationRecommender nextLocationRecommender;
     private final TourApiClient tourApiClient;
@@ -175,15 +170,7 @@ public class CultureMissionService {
 
     /** 장소에 연결된 활성 협동·보물찾기 미션 중 하나를 무작위로 고른다. 없으면 null이다. */
     private NextMission pickNextMission(Long locationId) {
-        List<Mission> candidates = new ArrayList<>();
-        cooperativeMissionRepository.findAllByLocationIdAndStatus(locationId, MissionActivationStatus.ACTIVE)
-                .forEach(cooperativeMission -> candidates.add(cooperativeMission.getMission()));
-        treasureMissionRepository.findAllByLocationIdAndStatus(locationId, MissionActivationStatus.ACTIVE)
-                .forEach(treasureMission -> candidates.add(treasureMission.getMission()));
-        if (candidates.isEmpty()) {
-            return null;
-        }
-        return NextMission.from(candidates.get(ThreadLocalRandom.current().nextInt(candidates.size())));
+        return nextMissionSelector.pick(locationId).map(NextMission::from).orElse(null);
     }
 
     /** 진행 중인 문화 미션을 즉시 완료하고, 저장된 정답 수로 보상을 지급하여 다음 장소와 함께 반환한다. */

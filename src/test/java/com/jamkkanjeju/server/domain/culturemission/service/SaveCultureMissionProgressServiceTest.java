@@ -19,6 +19,7 @@ import com.jamkkanjeju.server.domain.culturemission.exception.CultureMissionErro
 import com.jamkkanjeju.server.domain.culturemission.repository.*;
 import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender;
 import com.jamkkanjeju.server.domain.mission.entity.*;
+import com.jamkkanjeju.server.domain.mission.service.NextMissionSelector;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
 import java.time.*;
 import java.util.*;
@@ -48,7 +49,8 @@ class SaveCultureMissionProgressServiceTest {
     static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-15T03:00:00Z"), ZoneId.of("Asia/Seoul"));
     static final SaveCultureMissionProgressLocationRequest LOCATION = new SaveCultureMissionProgressLocationRequest(33.0,126.0);
     @BeforeEach void setup() {
-        service = new CultureMissionService(users, missions, progresses, quizzes, cooperative, treasure, rewards, recommender, images, CLOCK);
+        service = new CultureMissionService(users, missions, progresses, quizzes,
+                new NextMissionSelector(cooperative, treasure), rewards, recommender, images, CLOCK);
         user = activeUser(15L);
         mission = cultureMission(31L, MissionActivationStatus.ACTIVE);
         progress = progress(7L,user,mission,MissionProgressStatus.IN_PROGRESS,1,0,LAST_COMPLETED_AT);

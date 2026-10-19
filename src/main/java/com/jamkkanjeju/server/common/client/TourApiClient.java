@@ -8,10 +8,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.util.HtmlUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** TourAPI에서 장소 대표 이미지를 조회한다. 이미지는 부가 정보이므로 조회 실패 시 null을 반환한다. */
+/** TourAPI에서 장소 대표 이미지와 설명을 조회한다. 부가 정보 조회 실패 시 null을 반환한다. */
 @Slf4j
 @Component
 public class TourApiClient {
@@ -89,7 +90,69 @@ public class TourApiClient {
         }
     }
 
-    /** 누락·null·빈 문자열은 이미지 없음으로 취급한다. */
+    /** 장소 설명의 HTML·엔티티·불필요한 공백을 정리한다. 설명을 제공하지 못하면 null을 반환한다. */
+    public String getLocationOverview(Long contentId) {
+        if (contentId == null || contentId <= 0) {
+            log.warn("TourAPI 설명 조회 생략: 유효하지 않은 contentId={}", contentId);
+            return null;
+        }
+        if (!StringUtils.hasText(properties.serviceKey())) {
+            log.warn("TourAPI 설명 조회 생략: 인증키 미설정, contentId={}", contentId);
+            return null;
+        }
+        try {
+            String body = restClient.get()
+                    .uri(builder -> builder.path("/detailCommon2")
+                            .queryParam("serviceKey", "{serviceKey}")
+                            .queryParam("MobileOS", "{mobileOs}")
+                            .queryParam("MobileApp", "{mobileApp}")
+                            .queryParam("_type", "json")
+                            .queryParam("contentId", "{contentId}")
+                            .queryParam("overviewYN", "Y")
+                            .build(Map.of(
+                                    "serviceKey", properties.serviceKey(),
+                                    "mobileOs", properties.mobileOs(),
+                                    "mobileApp", properties.mobileApp(),
+                                    "contentId", contentId)))
+                    .retrieve()
+                    .body(String.class);
+            if (!StringUtils.hasText(body)) {
+                log.warn("TourAPI 설명 조회 실패: 빈 응답, contentId={}", contentId);
+                return null;
+            }
+            JsonNode response = jsonMapper.readTree(body).path("response");
+            String resultCode = text(response.path("header").path("resultCode"));
+            if (!"0000".equals(resultCode)) {
+                log.warn("TourAPI 설명 조회 실패: API 오류 또는 응답 형식 오류, contentId={}, resultCode={}",
+                        contentId, resultCode);
+                return null;
+            }
+            JsonNode items = response.path("body").path("items").path("item");
+            JsonNode item = items.isArray() ? items.path(0) : items;
+            String overview = text(item.path("overview"));
+            if (overview == null) {
+                log.debug("TourAPI 장소 설명 없음: contentId={}", contentId);
+                return null;
+            }
+            String cleaned = HtmlUtils.htmlUnescape(overview)
+                    .replaceAll("(?is)<(script|style)\\b[^>]*>.*?</\\1\\s*>", " ")
+                    .replaceAll("(?s)<[^>]*>", " ")
+                    .replaceAll("[\\s\\p{Z}]+", " ")
+                    .strip();
+            return StringUtils.hasText(cleaned) ? cleaned : null;
+        } catch (RestClientResponseException exception) {
+            log.warn("TourAPI 설명 조회 실패: HTTP 오류, contentId={}, status={}",
+                    contentId, exception.getStatusCode().value());
+            return null;
+        } catch (RuntimeException exception) {
+            // 외부 요청의 인증키가 노출되지 않도록 예외 메시지와 응답 본문은 기록하지 않는다.
+            log.warn("TourAPI 설명 조회 실패: 통신 또는 응답 처리 오류, contentId={}, errorType={}",
+                    contentId, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    /** 누락·null·빈 문자열은 해당 부가 정보 없음으로 취급한다. */
     private String text(JsonNode node) {
         if (!node.isString()) {
             return null;

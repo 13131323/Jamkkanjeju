@@ -32,6 +32,7 @@ import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionRep
 import com.jamkkanjeju.server.domain.map.service.NextLocationRecommender;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
+import com.jamkkanjeju.server.domain.mission.service.NextMissionSelector;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
 import java.time.Clock;
 import java.util.List;
@@ -78,7 +79,7 @@ class CultureMissionServiceTest {
     void setUp() {
         cultureMissionService = new CultureMissionService(userRepository, cultureMissionRepository,
                 cultureMissionProgressRepository, cultureMissionQuizRepository,
-                cooperativeMissionRepository, treasureMissionRepository, cultureMissionRewardGranter,
+                new NextMissionSelector(cooperativeMissionRepository, treasureMissionRepository), cultureMissionRewardGranter,
                 nextLocationRecommender, tourApiClient, Clock.systemDefaultZone());
         user = activeUser(USER_ID);
         activeMission = cultureMission(MISSION_ID, MissionActivationStatus.ACTIVE);
