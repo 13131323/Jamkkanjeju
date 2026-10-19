@@ -29,6 +29,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.transaction.TestTransaction;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.http.MediaType;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** 임시 MySQL·실제 JWT와 테스트 전용 데이터 준비·정리를 공유한다. */
@@ -39,6 +40,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class CooperativeMissionIntegrationTestSupport extends MySqlIntegrationTestSupport {
     protected static final String URL = "/api/v2/cooperative-missions/{missionId}/progress";
+    protected static final String JOIN_URL = "/api/v2/cooperative-missions/join-requests";
     @Autowired protected MockMvc mvc;
     @Autowired protected EntityManager em;
     @Autowired protected JdbcTemplate jdbc;
@@ -79,7 +81,14 @@ public abstract class CooperativeMissionIntegrationTestSupport extends MySqlInte
     /** 기존 두 번째 단계 팀과 본인 참가 기록을 저장한다. */
     protected CooperativeMissionProgress team(User user, CooperativeMission mission,
                                                ParticipantStatus status, ParticipantRole role, boolean completed) {
-        var progress = CooperativeMissionProgress.builder().cooperativeMission(mission).currentStep(2)
+        return team(user, mission, status, role, 2, completed);
+    }
+
+    /** 지정한 단계의 기존 팀과 본인 참가 기록을 저장한다. */
+    protected CooperativeMissionProgress team(User user, CooperativeMission mission,
+                                               ParticipantStatus status, ParticipantRole role,
+                                               int currentStep, boolean completed) {
+        var progress = CooperativeMissionProgress.builder().cooperativeMission(mission).currentStep(currentStep)
                 .teamToken("fixture-" + UUID.randomUUID()).build();
         if (completed) progress.complete(JOINED_AT);
         em.persist(progress);
@@ -105,6 +114,14 @@ public abstract class CooperativeMissionIntegrationTestSupport extends MySqlInte
     protected ResultActions start(User user, Object missionId) throws Exception {
         return mvc.perform(post(URL, missionId)
                 .header("Authorization", "Bearer " + tokens.createAccessToken(user).value()));
+    }
+
+    /** JWT와 팀 토큰을 포함한 URL 참여 요청을 보낸다. */
+    protected ResultActions join(User user, String teamToken) throws Exception {
+        return mvc.perform(post(JOIN_URL)
+                .header("Authorization", "Bearer " + tokens.createAccessToken(user).value())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"teamToken\":\"" + teamToken + "\"}"));
     }
 
     /** 응답 객체를 필드 수까지 비교 가능한 Map으로 읽는다. */

@@ -1,16 +1,20 @@
 package com.jamkkanjeju.server.domain.cooperativemission.controller;
 
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,6 +36,18 @@ public class CooperativeMissionController {
         StartCooperativeMissionResponse response = cooperativeMissionService
                 .startCooperativeMission(authUser.userId(), missionId);
         // 새 팀을 만들었으면 201, 기존 팀을 이어가면 200으로 응답한다.
+        return ResponseEntity.status(response.created() ? HttpStatus.CREATED : HttpStatus.OK).body(response);
+    }
+
+    /** 초대 URL의 팀 토큰으로 로그인한 사용자의 협동 미션 참여를 요청한다. */
+    @Operation(summary = "URL로 협동 미션 참여 요청")
+    @PostMapping("/join-requests")
+    public ResponseEntity<JoinCooperativeMissionResponse> joinCooperativeMission(
+            @AuthenticationPrincipal AuthUser authUser,
+            @Valid @RequestBody JoinCooperativeMissionRequest request) {
+        JoinCooperativeMissionResponse response = cooperativeMissionService
+                .joinCooperativeMission(authUser.userId(), request.teamToken());
+        // 새 참가자를 만들었으면 201, 기존 참가자 정보를 반환하면 200으로 응답한다.
         return ResponseEntity.status(response.created() ? HttpStatus.CREATED : HttpStatus.OK).body(response);
     }
 }

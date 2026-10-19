@@ -3,7 +3,7 @@ package com.jamkkanjeju.server.domain.cooperativemission.exception;
 import com.jamkkanjeju.server.common.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
 
-/** 보물찾기 도메인의 오류 코드를 정의한다. */
+/** 협동 미션 도메인의 오류 코드를 정의한다. */
 public enum CooperativeMissionErrorCode implements ErrorCode {
 
     COOPERATIVE_MISSION_NOT_FOUND(HttpStatus.NOT_FOUND, "협동 미션을 찾을 수 없습니다."),
