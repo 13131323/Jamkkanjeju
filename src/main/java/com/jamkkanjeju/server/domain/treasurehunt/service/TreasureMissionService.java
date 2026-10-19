@@ -1,8 +1,12 @@
 package com.jamkkanjeju.server.domain.treasurehunt.service;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.client.BlobStorageClient.UploadedBlob;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
+import com.jamkkanjeju.server.common.image.ImageValidator;
+import com.jamkkanjeju.server.common.image.ImageValidator.ValidatedImage;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.map.entity.Location;
@@ -15,6 +19,7 @@ import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter.Grante
 import com.jamkkanjeju.server.domain.mission.service.NextMissionSelector;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressLocationRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressRequest;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.SavePictureWithCharacterRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressResponse.NextLocation;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressResponse.NextMission;
@@ -26,6 +31,7 @@ import com.jamkkanjeju.server.domain.treasurehunt.dto.StartTreasureMissionRespon
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionLocationRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.StopTreasureMissionResponse;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureItemStatus;
+import com.jamkkanjeju.server.domain.treasurehunt.entity.PictureWithCharacter;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMission;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgressItem;
@@ -34,17 +40,24 @@ import com.jamkkanjeju.server.domain.treasurehunt.exception.TreasureHuntErrorCod
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionProgressItemRepository;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionProgressRepository;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
+import com.jamkkanjeju.server.domain.treasurehunt.repository.PictureWithCharacterRepository;
 import com.jamkkanjeju.server.domain.treasurehunt.service.TreasureItemCoordinateGenerator.Coordinate;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** 사용자의 보물찾기를 시작·이어하기·재시작하고 보물 발견과 보상 지급, 완료·중단 상태를 저장한다. */
+/** 보물찾기 진행과 보상·완료·중단을 처리하고 사용자의 AR 캐릭터 사진을 저장한다. */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -60,6 +73,9 @@ public class TreasureMissionService {
     private final NextLocationRecommender nextLocationRecommender;
     private final NextMissionSelector nextMissionSelector;
     private final Clock clock;
+    private final PictureWithCharacterRepository pictureWithCharacterRepository;
+    private final ImageValidator imageValidator;
+    private final BlobStorageClient blobStorageClient;
 
     /** 최초 시작은 진행도·보물을 생성하고, 이어하기는 유지하며, 완료한 진행도는 같은 ID로 재시작한다. */
     @Transactional
@@ -210,6 +226,75 @@ public class TreasureMissionService {
                 progress, treasureCount, foundTreasureIndexes,
                 StopTreasureMissionResponse.NextLocation.of(
                         nextLocation, locationImageUrl, recommended.distanceMeter(), nextMission));
+    }
+
+    /** 검증된 사진을 Blob에 업로드하고 사용자·URL·서버 저장 시각을 기록한다. */
+    @Transactional
+    public void savePictureWithCharacter(Long userId, SavePictureWithCharacterRequest request) {
+        // 1. 현재 사용자 확인
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2~3. 파일 크기·실제 형식·전체 이미지 디코딩 검증
+        ValidatedImage image = imageValidator.validate(request.picture(),
+                TreasureHuntErrorCode.INVALID_IMAGE_FORMAT, TreasureHuntErrorCode.IMAGE_SIZE_EXCEEDED,
+                TreasureHuntErrorCode.INVALID_IMAGE);
+
+        // 커밋 시점의 실패도 정리해야 하므로 트랜잭션 없이 파일만 업로드하지 않는다.
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("사진 저장에는 활성 트랜잭션이 필요합니다.");
+        }
+
+        // 4. 원본 파일명 대신 사용자 ID·UUID·실제 확장자로 Blob 업로드
+        String blobName = "ar_character_picture/" + userId + "/" + UUID.randomUUID() + image.format().extension();
+        UploadedBlob uploaded;
+        try {
+            uploaded = blobStorageClient.upload(image.data(), blobName, image.format().contentType());
+        } catch (RuntimeException exception) {
+            log.error("AR 사진 업로드 실패: userId={}, blobName={}", userId, blobName, exception);
+            throw exception;
+        }
+
+        // 6. 서비스 호출 이후의 DB 커밋 실패까지 포함해 롤백된 요청의 파일만 정리한다.
+        registerPictureRollbackCleanup(userId, uploaded);
+
+        // 5. 클라이언트 촬영 시각이 아닌 서버의 KST 저장 시각을 한 번 구해 새 기록 저장
+        try {
+            LocalDateTime savedAt = LocalDateTime.ofInstant(clock.instant(), ZoneId.of("Asia/Seoul"));
+            pictureWithCharacterRepository.saveAndFlush(PictureWithCharacter.builder()
+                    .user(user)
+                    .pictureUrl(uploaded.url())
+                    .savedAt(savedAt)
+                    .build());
+        } catch (RuntimeException exception) {
+            log.error("AR 사진 DB 저장 실패: userId={}, blobName={}", userId, uploaded.name(), exception);
+            throw exception;
+        }
+    }
+
+    /** DB 트랜잭션 종료 결과를 확인해 실패한 요청에서 올린 사진만 삭제한다. */
+    private void registerPictureRollbackCleanup(Long userId, UploadedBlob uploaded) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    return;
+                }
+                if (status != STATUS_ROLLED_BACK) {
+                    // 커밋 여부가 불명확할 때 파일을 지워 정상 DB 행의 URL을 깨뜨리지 않는다.
+                    log.error("AR 사진 트랜잭션 결과 확인 필요: userId={}, blobName={}, status={}",
+                            userId, uploaded.name(), status);
+                    return;
+                }
+                log.warn("AR 사진 저장 롤백으로 업로드 파일 삭제: userId={}, blobName={}", userId, uploaded.name());
+                try {
+                    blobStorageClient.delete(uploaded.name());
+                } catch (RuntimeException exception) {
+                    // 파일 정리 실패가 최초 DB 저장·커밋 실패를 덮어쓰지 않도록 한다.
+                    log.error("AR 사진 롤백 파일 삭제 실패: userId={}, blobName={}", userId, uploaded.name(), exception);
+                }
+            }
+        });
     }
 
     /** 새 진행도의 ID를 확보한 뒤 사용자 중심의 새 보물 아이템을 저장한다. */

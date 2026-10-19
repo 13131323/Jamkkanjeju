@@ -8,6 +8,8 @@ import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -52,7 +54,8 @@ class StartTreasureMissionServiceTest {
     void setUp() {
         mission = treasureMission(31L, null, 8);
         service = new TreasureMissionService(users, missions, progresses, items, coordinates, tourApi,
-                rewards, recommender, nextMissions, Clock.fixed(Instant.parse("2026-10-16T03:00:00Z"), ZoneOffset.UTC));
+                rewards, recommender, nextMissions, Clock.fixed(Instant.parse("2026-10-16T03:00:00Z"), ZoneOffset.UTC),
+                mock(PictureWithCharacterRepository.class), mock(ImageValidator.class), mock(BlobStorageClient.class));
     }
 
     @Test

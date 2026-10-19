@@ -1,6 +1,7 @@
 package com.jamkkanjeju.server.domain.treasurehunt.controller;
 
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
+import com.jamkkanjeju.server.domain.treasurehunt.dto.SavePictureWithCharacterRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressLocationRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressRequest;
 import com.jamkkanjeju.server.domain.treasurehunt.dto.SaveTreasureMissionProgressResponse;
@@ -16,6 +17,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.ModelAttribute;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 보물찾기 API 요청을 받아 서비스에 전달하는 컨트롤러이다. */
@@ -68,5 +71,15 @@ public class TreasureMissionController {
             @PathVariable Long treasureMissionProgressId,
             @Valid @ParameterObject @ModelAttribute StopTreasureMissionLocationRequest location) {
         return treasureMissionService.stopTreasureMission(authUser.userId(), treasureMissionProgressId, location);
+    }
+
+    /** 로그인한 사용자가 multipart로 보낸 AR 캐릭터 사진을 저장하고 본문 없이 완료 응답을 반환한다. */
+    @Operation(summary = "AR 캐릭터와 사진 저장")
+    @PostMapping(value = "/pictures-with-character", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void savePictureWithCharacter(
+            @AuthenticationPrincipal AuthUser authUser,
+            @Valid @ModelAttribute SavePictureWithCharacterRequest request) {
+        treasureMissionService.savePictureWithCharacter(authUser.userId(), request);
     }
 }

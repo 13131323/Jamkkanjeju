@@ -10,7 +10,10 @@ public enum TreasureHuntErrorCode implements ErrorCode {
     TREASURE_MISSION_INACTIVE(HttpStatus.NOT_FOUND, "비활성화된 보물찾기 미션입니다."),
     TREASURE_MISSION_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "보물찾기 미션 진행도를 찾을 수 없습니다."),
     TREASURE_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "보물찾기 아이템을 찾을 수 없습니다."),
-    TREASURE_ITEM_ALREADY_FOUND(HttpStatus.CONFLICT, "이미 찾은 보물입니다.");
+    TREASURE_ITEM_ALREADY_FOUND(HttpStatus.CONFLICT, "이미 찾은 보물입니다."),
+    INVALID_IMAGE_FORMAT(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다."),
+    IMAGE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "이미지 파일은 10MB를 초과할 수 없습니다."),
+    INVALID_IMAGE(HttpStatus.BAD_REQUEST, "손상되었거나 올바르지 않은 이미지 파일입니다.");
 
     private final HttpStatus status;
     private final String message;

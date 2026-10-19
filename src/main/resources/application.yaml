@@ -2,6 +2,13 @@ spring:
   application:
     name: server-spring
 
+  servlet:
+    multipart:
+      # MB 접미사는 1024 기준으로 해석되므로 정확한 바이트 수를 지정한다.
+      max-file-size: 10000000B
+      # 파일 외 multipart 경계·헤더를 포함할 수 있도록 전체 요청은 여유를 둔다.
+      max-request-size: 11000000B
+
   datasource:
     url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
     username: ${MYSQL_USER}
@@ -33,6 +40,10 @@ spring:
       mode: never
 
 app:
+  blob-storage:
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING:}
+    container: ${AZURE_STORAGE_CONTAINER:}
+
   tour-api:
     base-url: ${TOUR_API_BASE_URL:https://apis.data.go.kr/B551011/KorService2}
     service-key: ${TOUR_API_SERVICE_KEY:}

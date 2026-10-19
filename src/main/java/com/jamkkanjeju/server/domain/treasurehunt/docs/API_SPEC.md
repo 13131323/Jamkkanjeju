@@ -586,3 +586,123 @@ Status Code : `404 Not Found`
   "message": "비활성화된 보물찾기 미션입니다."
 }
 ```
+
+---
+
+# AR 캐릭터와 사진 저장 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | AR 캐릭터와 사진 저장 |
+| HTTP 메서드 | `POST` |
+| 도메인 | `TREASURE_MISSION` |
+| 엔드포인트 | `/api/v2/treasure-missions/pictures-with-character` |
+
+### API 설명
+
+사용자가 AR 캐릭터와 함께 촬영한 사진을 저장할 때 호출한다.
+
+인증된 사용자는 캐릭터가 합성된 사진 파일 한 개를 전송한다. 캐릭터 ID나 미션 ID는 전달하지 않는다.
+
+사진은 JPEG, PNG, WebP 형식만 허용하며 최대 크기는 10MB(10,000,000바이트)이다. 손상되어 정상적으로 읽을 수 없는 이미지 파일은 저장할 수 없다. HEIC/HEIF 사진은 프론트에서 JPEG로 변환한 후 전송한다.
+
+정상적으로 저장하면 응답 본문 없이 `204 No Content`를 반환한다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+| `Content-Type` | 필수 | `multipart/form-data; boundary=...`. boundary는 multipart 요청을 생성하는 클라이언트가 설정 |
+
+---
+
+### 요청 Query
+
+없음
+
+---
+
+### 요청 Path
+
+없음
+
+---
+
+### 요청 Body
+
+Content-Type : `multipart/form-data`
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `picture` | file | 필수 | AR 캐릭터와 함께 촬영한 이미지 파일 한 개. JPEG(`.jpg`, `.jpeg`), PNG(`.png`), WebP(`.webp`). 비어 있지 않고 최대 10MB이며 정상적으로 읽을 수 있는 이미지여야 함 |
+
+GIF, SVG, BMP, TIFF, HEIC, HEIF 등 그 밖의 이미지 형식은 허용하지 않는다. 파일명이나 전송한 Content-Type을 바꾸는 것만으로 실제 허용되지 않은 형식의 파일을 전송할 수는 없다.
+
+요청 예시:
+
+```bash
+curl -X POST \
+  "http://localhost:8080/api/v2/treasure-missions/pictures-with-character" \
+  -H "Authorization: Bearer {accessToken}" \
+  -F "picture=@picture-with-character.jpg;type=image/jpeg"
+```
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `204 No Content`
+
+사진이 정상적으로 저장된 경우
+
+응답 Body 없음
+
+---
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
+
+이 API의 이미지 형식·용량·손상 오류는 공통 `400 INVALID_REQUEST` 대신 아래의 개별 오류 코드와 메시지를 반환한다. `picture` 누락·빈 파일 및 정상적인 multipart 요청으로 해석할 수 없는 경우는 기존 공통 요청값 검증 실패를 따른다.
+
+#### 지원하지 않는 이미지 형식
+
+Status Code : `400 Bad Request`
+
+파일의 실제 형식이 JPEG, PNG, WebP가 아니거나 이미지 형식을 판별할 수 없는 경우
+
+```json
+{
+  "code": "INVALID_IMAGE_FORMAT",
+  "message": "지원하지 않는 이미지 형식입니다."
+}
+```
+
+#### 이미지 파일 크기 초과
+
+Status Code : `400 Bad Request`
+
+이미지 파일 크기가 10MB(10,000,000바이트)를 초과한 경우
+
+```json
+{
+  "code": "IMAGE_SIZE_EXCEEDED",
+  "message": "이미지 파일은 10MB를 초과할 수 없습니다."
+}
+```
+
+#### 손상된 이미지 파일
+
+Status Code : `400 Bad Request`
+
+허용된 이미지 형식으로 판별되었으나 파일이 손상되었거나 정상적으로 읽을 수 없는 경우
+
+```json
+{
+  "code": "INVALID_IMAGE",
+  "message": "손상되었거나 올바르지 않은 이미지 파일입니다."
+}
+```

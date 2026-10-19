@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
@@ -47,7 +49,8 @@ class StopTreasureMissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new TreasureMissionService(users, missions, progresses, items, coordinates, images,
-                rewards, recommender, nextMissions, CLOCK);
+                rewards, recommender, nextMissions, CLOCK,
+                mock(PictureWithCharacterRepository.class), mock(ImageValidator.class), mock(BlobStorageClient.class));
         user = activeUser(15L);
         mission = treasureMission(31L, null, 8);
         progress = progress(user, mission);

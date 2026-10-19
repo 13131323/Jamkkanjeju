@@ -1,6 +1,8 @@
     package com.jamkkanjeju.server.common.exception;
 
     import jakarta.validation.ConstraintViolationException;
+    import jakarta.servlet.http.HttpServletRequest;
+    import com.jamkkanjeju.server.domain.treasurehunt.exception.TreasureHuntErrorCode;
     import lombok.extern.slf4j.Slf4j;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.HttpStatusCode;
@@ -14,6 +16,8 @@
     import org.springframework.web.bind.annotation.RestControllerAdvice;
     import org.springframework.web.method.annotation.HandlerMethodValidationException;
     import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+    import org.springframework.web.multipart.MaxUploadSizeExceededException;
+    import org.springframework.web.multipart.MultipartException;
 
     /** 컨트롤러에서 발생한 예외를 공통 오류 응답으로 변환한다. */
     @Slf4j      // logger를 만들어주는 lombok annotation. log.debug(), log.info() 등으로 로그를 찍을 수 있음.
@@ -39,6 +43,33 @@
         public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception exception) {
             log.debug("Invalid request: {}", exception.getMessage());
             return toResponse(CommonErrorCode.INVALID_REQUEST);
+        }
+
+        /** 컨트롤러 호출 전 발생한 사진 업로드 용량 초과를 명세의 개별 오류로 변환한다. */
+        @ExceptionHandler(MaxUploadSizeExceededException.class)
+        public ResponseEntity<ErrorResponse> handleUploadSizeExceeded(
+                MaxUploadSizeExceededException exception, HttpServletRequest request) {
+            if (isPictureUpload(request)) {
+                return toResponse(TreasureHuntErrorCode.IMAGE_SIZE_EXCEEDED);
+            }
+            return handleException(exception);
+        }
+
+        /** 사진 저장의 잘못된 multipart 요청은 공통 요청 오류로, 다른 API는 기존 방식으로 처리한다. */
+        @ExceptionHandler(MultipartException.class)
+        public ResponseEntity<ErrorResponse> handleMultipartException(
+                MultipartException exception, HttpServletRequest request) {
+            if (isPictureUpload(request)) {
+                return toResponse(CommonErrorCode.INVALID_REQUEST);
+            }
+            return handleException(exception);
+        }
+
+        /** multipart 파싱은 핸들러 선택 전 실패할 수 있으므로 사진 업로드 경로를 직접 확인한다. */
+        private boolean isPictureUpload(HttpServletRequest request) {
+            return "POST".equals(request.getMethod())
+                    && request.getRequestURI().equals(
+                            request.getContextPath() + "/api/v2/treasure-missions/pictures-with-character");
         }
 
         /** 인증·인가 예외를 Spring Security가 처리하도록 넘긴다. */
