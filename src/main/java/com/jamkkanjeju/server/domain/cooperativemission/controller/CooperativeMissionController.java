@@ -1,6 +1,7 @@
 package com.jamkkanjeju.server.domain.cooperativemission.controller;
 
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMissionParticipantRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
@@ -13,9 +14,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 협동 미션 API 요청을 받아 서비스에 전달하는 컨트롤러이다. */
@@ -49,5 +52,18 @@ public class CooperativeMissionController {
                 .joinCooperativeMission(authUser.userId(), request.teamToken());
         // 새 참가자를 만들었으면 201, 기존 참가자 정보를 반환하면 200으로 응답한다.
         return ResponseEntity.status(response.created() ? HttpStatus.CREATED : HttpStatus.OK).body(response);
+    }
+
+    /** 방장이 지정한 팀원의 참여 요청을 수락하거나 거절하고 본문 없이 응답한다. */
+    @Operation(summary = "협동 미션 참여 요청 수락/거절")
+    @PatchMapping("/{cooperativeMissionProgressId}/participants/{participantId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void decideCooperativeMissionParticipant(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId,
+            @PathVariable Long participantId,
+            @Valid @RequestBody DecideCooperativeMissionParticipantRequest request) {
+        cooperativeMissionService.decideCooperativeMissionParticipant(
+                authUser.userId(), cooperativeMissionProgressId, participantId, request.decision());
     }
 }

@@ -4,6 +4,7 @@ import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMissionParticipantRequest.Decision;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMission;
@@ -25,7 +26,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 협동 미션 팀을 시작·이어가거나 초대 URL을 통한 참가 요청을 처리한다. */
+/** 협동 미션 팀의 시작·이어하기와 참가 요청 생성·수락·거절을 처리한다. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -129,6 +130,56 @@ public class CooperativeMissionService {
 
         // 7. 프론트의 상태 폴링에 필요한 팀 진행도와 참가자 정보를 반환한다
         return JoinCooperativeMissionResponse.of(progress, participant, true);
+    }
+
+    /** 수락된 방장이 초대 단계의 팀원 참여 요청을 수락하거나 거절한다. */
+    @Transactional
+    public void decideCooperativeMissionParticipant(Long userId, Long progressId, Long participantId,
+                                                     Decision decision) {
+        // 1. 요청 및 현재 사용자 정보는 컨트롤러에서 전달받는다
+        // 2. 팀 진행도 잠금 및 미션 확인 (같은 팀의 참가자 변경을 순서대로 처리한다)
+        CooperativeMissionProgress progress = cooperativeMissionProgressRepository.findByIdForUpdate(progressId)
+                .filter(savedProgress -> savedProgress.getMissionStatus() == MissionProgressStatus.IN_PROGRESS)
+                .orElseThrow(() -> new BusinessException(
+                        CooperativeMissionErrorCode.COOPERATIVE_MISSION_PROGRESS_NOT_FOUND));
+        if (progress.getCooperativeMission().getStatus() == MissionActivationStatus.INACTIVE) {
+            throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_INACTIVE);
+        }
+
+        // 3. 대상 팀의 수락된 방장만 참여 요청을 처리할 수 있다
+        cooperativeMissionParticipantRepository.findByCooperativeMissionProgressIdAndUserId(progressId, userId)
+                .filter(participant -> participant.getParticipantRole() == ParticipantRole.HOST
+                        && participant.getParticipantStatus() == ParticipantStatus.ACCEPTED)
+                .orElseThrow(() -> new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_HOST_ONLY));
+
+        // 4. 초대 단계를 지난 팀에서는 수락과 거절 모두 허용하지 않는다
+        if (progress.getCurrentStep() != CooperativeMissionProgress.FIRST_STEP) {
+            throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_JOIN_CLOSED);
+        }
+
+        // 5. 요청한 진행도에 속한 팀원만 대상으로 삼는다
+        CooperativeMissionParticipant participant = cooperativeMissionParticipantRepository
+                .findByIdAndCooperativeMissionProgressId(participantId, progressId)
+                .filter(savedParticipant -> savedParticipant.getParticipantRole() == ParticipantRole.MEMBER)
+                .orElseThrow(() -> new BusinessException(
+                        CooperativeMissionErrorCode.COOPERATIVE_MISSION_PARTICIPANT_NOT_FOUND));
+
+        switch (decision) {
+            case ACCEPT -> {
+                // 6. 이미 수락된 참가자는 합류 시각을 유지하여 재요청을 멱등 처리한다
+                if (participant.getParticipantStatus() == ParticipantStatus.PENDING) {
+                    participant.accept(LocalDateTime.now(clock));
+                }
+            }
+            case REJECT -> {
+                // 7. 수락 대기 참가자만 삭제하고, 이미 수락된 팀원은 보호한다
+                if (participant.getParticipantStatus() == ParticipantStatus.ACCEPTED) {
+                    throw new BusinessException(
+                            CooperativeMissionErrorCode.COOPERATIVE_MISSION_PARTICIPANT_ALREADY_ACCEPTED);
+                }
+                cooperativeMissionParticipantRepository.delete(participant);
+            }
+        }
     }
 
     /** 새 팀을 첫 단계부터 만들고 현재 사용자를 수락된 방장으로 등록한다. 과거 완료 기록은 유지한다. */
