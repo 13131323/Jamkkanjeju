@@ -19,6 +19,18 @@ import org.springframework.data.repository.query.Param;
 public interface CooperativeMissionProgressRepository extends JpaRepository<CooperativeMissionProgress, Long> {
 
     /**
+     * 결과: ID({@code id})가 일치하는 협동 미션 진행도 한 건을 비관적 쓰기 잠금으로 조회한다.
+     * 진행 상태와 무관하며 연관 엔티티는 함께 로딩하지 않고, 없으면 빈 {@code Optional}이다.
+     * 잠금은 트랜잭션 종료까지 유지된다.
+     * 사용: 참여 요청 수락/거절({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/participants/{participantId}})에서
+     * 대상 팀을 식별하고, 서비스가 진행 중 여부·미션 활성 상태·방장 권한·현재 단계를 검증한 뒤
+     * 참가자 상태 변경 또는 삭제까지 같은 잠금 범위에서 처리한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from CooperativeMissionProgress p where p.id = :id")
+    Optional<CooperativeMissionProgress> findByIdForUpdate(@Param("id") Long id);
+
+    /**
      * 결과: 팀 토큰({@code teamToken})이 일치하는 협동 미션 진행도 한 건을 비관적 쓰기 잠금으로 조회한다.
      * 진행 상태와 무관하며 연관 엔티티는 함께 로딩하지 않고, 없으면 빈 {@code Optional}이다.
      * 잠금은 트랜잭션 종료까지 유지된다.

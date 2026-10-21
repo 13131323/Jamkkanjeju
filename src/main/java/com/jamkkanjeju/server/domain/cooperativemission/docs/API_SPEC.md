@@ -303,3 +303,174 @@ Status Code : `409 Conflict`
 }
 ```
 
+---
+
+# 협동 미션 참여 요청 수락/거절 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 협동 미션 참여 요청 수락/거절 |
+| HTTP 메서드 | `PATCH` |
+| 도메인 | `COOPERATIVE_MISSION` |
+| 엔드포인트 | `/api/v2/cooperative-missions/{cooperativeMissionProgressId}/participants/{participantId}` |
+
+### API 설명
+
+협동 미션 방장이 팀원의 참여 요청을 수락하거나 거절할 때 호출한다.
+
+`decision`이 `ACCEPT`이면 대상 참여 요청을 수락하고, `REJECT`이면 대상 참여 요청을 거절한다.
+
+수락된 팀원은 기존에 받은 `cooperativeMissionProgressId`로 협동 미션 상태 조회를 계속 폴링한다. 거절된 팀원은 상태 조회에서 자신의 참가자 정보를 더 이상 확인할 수 없으므로 폴링을 중단하고 참여 요청 거절로 처리한다.
+
+처리 결과는 협동 미션 상태 조회 응답으로 확인하므로 이 API는 진행도 ID나 참가자 정보를 다시 반환하지 않는다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+
+---
+
+### 요청 Query
+
+없음
+
+---
+
+### 요청 Path
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `cooperativeMissionProgressId` | integer | 필수 | 참여 요청이 속한 협동 미션 진행도 ID |
+| `participantId` | integer | 필수 | 수락하거나 거절할 참가자 ID |
+
+요청 예시:
+
+```http
+PATCH /api/v2/cooperative-missions/31/participants/47
+Authorization: Bearer {accessToken}
+```
+
+---
+
+### 요청 Body
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `decision` | string | 필수 | 참여 요청 처리 방식. `ACCEPT` 또는 `REJECT` |
+
+수락 요청:
+
+```json
+{
+  "decision": "ACCEPT"
+}
+```
+
+거절 요청:
+
+```json
+{
+  "decision": "REJECT"
+}
+```
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `204 No Content`
+
+참여 요청을 수락하거나 거절한 경우 응답 Body는 없다.
+
+이미 수락된 참가자에게 `ACCEPT`를 다시 요청한 경우에도 `204 No Content`를 반환한다.
+
+---
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
+
+Path 값을 정수로 변환할 수 없거나 `decision`이 누락되었거나 `ACCEPT`, `REJECT` 이외의 값인 경우는 공통 요청값 검증 실패에 해당한다.
+
+#### 협동 미션 방장 권한 없음
+
+Status Code : `403 Forbidden`
+
+현재 사용자가 해당 팀의 `HOST + ACCEPTED` 참가자가 아닌 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_HOST_ONLY",
+  "message": "협동 미션 방장만 참여 요청을 처리할 수 있습니다."
+}
+```
+
+#### 협동 미션 진행도 없음
+
+Status Code : `404 Not Found`
+
+`cooperativeMissionProgressId`에 해당하는 진행 중인 협동 미션 진행도가 없거나 해당 진행도가 이미 완료된 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_PROGRESS_NOT_FOUND",
+  "message": "진행 중인 협동 미션을 찾을 수 없습니다."
+}
+```
+
+#### 비활성화된 협동 미션
+
+Status Code : `404 Not Found`
+
+해당 진행도에 연결된 협동 미션의 상태가 `INACTIVE`인 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_INACTIVE",
+  "message": "비활성화된 협동 미션입니다."
+}
+```
+
+#### 협동 미션 참여 요청 없음
+
+Status Code : `404 Not Found`
+
+`participantId`에 해당하는 참가자가 없거나, 다른 진행도에 속하거나, 대상 참가자가 방장인 경우. 이미 거절되어 삭제된 참가자를 다시 처리하는 경우도 포함한다.
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_PARTICIPANT_NOT_FOUND",
+  "message": "협동 미션 참여 요청을 찾을 수 없습니다."
+}
+```
+
+#### 협동 미션 참여 요청 마감
+
+Status Code : `409 Conflict`
+
+대상 팀이 참여 요청을 처리할 수 있는 1단계를 지난 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_JOIN_CLOSED",
+  "message": "협동 미션 참여 요청이 마감되었습니다."
+}
+```
+
+#### 이미 수락된 참가자 거절
+
+Status Code : `409 Conflict`
+
+`ACCEPTED` 상태인 참가자를 `REJECT`하려는 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_PARTICIPANT_ALREADY_ACCEPTED",
+  "message": "이미 수락된 참가자는 거절할 수 없습니다."
+}
+```
+

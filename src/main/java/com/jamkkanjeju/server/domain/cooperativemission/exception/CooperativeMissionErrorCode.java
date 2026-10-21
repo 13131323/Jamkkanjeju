@@ -11,7 +11,11 @@ public enum CooperativeMissionErrorCode implements ErrorCode {
     INVALID_INVITE_TOKEN(HttpStatus.NOT_FOUND, "유효하지 않은 초대 링크입니다."),
     COOPERATIVE_MISSION_ALREADY_PARTICIPATING(HttpStatus.CONFLICT, "이미 해당 협동 미션에 참여 중입니다."),
     COOPERATIVE_MISSION_FULL(HttpStatus.CONFLICT, "협동 미션 참여 인원이 가득 찼습니다."),
-    COOPERATIVE_MISSION_JOIN_CLOSED(HttpStatus.CONFLICT, "협동 미션 참여 요청이 마감되었습니다.");
+    COOPERATIVE_MISSION_JOIN_CLOSED(HttpStatus.CONFLICT, "협동 미션 참여 요청이 마감되었습니다."),
+    COOPERATIVE_MISSION_HOST_ONLY(HttpStatus.FORBIDDEN, "협동 미션 방장만 참여 요청을 처리할 수 있습니다."),
+    COOPERATIVE_MISSION_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 협동 미션을 찾을 수 없습니다."),
+    COOPERATIVE_MISSION_PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, "협동 미션 참여 요청을 찾을 수 없습니다."),
+    COOPERATIVE_MISSION_PARTICIPANT_ALREADY_ACCEPTED(HttpStatus.CONFLICT, "이미 수락된 참가자는 거절할 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

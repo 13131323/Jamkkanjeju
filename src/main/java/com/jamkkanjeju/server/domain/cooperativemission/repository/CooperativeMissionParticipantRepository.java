@@ -53,6 +53,16 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
     Optional<CooperativeMissionParticipant> findByCooperativeMissionProgressIdAndUserId(Long progressId, Long userId);
 
     /**
+     * 결과: 참가자 ID({@code participantId})와 팀 진행도 ID({@code progressId})가 모두 일치하는 참가자 한 건이다.
+     * 연관 엔티티는 함께 로딩하지 않고, 참가자가 없거나 다른 진행도에 속하면 빈 {@code Optional}이다.
+     * 사용: 참여 요청 수락/거절({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/participants/{participantId}})에서
+     * 대상이 같은 팀의 참가자인지 확인한다. 서비스는 역할과 상태를 검증한 뒤 수락이면 상태를 변경하고,
+     * 거절이면 해당 참가자를 삭제한다.
+     */
+    Optional<CooperativeMissionParticipant> findByIdAndCooperativeMissionProgressId(Long participantId,
+                                                                                    Long progressId);
+
+    /**
      * 결과: 팀 진행도({@code progressId})에 연결된 참가자 전체 수이다. 참가자가 없으면 {@code 0}이며,
      * 참가 상태와 역할을 구분하지 않고 집계하고 연관 엔티티는 로딩하지 않는다.
      * 사용: URL로 참여 요청({@code POST /api/v2/cooperative-missions/join-requests})에서 새 참가자를 만들기 전에
