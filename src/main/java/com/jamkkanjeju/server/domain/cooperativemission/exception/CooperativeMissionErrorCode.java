@@ -16,7 +16,15 @@ public enum CooperativeMissionErrorCode implements ErrorCode {
     COOPERATIVE_MISSION_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "진행 중인 협동 미션을 찾을 수 없습니다."),
     COOPERATIVE_MISSION_PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, "협동 미션 참여 요청을 찾을 수 없습니다."),
     COOPERATIVE_MISSION_PARTICIPANT_ALREADY_ACCEPTED(HttpStatus.CONFLICT, "이미 수락된 참가자는 거절할 수 없습니다."),
-    COOPERATIVE_MISSION_STEP_NOT_ALLOWED(HttpStatus.CONFLICT, "허용되지 않는 단계 변경 요청입니다."),
+    COOPERATIVE_MISSION_STEP_NOT_ALLOWED(HttpStatus.CONFLICT, "현재 단계에서 허용되지 않는 요청입니다."),
+    COOPERATIVE_MISSION_LEAVE_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 협동 미션의 참가자가 아닙니다."),
+    COOPERATIVE_ROLE_CARD_NOT_FOUND(HttpStatus.NOT_FOUND, "역할 카드를 찾을 수 없습니다."),
+    COOPERATIVE_ROLE_PROGRESS_NOT_FOUND(HttpStatus.NOT_FOUND, "협동 미션 역할 진행도를 찾을 수 없습니다."),
+    COOPERATIVE_ROLE_PROGRESS_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 역할을 인증할 권한이 없습니다."),
+    COOPERATIVE_ROLE_PROGRESS_ALREADY_COMPLETED(HttpStatus.CONFLICT, "이미 완료된 협동 미션 역할입니다."),
+    INVALID_IMAGE_FORMAT(HttpStatus.BAD_REQUEST, "지원하지 않는 이미지 형식입니다."),
+    IMAGE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "이미지 파일은 10MB를 초과할 수 없습니다."),
+    INVALID_IMAGE(HttpStatus.BAD_REQUEST, "손상되었거나 올바르지 않은 이미지 파일입니다."),
     COOPERATIVE_MISSION_PENDING_PARTICIPANT_EXISTS(HttpStatus.CONFLICT, "대기 중인 참여 요청을 모두 처리해야 합니다."),
     COOPERATIVE_PARTICIPANT_ROLE_REQUIRED(HttpStatus.CONFLICT, "모든 수락된 참가자에게 역할을 배정해야 합니다.");
 

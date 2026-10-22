@@ -55,7 +55,7 @@ class SaveCooperativeMissionProgressApiIntegrationTest extends CooperativeMissio
         // 역할 한 건 추가 외에 포인트·지급·획득 데이터는 그대로이다.
         assertThat(rewardSnapshot(host).subList(0,4)).isEqualTo(rewards.subList(0,4));
         assertThat(snapshot(other.getId())).isEqualTo(otherBefore);
-        error(save(host,progress.getId(),2),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","허용되지 않는 단계 변경 요청입니다.");
+        error(save(host,progress.getId(),2),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","현재 단계에서 허용되지 않는 요청입니다.");
     }
 
     @Test void 대기와_미배정과_미인증은_오류이며_기존행을_보존한다() throws Exception {
@@ -72,7 +72,7 @@ class SaveCooperativeMissionProgressApiIntegrationTest extends CooperativeMissio
         var hostP=participantOf(p,host); var card=card();
         em.persist(CooperativeMissionRoleProgress.builder().participant(hostP).roleCard(card).build()); clear();
         before=snapshot(progress.getId());
-        error(save(host,progress.getId(),3),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","허용되지 않는 단계 변경 요청입니다.");
+        error(save(host,progress.getId(),3),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","현재 단계에서 허용되지 않는 요청입니다.");
         assertThat(snapshot(progress.getId())).isEqualTo(before);
         verifyNoInteractions(granter);
     }
@@ -88,7 +88,7 @@ class SaveCooperativeMissionProgressApiIntegrationTest extends CooperativeMissio
         assertThat(em.find(CooperativeMissionProgress.class,progress.getId()).getCompletedAt()).isEqualTo(LocalDateTime.now(CLOCK));
         assertThat(snapshot(progress.getId()).subList(1,3)).isEqualTo(roleBefore);
         var before=snapshot(progress.getId()); var paid=rewardSnapshot(host);
-        error(save(host,progress.getId(),3),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","허용되지 않는 단계 변경 요청입니다.");
+        error(save(host,progress.getId(),3),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","현재 단계에서 허용되지 않는 요청입니다.");
         when(recommender.recommend(anyDouble(),anyDouble(),isNull())).thenReturn(Optional.empty());
         read(host,progress.getId()).andExpect(status().isOk()).andExpect(jsonPath("$.currentStep").value(3))
                 .andExpect(jsonPath("$.reward.point").value(200)).andExpect(jsonPath("$.reward.arCharacter.id").value(mission.getArCharacter().getId()))
@@ -166,7 +166,7 @@ class SaveCooperativeMissionProgressApiIntegrationTest extends CooperativeMissio
         error(save(other,progress.getId(),2),403,"COOPERATIVE_MISSION_HOST_ONLY","협동 미션 방장만 참여 요청을 처리할 수 있습니다.");
         var member=participant(em.find(User.class,other.getId()),em.find(CooperativeMissionProgress.class,progress.getId()),ParticipantStatus.ACCEPTED,ParticipantRole.MEMBER); em.persist(member); clear();
         error(save(other,progress.getId(),2),403,"COOPERATIVE_MISSION_HOST_ONLY","협동 미션 방장만 참여 요청을 처리할 수 있습니다.");
-        for(int next:new int[]{0,1,3,4,-1,Integer.MAX_VALUE}) error(save(host,progress.getId(),next),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","허용되지 않는 단계 변경 요청입니다.");
+        for(int next:new int[]{0,1,3,4,-1,Integer.MAX_VALUE}) error(save(host,progress.getId(),next),409,"COOPERATIVE_MISSION_STEP_NOT_ALLOWED","현재 단계에서 허용되지 않는 요청입니다.");
         error(mvc.perform(patch(SAVE_URL,progress.getId()).contentType(MediaType.APPLICATION_JSON).content("{\"currentStep\":2}")),401,"UNAUTHORIZED","인증이 필요합니다.");
         error(save(activeUser(Long.MAX_VALUE),progress.getId(),2),401,"UNAUTHORIZED","인증이 필요합니다.");
         // 준비 과정에서 추가한 팀원 외에 기존 팀 상태와 보상은 유지된다.

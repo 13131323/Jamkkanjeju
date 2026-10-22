@@ -6,6 +6,8 @@ import static com.jamkkanjeju.server.domain.home.support.HomeFixtures.cooperativ
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import com.jamkkanjeju.server.common.exception.BusinessException;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMissionParticipantRequest.Decision;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
@@ -33,8 +35,12 @@ class DecideCooperativeMissionParticipantServiceTest {
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
     @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock CooperativeRoleCardRepository cards;
     @Mock MissionRewardStatusRepository rewardStatuses;
     @Mock MissionRewardGranter rewardGranter;
+    @Mock ImageValidator imageValidator;
+    @Mock BlobStorageClient blobStorageClient;
+    @Mock CooperativeMissionPhotoVerifier photoVerifier;
     CooperativeMissionService service;
     CooperativeMission mission;
     CooperativeMissionProgress progress;
@@ -42,7 +48,7 @@ class DecideCooperativeMissionParticipantServiceTest {
     @BeforeEach
     void setUp() {
         service = new CooperativeMissionService(users, missions, progresses, participants,
-                roleProgresses, rewardStatuses, rewardGranter, CLOCK);
+                roleProgresses, cards, rewardStatuses, rewardGranter, imageValidator, blobStorageClient, photoVerifier, CLOCK);
         mission = cooperativeMission(31L, null);
         progress = CooperativeMissionProgress.builder().cooperativeMission(mission).currentStep(1)
                 .teamToken("test-token").build();

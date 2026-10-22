@@ -4,7 +4,13 @@ import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeRoleCa
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-/** 협동 미션에서 공통으로 사용하는 역할 카드를 조회하는 레포지토리이다. */
+/**
+ * 협동 미션에서 공통으로 사용하는 역할 카드를 조회한다.
+ * 결과: 상속받은 {@code findById(roleCardId)}는 역할 카드 한 건이며, 없으면 빈 {@code Optional}이다.
+ * 연관 엔티티는 함께 로딩하지 않는다.
+ * 사용: 역할 배정 저장({@code PUT /api/v2/cooperative-missions/{cooperativeMissionProgressId}/role-assignments/{roleCardId}})에서
+ * 공통 카드 존재 여부를 확인하고 신규 배정이나 담당자 교체의 카드로 연결한다. 미션별로 제한하지 않으며 응답 본문은 없다.
+ */
 public interface CooperativeRoleCardRepository extends JpaRepository<CooperativeRoleCard, Long> {
 
     /**

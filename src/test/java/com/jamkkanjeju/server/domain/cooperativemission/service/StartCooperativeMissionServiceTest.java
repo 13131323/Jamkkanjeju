@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.exception.BusinessException;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.*;
@@ -35,8 +37,12 @@ class StartCooperativeMissionServiceTest {
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
     @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock CooperativeRoleCardRepository cards;
     @Mock MissionRewardStatusRepository rewardStatuses;
     @Mock MissionRewardGranter rewardGranter;
+    @Mock ImageValidator imageValidator;
+    @Mock BlobStorageClient blobStorageClient;
+    @Mock CooperativeMissionPhotoVerifier photoVerifier;
     CooperativeMissionService service;
     final com.jamkkanjeju.server.domain.auth.entity.User user = activeUser(15L);
     final CooperativeMission mission = cooperativeMission(31L, null);
@@ -44,7 +50,7 @@ class StartCooperativeMissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new CooperativeMissionService(users, missions, progresses, participants,
-                roleProgresses, rewardStatuses, rewardGranter, CLOCK);
+                roleProgresses, cards, rewardStatuses, rewardGranter, imageValidator, blobStorageClient, photoVerifier, CLOCK);
     }
 
     @Test

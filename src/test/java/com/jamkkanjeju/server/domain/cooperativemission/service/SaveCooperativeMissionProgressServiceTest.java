@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.exception.BusinessException;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionProgressRequest;
@@ -36,8 +38,12 @@ class SaveCooperativeMissionProgressServiceTest {
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
     @Mock CooperativeMissionRoleProgressRepository roles;
+    @Mock CooperativeRoleCardRepository cards;
     @Mock MissionRewardStatusRepository statuses;
     @Mock MissionRewardGranter granter;
+    @Mock ImageValidator imageValidator;
+    @Mock BlobStorageClient blobStorageClient;
+    @Mock CooperativeMissionPhotoVerifier photoVerifier;
     CooperativeMissionService service;
     User host = activeUser(15L);
     CooperativeMission mission = rewardedMission();
@@ -45,7 +51,8 @@ class SaveCooperativeMissionProgressServiceTest {
     CooperativeMissionParticipant hostParticipant;
 
     @BeforeEach void setUp() {
-        service = new CooperativeMissionService(users, missions, progresses, participants, roles, statuses, granter, CLOCK);
+        service = new CooperativeMissionService(users, missions, progresses, participants, roles, cards, statuses, granter,
+                imageValidator, blobStorageClient, photoVerifier, CLOCK);
         progress = statusProgress(71L, mission, 2);
         hostParticipant = participant(host, progress, ParticipantStatus.ACCEPTED, ParticipantRole.HOST);
         ReflectionTestUtils.setField(hostParticipant, "id", 101L);

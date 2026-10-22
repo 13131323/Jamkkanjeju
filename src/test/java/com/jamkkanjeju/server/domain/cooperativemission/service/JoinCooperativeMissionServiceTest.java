@@ -14,6 +14,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.jamkkanjeju.server.common.exception.BusinessException;
+import com.jamkkanjeju.server.common.client.BlobStorageClient;
+import com.jamkkanjeju.server.common.image.ImageValidator;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMission;
@@ -25,6 +27,7 @@ import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMi
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionProgressRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRoleProgressRepository;
+import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeRoleCardRepository;
 import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
 import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -50,8 +53,12 @@ class JoinCooperativeMissionServiceTest {
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
     @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock CooperativeRoleCardRepository cards;
     @Mock MissionRewardStatusRepository rewardStatuses;
     @Mock MissionRewardGranter rewardGranter;
+    @Mock ImageValidator imageValidator;
+    @Mock BlobStorageClient blobStorageClient;
+    @Mock CooperativeMissionPhotoVerifier photoVerifier;
     CooperativeMissionService service;
     final User user = activeUser(15L);
     final CooperativeMission mission = cooperativeMission(31L, null);
@@ -59,7 +66,7 @@ class JoinCooperativeMissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new CooperativeMissionService(users, missions, progresses, participants,
-                roleProgresses, rewardStatuses, rewardGranter,
+                roleProgresses, cards, rewardStatuses, rewardGranter, imageValidator, blobStorageClient, photoVerifier,
                 com.jamkkanjeju.server.domain.cooperativemission.support.CooperativeMissionFixtures.CLOCK);
     }
 

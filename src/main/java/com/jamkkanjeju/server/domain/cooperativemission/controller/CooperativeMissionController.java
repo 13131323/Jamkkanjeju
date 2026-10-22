@@ -7,6 +7,9 @@ import com.jamkkanjeju.server.domain.cooperativemission.dto.GetCooperativeMissio
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionProgressRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionRoleAssignmentRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionRoleProgressRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionRoleProgressResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionService;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionStatusService;
@@ -16,6 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +27,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -83,6 +88,42 @@ public class CooperativeMissionController {
             @Valid @RequestBody SaveCooperativeMissionProgressRequest request) {
         cooperativeMissionService.saveCooperativeMissionProgress(
                 authUser.userId(), cooperativeMissionProgressId, request);
+    }
+
+    /** 수락된 방장이 역할 카드의 담당자를 배정하거나 변경하고 본문 없이 응답한다. */
+    @Operation(summary = "협동 미션 역할 배정 저장")
+    @PutMapping("/{cooperativeMissionProgressId}/role-assignments/{roleCardId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void saveCooperativeMissionRoleAssignment(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId,
+            @PathVariable Long roleCardId,
+            @Valid @RequestBody SaveCooperativeMissionRoleAssignmentRequest request) {
+        cooperativeMissionService.saveCooperativeMissionRoleAssignment(
+                authUser.userId(), cooperativeMissionProgressId, roleCardId, request);
+    }
+
+    /** 본인에게 배정된 역할의 인증 사진을 받아 사진 인증 결과를 반환한다. */
+    @Operation(summary = "협동 미션 역할 진행도 저장")
+    @PostMapping(value = "/{cooperativeMissionProgressId}/role-progresses/{roleCardId}/verification",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SaveCooperativeMissionRoleProgressResponse saveCooperativeMissionRoleProgress(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId,
+            @PathVariable Long roleCardId,
+            @Valid @ModelAttribute SaveCooperativeMissionRoleProgressRequest request) {
+        return cooperativeMissionService.saveCooperativeMissionRoleProgress(
+                authUser.userId(), cooperativeMissionProgressId, roleCardId, request);
+    }
+
+    /** 첫 단계에서 본인 참여를 중단하고 방장 승계·팀 정리가 끝나면 본문 없이 응답한다. */
+    @Operation(summary = "협동 미션 중단")
+    @PatchMapping("/{cooperativeMissionProgressId}/progress/stop")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void stopCooperativeMission(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId) {
+        cooperativeMissionService.stopCooperativeMission(authUser.userId(), cooperativeMissionProgressId);
     }
 
     /** 방장이 지정한 팀원의 참여 요청을 수락하거나 거절하고 본문 없이 응답한다. */

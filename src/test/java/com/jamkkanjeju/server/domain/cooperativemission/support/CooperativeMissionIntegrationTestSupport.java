@@ -101,13 +101,19 @@ public abstract class CooperativeMissionIntegrationTestSupport extends MySqlInte
     protected void roleProgress(CooperativeMissionProgress progress) {
         var participant = em.createQuery("select p from CooperativeMissionParticipant p where p.cooperativeMissionProgress.id=:id",
                 CooperativeMissionParticipant.class).setParameter("id", progress.getId()).getResultList().getFirst();
+        var card = trackedRoleCard();
+        em.persist(CooperativeMissionRoleProgress.builder().participant(participant).roleCard(card)
+                .itemImgUrl("https://example.com/proof.jpg").progressStatus(MissionProgressStatus.COMPLETED)
+                .completedAt(JOINED_AT).build());
+    }
+
+    /** 공통 역할 카드를 저장하고 독립 트랜잭션 테스트 종료 시 정리할 대상으로 기록한다. */
+    protected CooperativeRoleCard trackedRoleCard() {
         var card = CooperativeRoleCard.builder().roleName("테스트 역할").roleDescription("역할 설명")
                 .locationToFind(List.of("대상")).build();
         em.persist(card);
         cardIds.add(card.getId());
-        em.persist(CooperativeMissionRoleProgress.builder().participant(participant).roleCard(card)
-                .itemImgUrl("https://example.com/proof.jpg").progressStatus(MissionProgressStatus.COMPLETED)
-                .completedAt(JOINED_AT).build());
+        return card;
     }
 
     /** JWT를 포함한 실제 HTTP 요청을 보낸다. */

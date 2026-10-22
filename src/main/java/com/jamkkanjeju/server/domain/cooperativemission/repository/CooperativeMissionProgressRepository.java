@@ -16,6 +16,9 @@ import org.springframework.data.repository.query.Param;
  * 사용: 협동 미션 시작/이어하기({@code POST /api/v2/cooperative-missions/{missionId}/progress})의
  * 신규 시작에서 팀 진행도를 저장하고 본인 참가자를 연결한다. 저장된 ID와 팀 토큰으로 응답의
  * {@code cooperativeMissionProgressId}, {@code teamToken}을 구성한다.
+ * 상속받은 {@code delete(progress)}는 팀 진행도를 삭제하고 반환값·추가 연관 조회가 없다.
+ * 협동 미션 중단({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress/stop})에서
+ * 마지막 참가자 또는 방장 승계 대상이 없는 팀을 정리한다. DB의 삭제 연쇄로 참가자·역할도 제거하며 응답 본문은 없다.
  */
 public interface CooperativeMissionProgressRepository extends JpaRepository<CooperativeMissionProgress, Long> {
 
@@ -42,6 +45,14 @@ public interface CooperativeMissionProgressRepository extends JpaRepository<Coop
      * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서도
      * 같은 잠금으로 팀을 조회하고 서비스가 미션 활성 상태·방장 권한·순차 단계·역할 조건을 검증한다.
      * 응답 본문은 없으며, 단계 변경과 완료 시 참가자별 보상 지급을 같은 트랜잭션에서 처리해 중복 완료·지급을 막는다.
+     * 역할 배정 저장({@code PUT /api/v2/cooperative-missions/{cooperativeMissionProgressId}/role-assignments/{roleCardId}})에서도
+     * 같은 잠금으로 미션 활성 상태·방장 권한·배정 단계를 확인하고 배정 생성·교체까지 처리한다.
+     * 단계 전환과 배정 변경을 순서대로 처리하며 응답 본문은 없다.
+     * 역할 진행도 저장({@code POST /api/v2/cooperative-missions/{cooperativeMissionProgressId}/role-progresses/{roleCardId}/verification})에서는
+     * 서비스가 활성 미션·수행 단계를 확인하고 판정·업로드·역할 저장까지 같은 팀 잠금 안에서 처리한다.
+     * 팀 자체는 완료하지 않으며 서비스가 사진 인증 결과인 {@code isVerified}를 구성한다.
+     * 협동 미션 중단({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress/stop})에서도
+     * 미션 활성·첫 단계 여부를 확인하고 참가자 삭제·방장 승계·팀 정리까지 같은 잠금으로 처리한다. 응답 본문은 없다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from CooperativeMissionProgress p where p.id = :id")
