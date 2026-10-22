@@ -11,6 +11,17 @@ import org.springframework.data.repository.query.Param;
 public interface CooperativeMissionParticipantRepository extends JpaRepository<CooperativeMissionParticipant, Long> {
 
     /**
+     * 결과: 팀 진행도({@code progressId})에 연결된 참가자 전체 목록이다. 역할·참가 상태와 무관하게 조회한다.
+     * 닉네임을 읽을 {@code user}를 함께 로딩하며 그 외 연관 엔티티는 함께 로딩하지 않는다.
+     * 참가자가 없으면 빈 목록이며 조회 순서는 보장하지 않는다.
+     * 사용: 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})의
+     * {@code participants}를 구성한다. 서비스가 방장 우선·나머지 생성 시각 오름차순으로 정렬하고
+     * 참가자 ID·닉네임·역할·상태를 응답으로 변환한다.
+     */
+    @EntityGraph(attributePaths = "user")
+    List<CooperativeMissionParticipant> findAllByCooperativeMissionProgressId(Long progressId);
+
+    /**
      * 결과: 사용자({@code userId})의 협동 미션 참가 기록 전체 목록(참가 상태·팀 진행 상태 무관).
      * 팀 진행도당 최대 한 건이라 같은 팀 진행도가 중복되지 않는다.
      * 각 원소는 {@code cooperativeMissionProgress}(현재 단계·진행 상태)와 그 미션의 {@code mission.missionType}
@@ -33,6 +44,9 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
      * 서비스가 팀 IN_PROGRESS 및 참가 PENDING·ACCEPTED 조건을 확인해 이어갈 팀을 고르고, 없으면 새 팀을 만든다.
      * URL로 참여 요청({@code POST /api/v2/cooperative-missions/join-requests})에서는 대상 팀과 같은 미션의
      * 다른 진행 중인 팀에 현재 사용자가 참가 중인지 확인해 중복 참가를 막는다.
+     * 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 서비스가 ACCEPTED 참가 기록 중 COMPLETED 팀을 완료 시각·진행도 ID순으로 비교해 사용자별 최초 완료 팀을 찾는다.
+     * 조회 중인 팀이 최초 완료 팀일 때만 지급된 {@code reward}를 표시하고, 재도전 팀은 모든 보상 항목을 null로 구성한다.
      */
     @EntityGraph(attributePaths = "cooperativeMissionProgress")
     @Query("""
@@ -49,6 +63,8 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
      * 사용: URL로 참여 요청({@code POST /api/v2/cooperative-missions/join-requests})에서 현재 사용자가 대상 팀에
      * 이미 PENDING 또는 ACCEPTED 참가자로 등록되어 있는지 확인한다. 기존 참가자이면 중복 생성하지 않고
      * 해당 ID와 상태로 {@code participantId}, {@code participantStatus}를 구성한다.
+     * 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 현재 사용자가 해당 팀의 참가자인지 확인하고 {@code currentParticipant}의 ID·역할·상태를 구성한다.
      */
     Optional<CooperativeMissionParticipant> findByCooperativeMissionProgressIdAndUserId(Long progressId, Long userId);
 

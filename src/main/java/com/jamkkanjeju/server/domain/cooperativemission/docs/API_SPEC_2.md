@@ -1,31 +1,31 @@
-# 협동 미션 시작/이어하기 API
+# 협동 미션 상태 조회 API
 
 | 구분 | 내용 |
 | --- | --- |
-| API 이름 | 협동 미션 시작/이어하기 |
-| HTTP 메서드 | `POST` |
+| API 이름 | 협동 미션 상태 조회 |
+| HTTP 메서드 | `GET` |
 | 도메인 | `COOPERATIVE_MISSION` |
-| 엔드포인트 | `/api/v2/cooperative-missions/{missionId}/progress` |
+| 엔드포인트 | `/api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress` |
 
 ### API 설명
 
-사용자가 협동 미션을 처음 시작하거나 본인이 참가 중인 팀의 협동 미션을 이어서 할 때 호출한다.
+방장과 팀원이 협동 미션 방의 최신 상태를 조회할 때 호출한다. 참여 요청 후 대기 중인 사용자도 조회할 수 있다.
 
-해당 미션의 진행 중인 팀에 본인이 `PENDING` 또는 `ACCEPTED` 상태로 등록되어 있으면 방장(`HOST`)·팀원(`MEMBER`) 구분 없이 기존 팀의 진행도 ID를 반환한다. 이어하기는 기존 팀과 참가 상태를 변경하지 않는다.
+프론트는 1단계부터 완료될 때까지 이 API를 폴링하여 참여 요청 수락·거절, 역할 배정, 미션 수행 및 완료 상태를 확인한다.
 
-해당 미션에서 이어갈 팀이 없으면 새 팀을 만들고 본인을 방장으로 참가시킨다. 다른 사용자의 팀이 같은 미션을 진행하고 있더라도 해당 팀에 자동으로 합류하지 않는다.
+단계는 `1: 초대·역할 배정 → 2: 미션 수행 → 3: 미션 완료`이다. 역할 배정은 초대와 함께 1단계에서 진행하며 별도 단계로 분리하지 않는다.
 
-같은 미션에서는 사용자당 참가·대기 중인 팀을 하나만 유지하며 기존 팀이 있으면 새로 만들지 않는다. 다른 협동 미션의 참가·대기 기록은 이 미션을 시작하는 데 영향을 주지 않는다.
+1·2단계에서는 현재 참가자, 방장과 대기·수락된 팀원, 공통 역할 카드 전체, 저장된 역할 진행도와 집계값을 반환한다. 아직 역할이 배정되지 않았으면 `roleProgresses`는 빈 배열이고 두 집계값은 `0`이다. 하나의 역할 카드는 팀에서 최대 한 명에게 배정되며 한 참가자는 여러 역할을 맡을 수 있다. 모든 역할 카드를 배정할 필요는 없다.
 
-`PENDING` 상태로 이어가는 경우에도 기존 참가 상태를 자동으로 수락 처리하지 않는다. 프론트는 상태 조회 결과에 따라 참가 대기 화면을 표시한다.
+3단계에서는 참가자·역할 관련 필드는 `null`로 반환하고 완료 장소, 현재 사용자의 완료 보상 정보와 다음 추천 장소를 반환한다. 이 API는 조회 전용으로, 호출하거나 반복 폴링해도 보상을 새로 지급하지 않는다.
 
-완료된 팀의 참가 이력은 새 시작을 제한하지 않는다. 완료한 미션을 다시 시작하면 과거 팀을 초기화하거나 재사용하지 않고 새 진행도 ID를 반환한다.
+보상은 수행 결과와 관계없이 해당 미션을 처음 완료하는 수락된 참가자에게 설정된 AR 캐릭터·포인트·쿠폰을 모두 제공한다. 방장과 팀원을 구분하지 않으며 같은 미션을 재도전해 완료한 경우에는 보상을 제공하지 않는다.
 
-시작·이어하기 모두 진행도 ID와 팀 토큰을 반환한다. 팀 토큰은 현재 사용자가 수락된 방장(`HOST + ACCEPTED`)인 경우에만 문자열로 반환하며, 대기 중인 방장이나 팀원은 `null`을 반환한다. 팀 상태·참가자 목록·역할 정보·보상 정보는 이 응답에 포함하지 않는다. 프론트는 성공 응답을 받은 뒤 반환된 진행도 ID로 협동 미션 상태 조회를 즉시 호출하고, 이후 폴링으로 화면을 동기화한다.
+완료 응답의 `reward`는 현재 사용자에게 해당 팀에서 지급된 보상이다. 현재 사용자의 최초 완료 팀을 조회하면 지급된 보상을 반환하고, 이후 재도전 팀을 조회하면 세 보상 항목을 모두 `null`로 반환한다. 따라서 같은 팀의 상태를 조회해도 사용자별 보상 응답은 다를 수 있다.
 
-같은 사용자가 같은 미션의 시작을 반복하거나 동시에 요청해도 팀을 중복 생성하지 않는다.
+사용자 좌표는 완료 단계의 다음 추천 장소와 거리 정보에 사용한다. 1·2단계에서도 같은 요청 형식으로 전달한다.
 
-비활성화된 협동 미션은 시작하거나 이어서 할 수 없다.
+거절되어 참가자 정보가 없어진 사용자는 `COOPERATIVE_MISSION_PARTICIPANT_NOT_FOUND`를 받으며 프론트는 폴링을 중단한다. 완료 응답이나 비활성 미션 오류를 받은 경우에도 폴링을 중단한다.
 
 ---
 
@@ -39,7 +39,10 @@
 
 ### 요청 Query
 
-없음
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `latitude` | number | 필수 | 사용자 현재 위도. `-90` 이상 `90` 이하 |
+| `longitude` | number | 필수 | 사용자 현재 경도. `-180` 이상 `180` 이하 |
 
 ---
 
@@ -47,12 +50,12 @@
 
 | 필드 | 타입 | 필수 여부 | 설명 |
 | --- | --- | --- | --- |
-| `missionId` | integer | 필수 | 시작하거나 이어서 진행할 협동 미션의 공통 미션 ID. 팀 진행도 ID와 구분 |
+| `cooperativeMissionProgressId` | integer | 필수 | 조회할 팀의 협동 미션 진행도 ID |
 
 요청 예시:
 
 ```http
-POST /api/v2/cooperative-missions/4/progress
+GET /api/v2/cooperative-missions/10/progress?latitude=33.4996&longitude=126.5312
 Authorization: Bearer {accessToken}
 ```
 
@@ -66,36 +69,380 @@ Authorization: Bearer {accessToken}
 
 ### 정상 응답 데이터
 
-Status Code : `201 Created`
-
-새 팀을 만들어 협동 미션을 시작한 경우
-
 Status Code : `200 OK`
 
-본인이 `PENDING` 또는 `ACCEPTED` 상태로 등록된 해당 미션의 진행 중인 팀을 이어서 하는 경우
-
-두 경우의 응답 형식은 동일하다.
+현재 사용자가 참가자로 등록된 팀의 상태를 조회한 경우. 완료된 팀도 조회할 수 있다.
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| `cooperativeMissionProgressId` | integer | 시작하거나 이어서 진행할 팀의 협동 미션 진행도 ID. 신규 시작이면 새 ID, 이어하기면 기존 ID |
-| `teamToken` | string 또는 null | 현재 사용자가 `HOST + ACCEPTED`이면 팀원 초대에 사용할 팀 토큰, 그 외에는 `null` |
+| `missionProgressId` | number | 협동 미션 진행도 id |
+| `missionId` | integer | 협동 미션의 공통 미션 ID |
+| `missionTitle` | string | 협동 미션 제목 |
+| `missionProgressStatus` | string | 협동 미션 진행 상태. `IN_PROGRESS \| COMPLETED` |
+| `currentStep` | integer | 현재 단계. `1: 초대·역할 배정, 2: 미션 수행, 3: 미션 완료` |
+| `completedLocation` | object 또는 null | 완료한 협동 미션의 장소. 1·2단계 또는 연결된 장소가 없으면 `null` |
+| `completedLocation.locationId` | number | 완료한 협동 미션이 진행된 `LOCATION.id` |
+| `completedLocation.locationTitle` | string | 완료한 협동 미션이 진행된 장소명 |
+| `currentParticipant` | object \| null | Bearer 토큰으로 식별한 현재 사용자의 참가자 정보. 3단계이면 `null` |
+| `currentParticipant.participantId` | number | 현재 사용자의 참가자 id |
+| `currentParticipant.participantRole` | string | 현재 사용자의 역할. `HOST \| MEMBER` |
+| `currentParticipant.participantStatus` | string | 현재 사용자의 참여 상태. `PENDING \| ACCEPTED` |
+| `participants` | object[] 또는 null | 해당 팀의 방장과 참여 요청 목록. 3단계이면 `null` |
+| `participants[].participantId` | number | 참가자 id |
+| `participants[].name` | string | 참가자 닉네임 |
+| `participants[].participantRole` | string | 참가자 역할. `HOST \| MEMBER` |
+| `participants[].participantStatus` | string | 참여 상태. `PENDING \| ACCEPTED` |
+| `roleCards` | object[] 또는 null | 공통 역할 카드 전체 목록. 1·2단계에서 반환하고 3단계이면 `null` |
+| `roleCards[].roleCardId` | number | 역할 카드 id |
+| `roleCards[].roleName` | string | 역할 이름 |
+| `roleCards[].roleDescription` | string | 역할 설명 |
+| `roleCards[].locationToFind` | string[] | 역할 수행을 위해 찾아야 하는 장소 또는 대상 |
+| `roleProgresses` | object[] 또는 null | 현재 저장된 역할 배정·수행 목록. 1·2단계에서 반환하고 배정이 없으면 빈 배열, 3단계이면 `null` |
+| `roleProgresses[].participantId` | number | 역할을 맡은 참가자 id |
+| `roleProgresses[].participantName` | string | 역할을 맡은 참가자 닉네임 |
+| `roleProgresses[].roleCardId` | number | 배정된 역할 카드 id |
+| `roleProgresses[].roleName` | string | 배정된 역할 이름 |
+| `roleProgresses[].progressStatus` | string | 역할 인증 진행 상태. `IN_PROGRESS \| COMPLETED` |
+| `roleProgresses[].itemImgUrl` | string \| null | 역할 인증 이미지 URL. 저장된 이미지가 없으면 `null` |
+| `completedRoleCount` | number \| null | 저장된 역할 진행도 중 인증을 완료한 수. 1·2단계에서만 반환 |
+| `totalRoleCount` | number \| null | 실제로 생성된 역할 진행도 수. 1·2단계에서만 반환하며 배정하지 않은 역할 카드는 포함하지 않음 |
+| `reward` | object \| null | 해당 팀에서 현재 사용자에게 지급된 완료 보상. 3단계에서 객체로 반환하며 재도전이면 모든 항목이 `null` |
+| `reward.arCharacter` | object \| null | 지급된 AR 캐릭터. 지급되지 않았으면 `null` |
+| `reward.arCharacter.id` | number | AR 캐릭터 id |
+| `reward.arCharacter.name` | string | AR 캐릭터 이름 |
+| `reward.arCharacter.imageUrl` | string | AR 캐릭터 이미지 URL |
+| `reward.point` | number \| null | 지급된 포인트. 지급되지 않았으면 `null` |
+| `reward.coupon` | object \| null | 지급된 쿠폰. 지급되지 않았으면 `null` |
+| `reward.coupon.couponLocation` | string | 쿠폰 사용처 |
+| `reward.coupon.couponPrice` | number | 쿠폰 금액 |
+| `nextLocation` | object \| null | 다음 추천 장소. 3단계에서만 객체로 반환 |
+| `nextLocation.id` | number | 다음 장소 id |
+| `nextLocation.locationTitle` | string | 다음 장소명 |
+| `nextLocation.locationImageUrl` | string \| null | 다음 장소 이미지 URL. 조회하지 못하면 `null` |
+| `nextLocation.distanceMeter` | number | Query의 사용자 위치에서 다음 장소까지의 직선거리(m) |
+| `nextLocation.mission` | object \| null | 다음 장소의 미션. 연결된 미션이 없으면 `null` |
+| `nextLocation.mission.id` | number | 다음 미션 id |
+| `nextLocation.mission.missionType` | string | 다음 미션 유형. `CULTURE \| COOPERATIVE \| TREASURE` |
+
+1단계: 초대·역할 배정 중인 경우
 
 ```json
 {
-  "cooperativeMissionProgressId": 31,
-  "teamToken": "example_team_token"
+  "missionProgressId": 10,
+  "missionId": 12,
+  "missionTitle": "함께 키우는 귤나무",
+  "missionProgressStatus": "IN_PROGRESS",
+  "currentStep": 1,
+  "completedLocation": null,
+  "currentParticipant": {
+    "participantId": 1,
+    "participantRole": "HOST",
+    "participantStatus": "ACCEPTED"
+  },
+  "participants": [
+    {
+      "participantId": 1,
+      "name": "나민",
+      "participantRole": "HOST",
+      "participantStatus": "ACCEPTED"
+    },
+    {
+      "participantId": 2,
+      "name": "이서연",
+      "participantRole": "MEMBER",
+      "participantStatus": "PENDING"
+    },
+    {
+      "participantId": 3,
+      "name": "김민우",
+      "participantRole": "MEMBER",
+      "participantStatus": "ACCEPTED"
+    }
+  ],
+  "roleCards": [
+    {
+      "roleCardId": 1,
+      "roleName": "땅지기",
+      "roleDescription": "귤나무가 뿌리를 내릴 건강한 땅을 찾고 비료를 주는 역할입니다.",
+      "locationToFind": [
+        "화산토",
+        "흙길",
+        "밭",
+        "퇴비 주변"
+      ]
+    },
+    {
+      "roleCardId": 2,
+      "roleName": "물지기",
+      "roleDescription": "귤나무에 생명을 불어넣는 물을 찾는 역할입니다.",
+      "locationToFind": [
+        "용천수",
+        "물길",
+        "연못",
+        "젖은 돌 주변"
+      ]
+    },
+    {
+      "roleCardId": 3,
+      "roleName": "빛지기",
+      "roleDescription": "귤이 달콤하게 익을 수 있도록 햇빛이 잘 드는 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "양지바른 길",
+        "햇살 드는 공터",
+        "남향 돌담",
+        "빛이 비치는 나무 아래"
+      ]
+    },
+    {
+      "roleCardId": 4,
+      "roleName": "바람지기",
+      "roleDescription": "어린 귤나무를 강한 바람으로부터 지켜줄 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "돌담",
+        "낮은 언덕 뒤",
+        "건물 사이 골목",
+        "방풍림"
+      ]
+    },
+    {
+      "roleCardId": 5,
+      "roleName": "이웃지기",
+      "roleDescription": "귤나무와 함께 살아갈 수 있는 자연의 흔적을 찾는 역할입니다.",
+      "locationToFind": [
+        "꽃밭",
+        "풀숲",
+        "주변 나무",
+        "곤충의 흔적"
+      ]
+    },
+    {
+      "roleCardId": 6,
+      "roleName": "수확지기",
+      "roleDescription": "제주 사람들의 손길과 감귤 수확의 흔적이 담긴 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "감귤 농장",
+        "귤 창고",
+        "수확 도구",
+        "오래된 과수원"
+      ]
+    }
+  ],
+  "roleProgresses": [
+    {
+      "participantId": 1,
+      "participantName": "나민",
+      "roleCardId": 1,
+      "roleName": "땅지기",
+      "progressStatus": "IN_PROGRESS",
+      "itemImgUrl": null
+    },
+    {
+      "participantId": 2,
+      "participantName": "이서연",
+      "roleCardId": 2,
+      "roleName": "물지기",
+      "progressStatus": "IN_PROGRESS",
+      "itemImgUrl": null
+    }
+  ],
+  "completedRoleCount": 0,
+  "totalRoleCount": 2,
+  "reward": null,
+  "nextLocation": null
 }
 ```
 
-현재 사용자가 대기 중이거나 팀원인 경우:
+현재 사용자가 대기 중인 팀원이면 `currentParticipant.participantStatus`는 `PENDING`이며, 방장이 수락하면 이후 폴링 응답부터 `ACCEPTED`가 된다. 역할 배정이 없으면 `roleProgresses: []`, `completedRoleCount: 0`, `totalRoleCount: 0`을 반환한다.
+
+2단계: 미션 수행 중인 경우
 
 ```json
 {
-  "cooperativeMissionProgressId": 31,
-  "teamToken": null
+  "missionProgressId": 10,
+  "missionId": 12,
+  "missionTitle": "함께 키우는 귤나무",
+  "missionProgressStatus": "IN_PROGRESS",
+  "currentStep": 2,
+  "completedLocation": null,
+  "currentParticipant": {
+    "participantId": 2,
+    "participantRole": "MEMBER",
+    "participantStatus": "ACCEPTED"
+  },
+  "participants": [
+    {
+      "participantId": 1,
+      "name": "나민",
+      "participantRole": "HOST",
+      "participantStatus": "ACCEPTED"
+    },
+    {
+      "participantId": 2,
+      "name": "이서연",
+      "participantRole": "MEMBER",
+      "participantStatus": "ACCEPTED"
+    }
+  ],
+  "roleCards": [
+    {
+      "roleCardId": 1,
+      "roleName": "땅지기",
+      "roleDescription": "귤나무가 뿌리를 내릴 건강한 땅을 찾고 비료를 주는 역할입니다.",
+      "locationToFind": [
+        "화산토",
+        "흙길",
+        "밭",
+        "퇴비 주변"
+      ]
+    },
+    {
+      "roleCardId": 2,
+      "roleName": "물지기",
+      "roleDescription": "귤나무에 생명을 불어넣는 물을 찾는 역할입니다.",
+      "locationToFind": [
+        "용천수",
+        "물길",
+        "연못",
+        "젖은 돌 주변"
+      ]
+    },
+    {
+      "roleCardId": 3,
+      "roleName": "빛지기",
+      "roleDescription": "귤이 달콤하게 익을 수 있도록 햇빛이 잘 드는 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "양지바른 길",
+        "햇살 드는 공터",
+        "남향 돌담",
+        "빛이 비치는 나무 아래"
+      ]
+    },
+    {
+      "roleCardId": 4,
+      "roleName": "바람지기",
+      "roleDescription": "어린 귤나무를 강한 바람으로부터 지켜줄 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "돌담",
+        "낮은 언덕 뒤",
+        "건물 사이 골목",
+        "방풍림"
+      ]
+    },
+    {
+      "roleCardId": 5,
+      "roleName": "이웃지기",
+      "roleDescription": "귤나무와 함께 살아갈 수 있는 자연의 흔적을 찾는 역할입니다.",
+      "locationToFind": [
+        "꽃밭",
+        "풀숲",
+        "주변 나무",
+        "곤충의 흔적"
+      ]
+    },
+    {
+      "roleCardId": 6,
+      "roleName": "수확지기",
+      "roleDescription": "제주 사람들의 손길과 감귤 수확의 흔적이 담긴 장소를 찾는 역할입니다.",
+      "locationToFind": [
+        "감귤 농장",
+        "귤 창고",
+        "수확 도구",
+        "오래된 과수원"
+      ]
+    }
+  ],
+  "roleProgresses": [
+    {
+      "participantId": 1,
+      "participantName": "나민",
+      "roleCardId": 1,
+      "roleName": "땅지기",
+      "progressStatus": "COMPLETED",
+      "itemImgUrl": null
+    },
+    {
+      "participantId": 2,
+      "participantName": "이서연",
+      "roleCardId": 2,
+      "roleName": "물지기",
+      "progressStatus": "IN_PROGRESS",
+      "itemImgUrl": null
+    },
+    {
+      "participantId": 1,
+      "participantName": "나민",
+      "roleCardId": 3,
+      "roleName": "빛지기",
+      "progressStatus": "IN_PROGRESS",
+      "itemImgUrl": null
+    }
+  ],
+  "completedRoleCount": 1,
+  "totalRoleCount": 3,
+  "reward": null,
+  "nextLocation": null
 }
 ```
+
+3단계: 현재 사용자가 해당 미션을 처음 완료하여 설정된 보상을 모두 받은 경우
+
+```json
+{
+  "missionProgressId": 10,
+  "missionId": 12,
+  "missionTitle": "함께 키우는 귤나무",
+  "missionProgressStatus": "COMPLETED",
+  "currentStep": 3,
+  "completedLocation": {
+    "locationId": 68,
+    "locationTitle": "제주레저힐링축제"
+  },
+  "currentParticipant": null,
+  "participants": null,
+  "roleCards": null,
+  "roleProgresses": null,
+  "completedRoleCount": null,
+  "totalRoleCount": null,
+  "reward": {
+    "arCharacter": {
+      "id": 1,
+      "name": "감귤 캐릭터",
+      "imageUrl": "https://example.com/characters/tangerine.png"
+    },
+    "point": 100,
+    "coupon": {
+      "couponLocation": "제주 감귤 카페",
+      "couponPrice": 5000
+    }
+  },
+  "nextLocation": {
+    "id": 39,
+    "locationTitle": "한담 해안 산책로",
+    "locationImageUrl": "https://example.com/locations/handam.jpg",
+    "distanceMeter": 4200,
+    "mission": {
+      "id": 342,
+      "missionType": "TREASURE"
+    }
+  }
+}
+```
+
+완료 장소가 없으면 `completedLocation`은 `null`이다. 완료 장소가 있으면 프론트는 `completedLocation.locationId`와 `locationTitle`을 장소 방명록 작성에 사용한다.
+
+재도전 팀의 완료 응답은 나머지 필드 형식이 동일하며 `reward`만 다음과 같다. 최초 완료 팀에서는 미션에 설정되지 않은 보상 항목만 `null`일 수 있다.
+
+```json
+{
+  "reward": {
+    "arCharacter": null,
+    "point": null,
+    "coupon": null
+  }
+}
+```
+
+완료 보상이 없어도 `reward`는 객체이며 지급되지 않은 항목은 각각 `null`이다. 추천 장소가 없으면 `nextLocation`, 추천 장소에 연결된 미션이 없으면 `nextLocation.mission`은 `null`이다. 장소 이미지를 조회하지 못하면 `locationImageUrl`은 `null`이다.
 
 ---
 
@@ -103,317 +450,13 @@ Status Code : `200 OK`
 
 공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
 
-`missionId`를 정수로 변환할 수 없는 경우는 공통 요청값 검증 실패에 해당한다.
-
-#### 협동 미션 없음
-
-Status Code : `404 Not Found`
-
-요청한 미션 ID에 해당하는 협동 미션이 없는 경우. 문화 미션·보물찾기 미션 등 다른 유형의 미션 ID를 전달한 경우도 포함한다.
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_NOT_FOUND",
-  "message": "협동 미션을 찾을 수 없습니다."
-}
-```
-
-#### 비활성화된 협동 미션
-
-Status Code : `404 Not Found`
-
-요청한 협동 미션의 상태가 `INACTIVE`인 경우. 신규 시작과 기존 팀 이어하기 모두 해당한다.
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_INACTIVE",
-  "message": "비활성화된 협동 미션입니다."
-}
-```
-
----
-
-# URL로 참여 요청 API
-
-| 구분 | 내용 |
-| --- | --- |
-| API 이름 | URL로 협동 미션 참여 요청 |
-| HTTP 메서드 | `POST` |
-| 도메인 | `COOPERATIVE_MISSION` |
-| 엔드포인트 | `/api/v2/cooperative-missions/join-requests` |
-
-### API 설명
-
-초대 URL을 연 사용자가 해당 협동 미션 팀에 참여를 요청할 때 호출한다.
-
-프론트는 초대 URL에서 팀 토큰을 추출하여 요청 Body의 `teamToken`으로 전달한다.
-
-새로운 참여 요청을 생성하면 사용자는 해당 팀의 `MEMBER + PENDING` 참가자로 등록된다. 동일한 팀에 현재 사용자의 `PENDING` 또는 `ACCEPTED` 참가자 정보가 이미 있으면 중복 생성하지 않고 기존 참가자 정보를 반환한다.
-
-현재 사용자가 같은 협동 미션의 다른 진행 중인 팀에 이미 `PENDING` 또는 `ACCEPTED` 상태로 참가하고 있으면 새로운 팀에 참여를 요청할 수 없다. 다른 협동 미션의 참가 기록과 완료된 팀의 참가 이력은 이 요청을 제한하지 않는다.
-
-프론트는 응답의 `cooperativeMissionProgressId`를 사용하여 협동 미션 상태 조회 API를 폴링한다. 참가 상태가 `PENDING`이면 수락 대기 화면을 유지하고, `ACCEPTED`이면 협동 미션 방으로 이동한다.
-
-비활성화된 협동 미션에는 참여를 요청할 수 없다.
-
----
-
-### 요청 Header
-
-| 헤더 | 필수 여부 | 설명 |
-| --- | --- | --- |
-| `Authorization` | 필수 | `Bearer {accessToken}` |
-
----
-
-### 요청 Query
-
-없음
-
----
-
-### 요청 Path
-
-없음
-
----
-
-### 요청 Body
-
-| 필드 | 타입 | 필수 여부 | 설명 |
-| --- | --- | --- | --- |
-| `teamToken` | string | 필수 | 초대 URL에서 추출한 팀 단위 초대 토큰. 공백일 수 없으며 최대 100자 |
-
-```json
-{
-  "teamToken": "example_team_token"
-}
-```
-
----
-
-### 정상 응답 데이터
-
-Status Code : `201 Created`
-
-새로운 `PENDING` 참가자를 생성한 경우
-
-Status Code : `200 OK`
-
-대상 팀에 현재 사용자의 `PENDING` 또는 `ACCEPTED` 참가자 정보가 이미 존재하는 경우
-
-두 경우의 응답 형식은 동일하다.
-
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `cooperativeMissionProgressId` | integer | 참여를 요청한 팀의 협동 미션 진행도 ID. 이후 상태 조회에 사용 |
-| `participantId` | integer | 현재 사용자의 협동 미션 참가자 ID |
-| `participantStatus` | string | 현재 참가 상태. `PENDING` 또는 `ACCEPTED` |
-
-새로운 참여 요청을 생성한 경우:
-
-```json
-{
-  "cooperativeMissionProgressId": 31,
-  "participantId": 47,
-  "participantStatus": "PENDING"
-}
-```
-
-기존 참가자 정보를 반환하는 경우:
-
-```json
-{
-  "cooperativeMissionProgressId": 31,
-  "participantId": 47,
-  "participantStatus": "ACCEPTED"
-}
-```
-
----
-
-### 오류 응답 데이터
-
-공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
-
-`teamToken`이 누락되거나 공백이거나 100자를 초과한 경우는 공통 요청값 검증 실패에 해당한다.
-
-#### 유효하지 않은 초대 토큰
-
-Status Code : `404 Not Found`
-
-`teamToken`에 해당하는 진행 중인 협동 미션 팀을 찾을 수 없는 경우. 존재하지 않는 토큰이거나 해당 팀이 이미 완료된 경우를 포함한다.
-
-```json
-{
-  "code": "INVALID_INVITE_TOKEN",
-  "message": "유효하지 않은 초대 링크입니다."
-}
-```
-
-#### 비활성화된 협동 미션
-
-Status Code : `404 Not Found`
-
-팀 토큰에 해당하는 협동 미션의 상태가 `INACTIVE`인 경우. 대상 팀에 기존 참가자 정보가 있는 경우도 포함한다.
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_INACTIVE",
-  "message": "비활성화된 협동 미션입니다."
-}
-```
-
-#### 동일 협동 미션의 다른 팀에 참가 중
-
-Status Code : `409 Conflict`
-
-현재 사용자가 같은 협동 미션의 다른 진행 중인 팀에 `PENDING` 또는 `ACCEPTED` 상태로 참가하고 있는 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_ALREADY_PARTICIPATING",
-  "message": "이미 해당 협동 미션에 참여 중입니다."
-}
-```
-
-#### 협동 미션 참여 인원 초과
-
-Status Code : `409 Conflict`
-
-대상 팀의 `PENDING`과 `ACCEPTED` 참가자가 방장을 포함하여 이미 6명인 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_FULL",
-  "message": "협동 미션 참여 인원이 가득 찼습니다."
-}
-```
-
-#### 협동 미션 참여 요청 마감
-
-Status Code : `409 Conflict`
-
-대상 팀이 참여 요청을 받을 수 있는 1단계를 지난 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_JOIN_CLOSED",
-  "message": "협동 미션 참여 요청이 마감되었습니다."
-}
-```
-
----
-
-# 협동 미션 참여 요청 수락/거절 API
-
-| 구분 | 내용 |
-| --- | --- |
-| API 이름 | 협동 미션 참여 요청 수락/거절 |
-| HTTP 메서드 | `PATCH` |
-| 도메인 | `COOPERATIVE_MISSION` |
-| 엔드포인트 | `/api/v2/cooperative-missions/{cooperativeMissionProgressId}/participants/{participantId}` |
-
-### API 설명
-
-협동 미션 방장이 팀원의 참여 요청을 수락하거나 거절할 때 호출한다.
-
-`decision`이 `ACCEPT`이면 대상 참여 요청을 수락하고, `REJECT`이면 대상 참여 요청을 거절한다.
-
-수락된 팀원은 기존에 받은 `cooperativeMissionProgressId`로 협동 미션 상태 조회를 계속 폴링한다. 거절된 팀원은 상태 조회에서 자신의 참가자 정보를 더 이상 확인할 수 없으므로 폴링을 중단하고 참여 요청 거절로 처리한다.
-
-처리 결과는 협동 미션 상태 조회 응답으로 확인하므로 이 API는 진행도 ID나 참가자 정보를 다시 반환하지 않는다.
-
----
-
-### 요청 Header
-
-| 헤더 | 필수 여부 | 설명 |
-| --- | --- | --- |
-| `Authorization` | 필수 | `Bearer {accessToken}` |
-
----
-
-### 요청 Query
-
-없음
-
----
-
-### 요청 Path
-
-| 필드 | 타입 | 필수 여부 | 설명 |
-| --- | --- | --- | --- |
-| `cooperativeMissionProgressId` | integer | 필수 | 참여 요청이 속한 협동 미션 진행도 ID |
-| `participantId` | integer | 필수 | 수락하거나 거절할 참가자 ID |
-
-요청 예시:
-
-```http
-PATCH /api/v2/cooperative-missions/31/participants/47
-Authorization: Bearer {accessToken}
-```
-
----
-
-### 요청 Body
-
-| 필드 | 타입 | 필수 여부 | 설명 |
-| --- | --- | --- | --- |
-| `decision` | string | 필수 | 참여 요청 처리 방식. `ACCEPT` 또는 `REJECT` |
-
-수락 요청:
-
-```json
-{
-  "decision": "ACCEPT"
-}
-```
-
-거절 요청:
-
-```json
-{
-  "decision": "REJECT"
-}
-```
-
----
-
-### 정상 응답 데이터
-
-Status Code : `204 No Content`
-
-참여 요청을 수락하거나 거절한 경우 응답 Body는 없다.
-
-이미 수락된 참가자에게 `ACCEPT`를 다시 요청한 경우에도 `204 No Content`를 반환한다.
-
----
-
-### 오류 응답 데이터
-
-공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
-
-Path 값을 정수로 변환할 수 없거나 `decision`이 누락되었거나 `ACCEPT`, `REJECT` 이외의 값인 경우는 공통 요청값 검증 실패에 해당한다.
-
-#### 협동 미션 방장 권한 없음
-
-Status Code : `403 Forbidden`
-
-현재 사용자가 해당 팀의 `HOST + ACCEPTED` 참가자가 아닌 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_HOST_ONLY",
-  "message": "협동 미션 방장만 참여 요청을 처리할 수 있습니다."
-}
-```
+경로를 정수로 변환할 수 없거나 좌표가 누락·비숫자·허용 범위 밖인 경우는 공통 요청값 검증 실패에 해당한다.
 
 #### 협동 미션 진행도 없음
 
 Status Code : `404 Not Found`
 
-`cooperativeMissionProgressId`에 해당하는 진행 중인 협동 미션 진행도가 없거나 해당 진행도가 이미 완료된 경우
+요청한 진행도 ID에 해당하는 팀 진행도가 없는 경우. 완료된 진행도는 이 오류에 해당하지 않는다.
 
 ```json
 {
@@ -426,7 +469,7 @@ Status Code : `404 Not Found`
 
 Status Code : `404 Not Found`
 
-해당 진행도에 연결된 협동 미션의 상태가 `INACTIVE`인 경우
+조회 대상 팀의 협동 미션이 `INACTIVE`인 경우
 
 ```json
 {
@@ -435,11 +478,11 @@ Status Code : `404 Not Found`
 }
 ```
 
-#### 협동 미션 참여 요청 없음
+#### 협동 미션 참가자 없음
 
 Status Code : `404 Not Found`
 
-`participantId`에 해당하는 참가자가 없거나, 다른 진행도에 속하거나, 대상 참가자가 방장인 경우. 이미 거절되어 삭제된 참가자를 다시 처리하는 경우도 포함한다.
+현재 사용자가 해당 진행도의 참가자가 아닌 경우. 참여 요청 거절로 참가자 정보가 삭제된 경우도 포함한다.
 
 ```json
 {
@@ -447,30 +490,3 @@ Status Code : `404 Not Found`
   "message": "협동 미션 참여 요청을 찾을 수 없습니다."
 }
 ```
-
-#### 협동 미션 참여 요청 마감
-
-Status Code : `409 Conflict`
-
-대상 팀이 참여 요청을 처리할 수 있는 1단계를 지난 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_JOIN_CLOSED",
-  "message": "협동 미션 참여 요청이 마감되었습니다."
-}
-```
-
-#### 이미 수락된 참가자 거절
-
-Status Code : `409 Conflict`
-
-`ACCEPTED` 상태인 참가자를 `REJECT`하려는 경우
-
-```json
-{
-  "code": "COOPERATIVE_MISSION_PARTICIPANT_ALREADY_ACCEPTED",
-  "message": "이미 수락된 참가자는 거절할 수 없습니다."
-}
-```
-

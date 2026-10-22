@@ -2,17 +2,23 @@ package com.jamkkanjeju.server.domain.cooperativemission.controller;
 
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMissionParticipantRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.GetCooperativeMissionStatusRequest;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.GetCooperativeMissionStatusResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionService;
+import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionStatusService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +35,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class CooperativeMissionController {
 
     private final CooperativeMissionService cooperativeMissionService;
+    private final CooperativeMissionStatusService cooperativeMissionStatusService;
+
+    /** 로그인한 참가자에게 팀의 최신 상태와 완료 시 본인의 보상·다음 장소 정보를 반환한다. */
+    @Operation(summary = "협동 미션 상태 조회")
+    @GetMapping("/{cooperativeMissionProgressId}/progress")
+    public GetCooperativeMissionStatusResponse getCooperativeMissionStatus(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId,
+            @Valid @ParameterObject @ModelAttribute GetCooperativeMissionStatusRequest request) {
+        return cooperativeMissionStatusService.getCooperativeMissionStatus(
+                authUser.userId(), cooperativeMissionProgressId, request);
+    }
 
     /** 로그인한 사용자의 협동 미션을 시작하거나 이어서 하고 팀 진행도 ID와 허용된 팀 토큰을 반환한다. */
     @Operation(summary = "협동 미션 시작/이어하기")

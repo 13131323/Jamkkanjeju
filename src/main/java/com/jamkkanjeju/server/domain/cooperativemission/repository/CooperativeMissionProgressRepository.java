@@ -3,6 +3,7 @@ package com.jamkkanjeju.server.domain.cooperativemission.repository;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMissionProgress;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +18,19 @@ import org.springframework.data.repository.query.Param;
  * {@code cooperativeMissionProgressId}, {@code teamToken}을 구성한다.
  */
 public interface CooperativeMissionProgressRepository extends JpaRepository<CooperativeMissionProgress, Long> {
+
+    /**
+     * 결과: ID({@code id})가 일치하는 팀 진행도 한 건이다. 진행 상태와 무관하며 쓰기 잠금을 사용하지 않는다.
+     * {@code cooperativeMission.mission}(제목), {@code cooperativeMission.location}(장소),
+     * {@code cooperativeMission.arCharacter}, {@code cooperativeMission.coupon.location}(보상 구성)을 함께 로딩한다.
+     * 연결된 장소·보상이 없으면 해당 연관 값은 null이며, 진행도가 없으면 빈 {@code Optional}이다.
+     * 사용: 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서
+     * 서비스가 미션 활성 상태와 현재 참가자를 확인한 뒤 공통 미션 정보·현재 단계·완료 장소·보상 정보를 구성한다.
+     * 보상은 조회만 하며 지급 상태를 변경하지 않는다.
+     */
+    @EntityGraph(attributePaths = {"cooperativeMission.mission", "cooperativeMission.location",
+            "cooperativeMission.arCharacter", "cooperativeMission.coupon.location"})
+    Optional<CooperativeMissionProgress> findWithDetailsById(Long id);
 
     /**
      * 결과: ID({@code id})가 일치하는 협동 미션 진행도 한 건을 비관적 쓰기 잠금으로 조회한다.
