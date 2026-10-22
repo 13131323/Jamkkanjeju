@@ -11,6 +11,8 @@ import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.*;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -32,13 +34,17 @@ class StartCooperativeMissionServiceTest {
     @Mock CooperativeMissionRepository missions;
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
+    @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock MissionRewardStatusRepository rewardStatuses;
+    @Mock MissionRewardGranter rewardGranter;
     CooperativeMissionService service;
     final com.jamkkanjeju.server.domain.auth.entity.User user = activeUser(15L);
     final CooperativeMission mission = cooperativeMission(31L, null);
 
     @BeforeEach
     void setUp() {
-        service = new CooperativeMissionService(users, missions, progresses, participants, CLOCK);
+        service = new CooperativeMissionService(users, missions, progresses, participants,
+                roleProgresses, rewardStatuses, rewardGranter, CLOCK);
     }
 
     @Test

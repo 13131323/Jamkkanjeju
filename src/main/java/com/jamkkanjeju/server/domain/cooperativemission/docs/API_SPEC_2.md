@@ -490,3 +490,177 @@ Status Code : `404 Not Found`
   "message": "협동 미션 참여 요청을 찾을 수 없습니다."
 }
 ```
+
+# 협동 미션 진행도 저장 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 협동 미션 진행도 저장 |
+| HTTP 메서드 | `PATCH` |
+| 도메인 | `COOPERATIVE_MISSION` |
+| 엔드포인트 | `/api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress` |
+
+### API 설명
+
+수락된 방장이 협동 미션을 다음 단계로 변경할 때 호출한다.
+
+단계는 `1: 초대·역할 배정 → 2: 미션 수행 → 3: 미션 완료`이며 한 단계씩만 이동할 수 있다. 요청의 `currentStep`에는 변경하려는 다음 단계를 전달한다.
+
+`1 → 2`로 변경하려면 대기 중인 참여 요청이 없어야 하며, 방장을 포함한 수락된 참가자 모두가 역할 카드를 최소 하나 배정받아야 한다. 모든 역할 카드를 배정할 필요는 없고 한 참가자가 여러 역할을 맡아도 된다.
+
+`2 → 3`으로 변경하려면 배정된 역할의 인증이 모두 완료되어야 한다. 미인증 역할이 남은 상태에서 종료하려면 별도의 협동 미션 중단 API를 사용한다.
+
+완료 시 해당 미션을 처음 완료하는 수락된 참가자에게 설정된 AR 캐릭터·포인트·쿠폰을 모두 제공한다. 방장과 팀원을 구분하지 않으며 재도전 참가자에게는 추가 보상을 제공하지 않는다.
+
+성공하면 응답 본문 없이 반환한다. 변경된 팀 상태와 사용자별 보상 정보는 협동 미션 상태 조회 API의 폴링 응답으로 확인한다. 이 API에서 역할을 배정하거나 다음 장소를 추천하지 않는다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+| `Content-Type` | 필수 | `application/json` |
+
+---
+
+### 요청 Query
+
+없음
+
+---
+
+### 요청 Path
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `cooperativeMissionProgressId` | integer | 필수 | 단계를 변경할 팀의 협동 미션 진행도 ID |
+
+요청 예시:
+
+```http
+PATCH /api/v2/cooperative-missions/10/progress
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+---
+
+### 요청 Body
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `currentStep` | integer | 필수 | 변경할 다음 단계. `2: 미션 수행, 3: 미션 완료` |
+
+1단계에서 미션 수행 단계로 변경하는 경우
+
+```json
+{
+  "currentStep": 2
+}
+```
+
+2단계에서 미션을 완료하는 경우
+
+```json
+{
+  "currentStep": 3
+}
+```
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `204 No Content`
+
+다음 단계로 변경하거나 미션 완료 및 보상 처리를 마친 경우
+
+응답 Body 없음
+
+---
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
+
+경로를 정수로 변환할 수 없거나 요청 본문·`currentStep`이 누락되거나 정수 형식이 아닌 경우는 공통 요청값 검증 실패에 해당한다. 정수이지만 허용되지 않는 단계 요청은 아래 단계 변경 오류로 처리한다.
+
+#### 방장 전용 요청
+
+Status Code : `403 Forbidden`
+
+현재 사용자가 해당 팀의 수락된 방장이 아닌 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_HOST_ONLY",
+  "message": "협동 미션 방장만 참여 요청을 처리할 수 있습니다."
+}
+```
+
+#### 협동 미션 진행도 없음
+
+Status Code : `404 Not Found`
+
+요청한 진행도 ID에 해당하는 팀 진행도가 없는 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_PROGRESS_NOT_FOUND",
+  "message": "진행 중인 협동 미션을 찾을 수 없습니다."
+}
+```
+
+#### 비활성화된 협동 미션
+
+Status Code : `404 Not Found`
+
+변경 대상 팀의 협동 미션이 `INACTIVE`인 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_INACTIVE",
+  "message": "비활성화된 협동 미션입니다."
+}
+```
+
+#### 허용되지 않는 단계 변경
+
+Status Code : `409 Conflict`
+
+이미 완료된 팀의 변경 요청, 동일 단계·역행·건너뛰기·지원하지 않는 단계 요청 또는 역할 인증이 모두 끝나지 않은 상태의 완료 요청인 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_STEP_NOT_ALLOWED",
+  "message": "허용되지 않는 단계 변경 요청입니다."
+}
+```
+
+#### 대기 중인 참가자 존재
+
+Status Code : `409 Conflict`
+
+`1 → 2` 변경 시 수락하거나 거절하지 않은 대기 참가자가 있는 경우
+
+```json
+{
+  "code": "COOPERATIVE_MISSION_PENDING_PARTICIPANT_EXISTS",
+  "message": "대기 중인 참여 요청을 모두 처리해야 합니다."
+}
+```
+
+#### 참가자 역할 배정 필요
+
+Status Code : `409 Conflict`
+
+`1 → 2` 변경 시 방장을 포함한 수락된 참가자 중 역할 카드를 하나도 배정받지 않은 참가자가 있는 경우
+
+```json
+{
+  "code": "COOPERATIVE_PARTICIPANT_ROLE_REQUIRED",
+  "message": "모든 수락된 참가자에게 역할을 배정해야 합니다."
+}
+```

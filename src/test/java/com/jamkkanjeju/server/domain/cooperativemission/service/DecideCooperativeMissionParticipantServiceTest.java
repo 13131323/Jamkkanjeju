@@ -11,6 +11,8 @@ import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMis
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.*;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,13 +32,17 @@ class DecideCooperativeMissionParticipantServiceTest {
     @Mock CooperativeMissionRepository missions;
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
+    @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock MissionRewardStatusRepository rewardStatuses;
+    @Mock MissionRewardGranter rewardGranter;
     CooperativeMissionService service;
     CooperativeMission mission;
     CooperativeMissionProgress progress;
 
     @BeforeEach
     void setUp() {
-        service = new CooperativeMissionService(users, missions, progresses, participants, CLOCK);
+        service = new CooperativeMissionService(users, missions, progresses, participants,
+                roleProgresses, rewardStatuses, rewardGranter, CLOCK);
         mission = cooperativeMission(31L, null);
         progress = CooperativeMissionProgress.builder().cooperativeMission(mission).currentStep(1)
                 .teamToken("test-token").build();

@@ -6,6 +6,7 @@ import com.jamkkanjeju.server.domain.cooperativemission.dto.GetCooperativeMissio
 import com.jamkkanjeju.server.domain.cooperativemission.dto.GetCooperativeMissionStatusResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionProgressRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionService;
 import com.jamkkanjeju.server.domain.cooperativemission.service.CooperativeMissionStatusService;
@@ -70,6 +71,18 @@ public class CooperativeMissionController {
                 .joinCooperativeMission(authUser.userId(), request.teamToken());
         // 새 참가자를 만들었으면 201, 기존 참가자 정보를 반환하면 200으로 응답한다.
         return ResponseEntity.status(response.created() ? HttpStatus.CREATED : HttpStatus.OK).body(response);
+    }
+
+    /** 수락된 방장이 팀을 다음 단계로 변경하고 완료·보상 처리를 마치면 본문 없이 응답한다. */
+    @Operation(summary = "협동 미션 진행도 저장")
+    @PatchMapping("/{cooperativeMissionProgressId}/progress")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void saveCooperativeMissionProgress(
+            @AuthenticationPrincipal AuthUser authUser,
+            @PathVariable Long cooperativeMissionProgressId,
+            @Valid @RequestBody SaveCooperativeMissionProgressRequest request) {
+        cooperativeMissionService.saveCooperativeMissionProgress(
+                authUser.userId(), cooperativeMissionProgressId, request);
     }
 
     /** 방장이 지정한 팀원의 참여 요청을 수락하거나 거절하고 본문 없이 응답한다. */

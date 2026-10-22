@@ -6,6 +6,7 @@ import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.DecideCooperativeMissionParticipantRequest.Decision;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.JoinCooperativeMissionResponse;
+import com.jamkkanjeju.server.domain.cooperativemission.dto.SaveCooperativeMissionProgressRequest;
 import com.jamkkanjeju.server.domain.cooperativemission.dto.StartCooperativeMissionResponse;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMission;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMissionParticipant;
@@ -16,17 +17,22 @@ import com.jamkkanjeju.server.domain.cooperativemission.exception.CooperativeMis
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionProgressRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
+import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRoleProgressRepository;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 협동 미션 팀의 시작·이어하기와 참가 요청 생성·수락·거절을 처리한다. */
+/** 협동 미션 팀의 시작·이어하기, 참가 요청과 단계 변경·완료 보상 지급을 처리한다. */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -34,11 +40,15 @@ public class CooperativeMissionService {
 
     private static final int TEAM_TOKEN_BYTE_LENGTH = 32;
     private static final long MAX_PARTICIPANT_COUNT = 6L;
+    private static final int COMPLETION_REWARD_LIMIT = 3;
 
     private final UserRepository userRepository;
     private final CooperativeMissionRepository cooperativeMissionRepository;
     private final CooperativeMissionProgressRepository cooperativeMissionProgressRepository;
     private final CooperativeMissionParticipantRepository cooperativeMissionParticipantRepository;
+    private final CooperativeMissionRoleProgressRepository cooperativeMissionRoleProgressRepository;
+    private final MissionRewardStatusRepository missionRewardStatusRepository;
+    private final MissionRewardGranter missionRewardGranter;
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -180,6 +190,107 @@ public class CooperativeMissionService {
                 cooperativeMissionParticipantRepository.delete(participant);
             }
         }
+    }
+
+    /** 수락된 방장이 팀을 다음 단계로 변경하고, 완료 시 참가자별 최초 완료 보상을 함께 지급한다. */
+    @Transactional
+    public void saveCooperativeMissionProgress(Long userId, Long progressId,
+                                               SaveCooperativeMissionProgressRequest request) {
+        // 1. 현재 사용자 확인
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2. 팀 진행도 잠금 및 미션 확인 (완료된 팀도 조회한 뒤 단계 변경 오류로 처리한다)
+        CooperativeMissionProgress progress = cooperativeMissionProgressRepository.findByIdForUpdate(progressId)
+                .orElseThrow(() -> new BusinessException(
+                        CooperativeMissionErrorCode.COOPERATIVE_MISSION_PROGRESS_NOT_FOUND));
+        CooperativeMission mission = progress.getCooperativeMission();
+        if (mission.getStatus() == MissionActivationStatus.INACTIVE) {
+            throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_INACTIVE);
+        }
+
+        // 3. 대상 팀의 수락된 방장만 단계를 변경할 수 있다
+        cooperativeMissionParticipantRepository.findByCooperativeMissionProgressIdAndUserId(progressId, userId)
+                .filter(participant -> participant.getParticipantRole() == ParticipantRole.HOST
+                        && participant.getParticipantStatus() == ParticipantStatus.ACCEPTED)
+                .orElseThrow(() -> new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_HOST_ONLY));
+
+        // 4. 이미 완료되었거나 순차적인 다음 단계가 아니면 같은 오류로 처리한다
+        int nextStep = request.currentStep();
+        if (progress.getMissionStatus() == MissionProgressStatus.COMPLETED
+                || progress.getCurrentStep() >= CooperativeMissionProgress.LAST_STEP
+                || nextStep != progress.getCurrentStep() + 1
+                || nextStep <= CooperativeMissionProgress.FIRST_STEP) {
+            throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_STEP_NOT_ALLOWED);
+        }
+
+        var participants = cooperativeMissionParticipantRepository.findAllByCooperativeMissionProgressId(progressId);
+        if (progress.getCurrentStep() == CooperativeMissionProgress.FIRST_STEP) {
+            // 5. 초대·역할 배정을 모두 마친 팀만 수행 단계로 이동한다
+            if (participants.stream().anyMatch(participant ->
+                    participant.getParticipantStatus() == ParticipantStatus.PENDING)) {
+                throw new BusinessException(
+                        CooperativeMissionErrorCode.COOPERATIVE_MISSION_PENDING_PARTICIPANT_EXISTS);
+            }
+            var assignedParticipantIds = cooperativeMissionRoleProgressRepository
+                    .findAllByParticipantCooperativeMissionProgressIdOrderByParticipantIdAscRoleCardIdAsc(progressId)
+                    .stream()
+                    .map(role -> role.getParticipant().getId())
+                    .collect(Collectors.toSet());
+            boolean unassignedParticipantExists = participants.stream()
+                    .filter(participant -> participant.getParticipantStatus() == ParticipantStatus.ACCEPTED)
+                    .anyMatch(participant -> !assignedParticipantIds.contains(participant.getId()));
+            if (unassignedParticipantExists) {
+                throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_PARTICIPANT_ROLE_REQUIRED);
+            }
+
+            // 7. 수행 단계 진입은 단계만 바꾸고 보상·완료 정보는 유지한다
+            progress.moveToNextStep();
+            return;
+        }
+
+        // 6. 미인증 역할이 남아 있는 종료는 별도 중단 API의 책임이다
+        boolean unfinishedRoleExists = cooperativeMissionRoleProgressRepository
+                .findAllByParticipantCooperativeMissionProgressIdOrderByParticipantIdAscRoleCardIdAsc(progressId)
+                .stream()
+                .anyMatch(role -> role.getProgressStatus() != MissionProgressStatus.COMPLETED);
+        if (unfinishedRoleExists) {
+            throw new BusinessException(CooperativeMissionErrorCode.COOPERATIVE_MISSION_STEP_NOT_ALLOWED);
+        }
+
+        // 8. 현재 팀을 완료하기 전에 사용자별 과거 완료·지급 이력을 확인해 최초 보상만 지급한다
+        participants.stream()
+                .filter(participant -> participant.getParticipantStatus() == ParticipantStatus.ACCEPTED)
+                .forEach(participant -> grantFirstCompletionReward(participant.getUser(), mission, progressId));
+        progress.moveToNextStep();
+        progress.complete(LocalDateTime.now(clock));
+        // 9. 단계·완료 시각·전체 참가자 보상은 같은 트랜잭션에서 커밋하며 실패 시 함께 롤백된다
+    }
+
+    /** 과거 완료나 일부라도 지급된 이력이 있으면 제외하고, 최초 완료 사용자에게 설정된 보상을 모두 지급한다. */
+    private void grantFirstCompletionReward(User user, CooperativeMission mission, Long progressId) {
+        boolean previouslyCompleted = cooperativeMissionParticipantRepository
+                .findAllByUserIdAndMissionId(user.getId(), mission.getMissionId()).stream()
+                .filter(participant -> participant.getParticipantStatus() == ParticipantStatus.ACCEPTED)
+                .map(CooperativeMissionParticipant::getCooperativeMissionProgress)
+                .anyMatch(team -> !team.getId().equals(progressId)
+                        && team.getMissionStatus() == MissionProgressStatus.COMPLETED);
+        if (previouslyCompleted) {
+            return;
+        }
+
+        boolean previouslyGranted = missionRewardStatusRepository
+                .findById(new MissionRewardStatusId(mission.getMissionId(), user.getId()))
+                .map(status -> status.isArCharacterRewardGranted()
+                        || status.isPointRewardGranted() || status.isCouponRewardGranted())
+                .orElse(false);
+        if (previouslyGranted) {
+            return;
+        }
+
+        // 공통 지급기는 미지급 항목을 채울 수 있으므로 최초 완료 판단을 통과한 경우에만 호출한다.
+        missionRewardGranter.grant(user, mission.getMission(), mission.getArCharacter(),
+                mission.getPoint(), mission.getCoupon(), COMPLETION_REWARD_LIMIT);
     }
 
     /** 새 팀을 첫 단계부터 만들고 현재 사용자를 수락된 방장으로 등록한다. 과거 완료 기록은 유지한다. */

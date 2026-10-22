@@ -39,6 +39,9 @@ public interface CooperativeMissionProgressRepository extends JpaRepository<Coop
      * 사용: 참여 요청 수락/거절({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/participants/{participantId}})에서
      * 대상 팀을 식별하고, 서비스가 진행 중 여부·미션 활성 상태·방장 권한·현재 단계를 검증한 뒤
      * 참가자 상태 변경 또는 삭제까지 같은 잠금 범위에서 처리한다.
+     * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서도
+     * 같은 잠금으로 팀을 조회하고 서비스가 미션 활성 상태·방장 권한·순차 단계·역할 조건을 검증한다.
+     * 응답 본문은 없으며, 단계 변경과 완료 시 참가자별 보상 지급을 같은 트랜잭션에서 처리해 중복 완료·지급을 막는다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from CooperativeMissionProgress p where p.id = :id")

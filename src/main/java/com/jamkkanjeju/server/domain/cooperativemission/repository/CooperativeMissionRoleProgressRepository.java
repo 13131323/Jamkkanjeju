@@ -17,6 +17,9 @@ public interface CooperativeMissionRoleProgressRepository
      * 사용: 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서
      * 서비스가 {@code roleProgresses}를 구성하고 목록 크기로 {@code totalRoleCount},
      * 완료 상태인 원소 수로 {@code completedRoleCount}를 계산한다. 다른 팀의 같은 카드 수행 기록은 포함하지 않는다.
+     * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 서비스가 참가자별 배정 유무를 확인해 수행 단계 진입을 검증하고, 실제 배정 기록의 인증 완료 여부로
+     * 완료 단계 진입을 검증한다. 역할을 생성·변경하거나 응답 본문을 구성하지 않는다.
      */
     @EntityGraph(attributePaths = {"participant.user", "roleCard"})
     List<CooperativeMissionRoleProgress>

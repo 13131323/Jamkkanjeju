@@ -24,6 +24,9 @@ import com.jamkkanjeju.server.domain.cooperativemission.entity.ParticipantStatus
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionProgressRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
+import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRoleProgressRepository;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
+import com.jamkkanjeju.server.domain.mission.service.MissionRewardGranter;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +49,9 @@ class JoinCooperativeMissionServiceTest {
     @Mock CooperativeMissionRepository missions;
     @Mock CooperativeMissionProgressRepository progresses;
     @Mock CooperativeMissionParticipantRepository participants;
+    @Mock CooperativeMissionRoleProgressRepository roleProgresses;
+    @Mock MissionRewardStatusRepository rewardStatuses;
+    @Mock MissionRewardGranter rewardGranter;
     CooperativeMissionService service;
     final User user = activeUser(15L);
     final CooperativeMission mission = cooperativeMission(31L, null);
@@ -53,6 +59,7 @@ class JoinCooperativeMissionServiceTest {
     @BeforeEach
     void setUp() {
         service = new CooperativeMissionService(users, missions, progresses, participants,
+                roleProgresses, rewardStatuses, rewardGranter,
                 com.jamkkanjeju.server.domain.cooperativemission.support.CooperativeMissionFixtures.CLOCK);
     }
 

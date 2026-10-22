@@ -17,6 +17,9 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
      * 사용: 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})의
      * {@code participants}를 구성한다. 서비스가 방장 우선·나머지 생성 시각 오름차순으로 정렬하고
      * 참가자 ID·닉네임·역할·상태를 응답으로 변환한다.
+     * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 서비스가 PENDING 참가자 존재 여부와 ACCEPTED 참가자별 역할 배정을 확인한다.
+     * 완료 시에는 로딩된 사용자별로 최초 완료 여부를 판단하여 보상을 지급하며 응답 본문은 구성하지 않는다.
      */
     @EntityGraph(attributePaths = "user")
     List<CooperativeMissionParticipant> findAllByCooperativeMissionProgressId(Long progressId);
@@ -47,6 +50,9 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
      * 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
      * 서비스가 ACCEPTED 참가 기록 중 COMPLETED 팀을 완료 시각·진행도 ID순으로 비교해 사용자별 최초 완료 팀을 찾는다.
      * 조회 중인 팀이 최초 완료 팀일 때만 지급된 {@code reward}를 표시하고, 재도전 팀은 모든 보상 항목을 null로 구성한다.
+     * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 서비스가 현재 팀을 제외한 ACCEPTED 참가·COMPLETED 팀 이력을 확인해 재도전 사용자의 추가 지급을 막는다.
+     * 진행 중인 참가 기록만 있다는 이유로 재도전으로 판단하지 않으며 응답 본문은 구성하지 않는다.
      */
     @EntityGraph(attributePaths = "cooperativeMissionProgress")
     @Query("""
@@ -65,6 +71,8 @@ public interface CooperativeMissionParticipantRepository extends JpaRepository<C
      * 해당 ID와 상태로 {@code participantId}, {@code participantStatus}를 구성한다.
      * 상태 조회({@code GET /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
      * 현재 사용자가 해당 팀의 참가자인지 확인하고 {@code currentParticipant}의 ID·역할·상태를 구성한다.
+     * 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+     * 현재 사용자가 대상 팀의 HOST이자 ACCEPTED 참가자인지 서비스가 확인하며 응답 본문은 구성하지 않는다.
      */
     Optional<CooperativeMissionParticipant> findByCooperativeMissionProgressIdAndUserId(Long progressId, Long userId);
 
