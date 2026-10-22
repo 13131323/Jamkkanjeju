@@ -18,10 +18,19 @@ public class NextLocationRecommender {
     /** 요청 위치에서 직선거리가 가장 가까운 장소를 추천한다. 거리가 같으면 ID가 작은 장소이고, 장소가 없으면 빈 값이다. */
     // TODO: 추후 사용자 개인화된 추천 로직을 적용한다.
     public Optional<RecommendedLocation> recommend(double latitude, double longitude) {
+        return recommend(latitude, longitude, null);
+    }
+
+    /** 지정 장소를 제외하고 가장 가까운 다음 장소를 추천한다. 제외 ID가 null이면 모든 장소를 비교한다. */
+    // TODO: 추후 사용자 개인화된 추천 로직을 적용한다.
+    public Optional<RecommendedLocation> recommend(double latitude, double longitude, Long excludedLocationId) {
         Location nearest = null;
         double nearestDistance = Double.MAX_VALUE;
         // ID 오름차순으로 비교하므로 거리가 같으면 먼저 나온(ID가 작은) 장소가 남는다.
         for (Location location : locationRepository.findAll(Sort.by("id"))) {
+            if (excludedLocationId != null && excludedLocationId.equals(location.getId())) {
+                continue;
+            }
             double distance = travelEstimator.distanceMeter(
                     latitude, longitude, location.getLatitude(), location.getLongitude());
             if (distance < nearestDistance) {

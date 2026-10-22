@@ -73,4 +73,9 @@ public class CooperativeMissionParticipant extends BaseTimeEntity {
         this.participantStatus = ParticipantStatus.ACCEPTED;
         this.joinedAt = joinedAt;
     }
+
+    /** 기존 참가 정보와 역할 배정을 유지한 채 방장 권한만 승계받는다. */
+    public void promoteToHost() {
+        this.participantRole = ParticipantRole.HOST;
+    }
 }

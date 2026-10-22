@@ -10,6 +10,15 @@ import org.springframework.data.domain.Sort;
 
 /** 실제 거리 계산으로 최근접 선택과 동률·빈 후보를 검증한다. */
 class NextLocationRecommenderTest {
+    @Test void completedLocationIsExcludedBeforeChoosingNearest() {
+        when(repository.findAll(Sort.by("id"))).thenReturn(List.of(
+                location(1L,"완료 장소",0,0), location(2L,"다음 장소",0,1)));
+        assertThat(recommender.recommend(0,0,1L).orElseThrow().location().getId()).isEqualTo(2L);
+    }
+    @Test void onlyExcludedLocationReturnsEmpty() {
+        when(repository.findAll(Sort.by("id"))).thenReturn(List.of(location(1L,"완료 장소",0,0)));
+        assertThat(recommender.recommend(0,0,1L)).isEmpty();
+    }
     final LocationRepository repository=mock(LocationRepository.class);
     final NextLocationRecommender recommender=new NextLocationRecommender(repository,new TravelEstimator());
     @Test void nearestIsChosenEvenWhenNotFirstAndDistanceIsInteger() {

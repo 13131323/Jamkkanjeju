@@ -3,6 +3,7 @@ package com.jamkkanjeju.server.domain.treasurehunt.service;
 import com.jamkkanjeju.server.common.client.TourApiClient;
 import com.jamkkanjeju.server.common.client.BlobStorageClient;
 import com.jamkkanjeju.server.common.client.BlobStorageClient.UploadedBlob;
+import com.jamkkanjeju.server.common.client.BlobRollbackCleanup;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.common.image.ImageValidator;
@@ -53,8 +54,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** 보물찾기 진행과 보상·완료·중단을 처리하고 사용자의 AR 캐릭터 사진을 저장한다. */
 @Slf4j
@@ -241,9 +240,7 @@ public class TreasureMissionService {
                 TreasureHuntErrorCode.INVALID_IMAGE);
 
         // 커밋 시점의 실패도 정리해야 하므로 트랜잭션 없이 파일만 업로드하지 않는다.
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            throw new IllegalStateException("사진 저장에는 활성 트랜잭션이 필요합니다.");
-        }
+        BlobRollbackCleanup.requireActiveTransaction();
 
         // 4. 원본 파일명 대신 사용자 ID·UUID·실제 확장자로 Blob 업로드
         String blobName = "ar_character_picture/" + userId + "/" + UUID.randomUUID() + image.format().extension();
@@ -274,27 +271,7 @@ public class TreasureMissionService {
 
     /** DB 트랜잭션 종료 결과를 확인해 실패한 요청에서 올린 사진만 삭제한다. */
     private void registerPictureRollbackCleanup(Long userId, UploadedBlob uploaded) {
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status == STATUS_COMMITTED) {
-                    return;
-                }
-                if (status != STATUS_ROLLED_BACK) {
-                    // 커밋 여부가 불명확할 때 파일을 지워 정상 DB 행의 URL을 깨뜨리지 않는다.
-                    log.error("AR 사진 트랜잭션 결과 확인 필요: userId={}, blobName={}, status={}",
-                            userId, uploaded.name(), status);
-                    return;
-                }
-                log.warn("AR 사진 저장 롤백으로 업로드 파일 삭제: userId={}, blobName={}", userId, uploaded.name());
-                try {
-                    blobStorageClient.delete(uploaded.name());
-                } catch (RuntimeException exception) {
-                    // 파일 정리 실패가 최초 DB 저장·커밋 실패를 덮어쓰지 않도록 한다.
-                    log.error("AR 사진 롤백 파일 삭제 실패: userId={}, blobName={}", userId, uploaded.name(), exception);
-                }
-            }
-        });
+        BlobRollbackCleanup.register(blobStorageClient, uploaded, "AR 사진 userId=" + userId);
     }
 
     /** 새 진행도의 ID를 확보한 뒤 사용자 중심의 새 보물 아이템을 저장한다. */

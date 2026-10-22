@@ -3,6 +3,8 @@
     import jakarta.validation.ConstraintViolationException;
     import jakarta.servlet.http.HttpServletRequest;
     import com.jamkkanjeju.server.domain.treasurehunt.exception.TreasureHuntErrorCode;
+    import com.jamkkanjeju.server.domain.cooperativemission.exception.CooperativeMissionErrorCode;
+    import java.util.regex.Pattern;
     import lombok.extern.slf4j.Slf4j;
     import org.springframework.http.HttpStatus;
     import org.springframework.http.HttpStatusCode;
@@ -52,6 +54,9 @@
             if (isPictureUpload(request)) {
                 return toResponse(TreasureHuntErrorCode.IMAGE_SIZE_EXCEEDED);
             }
+            if (isCooperativeRoleVerification(request)) {
+                return toResponse(CooperativeMissionErrorCode.IMAGE_SIZE_EXCEEDED);
+            }
             return handleException(exception);
         }
 
@@ -59,7 +64,7 @@
         @ExceptionHandler(MultipartException.class)
         public ResponseEntity<ErrorResponse> handleMultipartException(
                 MultipartException exception, HttpServletRequest request) {
-            if (isPictureUpload(request)) {
+            if (isPictureUpload(request) || isCooperativeRoleVerification(request)) {
                 return toResponse(CommonErrorCode.INVALID_REQUEST);
             }
             return handleException(exception);
@@ -70,6 +75,13 @@
             return "POST".equals(request.getMethod())
                     && request.getRequestURI().equals(
                             request.getContextPath() + "/api/v2/treasure-missions/pictures-with-character");
+        }
+
+        /** 협동 역할 사진의 파싱 오류도 컨트롤러 선택 전에 업로드 경로로 식별한다. */
+        private boolean isCooperativeRoleVerification(HttpServletRequest request) {
+            return "POST".equals(request.getMethod())
+                    && request.getRequestURI().matches(Pattern.quote(request.getContextPath())
+                            + "/api/v2/cooperative-missions/[^/]+/role-progresses/[^/]+/verification");
         }
 
         /** 인증·인가 예외를 Spring Security가 처리하도록 넘긴다. */

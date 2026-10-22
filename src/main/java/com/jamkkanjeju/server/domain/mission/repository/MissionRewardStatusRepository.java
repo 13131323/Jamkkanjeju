@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * {@code remainingReward}에서 이미 지급된 항목을 null로 구성한다. 기록이 없어도 생성하거나 저장하지 않는다.
  * 보물찾기 진행도 저장({@code PATCH /api/v2/treasure-missions/{treasureMissionProgressId}/progress})에서도
  * 같은 조회·저장 메서드로 기지급 항목을 제외하고 이번 보물 발견의 지급 여부를 기록해 {@code reward}를 구성한다.
+ * 협동 미션 진행도 저장({@code PATCH /api/v2/cooperative-missions/{cooperativeMissionProgressId}/progress})에서는
+ * 서비스가 참가자별 기존 완료 이력과 지급 상태를 확인하여 최초 완료 대상에게만 설정된 보상을 모두 지급한다.
+ * 한 항목이라도 기지급이면 남은 항목도 추가 지급하지 않으며 실제 지급한 항목의 상태만 저장한다. 응답 본문은 없다.
  */
 public interface MissionRewardStatusRepository extends JpaRepository<MissionRewardStatus, MissionRewardStatusId> {
 }

@@ -147,7 +147,7 @@ class SavePictureWithCharacterServiceTest {
         when(pictures.saveAndFlush(any())).thenThrow(failure);
         assertThatThrownBy(this::save).isSameAs(failure);
         doThrow(new IllegalStateException("삭제 실패")).when(storage).delete(uploadedName);
-        Logger logger = (Logger) LoggerFactory.getLogger(TreasureMissionService.class);
+        Logger logger = (Logger) LoggerFactory.getLogger(com.jamkkanjeju.server.common.client.BlobRollbackCleanup.class);
         var logs = new ListAppender<ILoggingEvent>();
         logs.start(); logger.addAppender(logs);
         try {
@@ -165,7 +165,7 @@ class SavePictureWithCharacterServiceTest {
     @Test
     void 커밋상태가_불명확하면_파일을_보존한다() {
         valid(); uploaded(); save();
-        Logger logger = (Logger) LoggerFactory.getLogger(TreasureMissionService.class);
+        Logger logger = (Logger) LoggerFactory.getLogger(com.jamkkanjeju.server.common.client.BlobRollbackCleanup.class);
         var logs = new ListAppender<ILoggingEvent>();
         logs.start(); logger.addAppender(logs);
         try {
