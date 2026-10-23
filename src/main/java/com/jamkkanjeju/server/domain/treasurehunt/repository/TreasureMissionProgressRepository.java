@@ -2,12 +2,24 @@ package com.jamkkanjeju.server.domain.treasurehunt.repository;
 
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TreasureMissionProgressRepository extends JpaRepository<TreasureMissionProgress, Long> {
+
+    /**
+     * 결과: 사용자({@code userId})와 공통 미션 ID 목록이 일치하는 보물찾기 진행도 전체 목록이다.
+     * 진행 상태를 제한하지 않고 {@code treasureMission}을 함께 로딩하며 결과가 없으면 빈 목록이다.
+     * 다른 연관 엔티티는 함께 로딩하지 않는다.
+     * 사용: 지도 홈 조회({@code GET /api/v2/map/contents}) 상세 응답에서 화면에 표시할 미션의 이력만 읽고
+     * 공통 완료 판정기로 {@code locations[].mission.isCompleted}를 판단한다. 쿼리에서 완료 여부를 결정하지 않는다.
+     */
+    @EntityGraph(attributePaths = "treasureMission")
+    List<TreasureMissionProgress> findAllByUserIdAndTreasureMissionMissionIdIn(Long userId,
+                                                                            Collection<Long> missionIds);
 
     /**
      * 결과: 사용자({@code userId})의 보물찾기 진행도 전체 목록(진행 중·완료 모두). 미션당 최대 한 건이다.

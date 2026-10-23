@@ -1,6 +1,7 @@
 package com.jamkkanjeju.server.domain.map.repository;
 
 import com.jamkkanjeju.server.domain.map.entity.Location;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -11,4 +12,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 고른 장소로 응답의 {@code nextLocation}을 구성한다.
  */
 public interface LocationRepository extends JpaRepository<Location, Long> {
+
+    /**
+     * 결과: 지정한 위도·경도 범위 내부와 경계에 있는 장소 전체 목록이다.
+     * 미션·방명록·쿠폰 존재 여부와 무관하며 연관 엔티티는 로딩하지 않고, 장소가 없으면 빈 목록이다.
+     * 사용: 지도 홈 조회({@code GET /api/v2/map/contents})에서 서비스가 계산한 확장 범위를 전달한다.
+     * 상세 응답은 {@code locations}의 기본 정보·거리·이미지 기준으로, 간소 응답은 장소 ID·좌표로 가공한다.
+     * 범위 확장과 포함할 응답 필드 선택은 서비스에서 처리한다.
+     */
+    List<Location> findAllByLatitudeBetweenAndLongitudeBetween(double minLatitude, double maxLatitude,
+                                                              double minLongitude, double maxLongitude);
 }

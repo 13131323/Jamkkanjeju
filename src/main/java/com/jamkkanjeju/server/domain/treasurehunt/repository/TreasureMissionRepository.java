@@ -1,13 +1,42 @@
 package com.jamkkanjeju.server.domain.treasurehunt.repository;
 
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import com.jamkkanjeju.server.domain.mission.repository.LocationMissionReference;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMission;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface TreasureMissionRepository extends JpaRepository<TreasureMission, Long> {
+
+    /**
+     * 결과: 장소 ID 목록({@code locationIds})에 연결되고 활성 상태가 {@code status}인 보물찾기 미션 전체 목록이다.
+     * {@code mission.missionType}과 {@code location}을 함께 로딩하며 결과가 없으면 빈 목록이다.
+     * 같은 장소의 여러 행을 합치거나 한 건만 선택하지 않는다.
+     * 사용: 지도 홈 조회({@code GET /api/v2/map/contents})의 상세 응답에서 협동 미션 조회 결과와 합쳐
+     * 장소별 활성 미션 중복을 서비스가 검증하고 {@code locations[].mission}을 구성한다.
+     */
+    @EntityGraph(attributePaths = {"mission.missionType", "location"})
+    List<TreasureMission> findAllByLocationIdInAndStatus(Collection<Long> locationIds, MissionActivationStatus status);
+
+    /**
+     * 결과: 장소 목록과 활성 상태가 일치하는 보물찾기 미션의 장소 ID·공통 미션 ID·유형 목록이다.
+     * 미션 제목·보상과 엔티티 연관을 로딩하지 않으며 결과가 없으면 빈 목록이다. 중복 장소의 행도 모두 반환한다.
+     * 사용: 지도 홈 조회({@code GET /api/v2/map/contents})의 간소 응답에서 서비스가 협동 미션 결과와 합쳐
+     * 중복을 검증하고 {@code locations[].missionId}, {@code locations[].missionType}을 구성한다.
+     */
+    @Query("""
+            select m.location.id as locationId, m.missionId as missionId,
+                   m.mission.missionType.type as missionType
+            from TreasureMission m
+            where m.location.id in :locationIds and m.status = :status
+            """)
+    List<LocationMissionReference> findReferencesByLocationIdsAndStatus(
+            @Param("locationIds") Collection<Long> locationIds, @Param("status") MissionActivationStatus status);
 
     /**
      * 결과: 공통 미션 ID({@code missionId})의 보물찾기 미션 한 건이며 활성 상태와 무관하게 조회한다.
