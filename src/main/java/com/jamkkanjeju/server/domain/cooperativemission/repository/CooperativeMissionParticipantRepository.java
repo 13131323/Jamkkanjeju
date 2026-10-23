@@ -2,6 +2,7 @@ package com.jamkkanjeju.server.domain.cooperativemission.repository;
 
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMissionParticipant;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -20,6 +21,23 @@ import org.springframework.data.repository.query.Param;
  * 역할 진행도는 기존 DB 삭제 연쇄로 정리하며 다른 팀의 참가자는 삭제하지 않는다.
  */
 public interface CooperativeMissionParticipantRepository extends JpaRepository<CooperativeMissionParticipant, Long> {
+
+    /**
+     * 결과: 사용자({@code userId})와 공통 미션 ID 목록이 일치하는 협동 참가 기록 전체 목록이다.
+     * 참가 상태·역할·팀 진행 상태를 제한하지 않고, 기록이 없으면 빈 목록이다.
+     * {@code cooperativeMissionProgress.cooperativeMission}을 함께 로딩하며 그 외 연관은 함께 로딩하지 않는다.
+     * 사용: 지도 홈 조회({@code GET /api/v2/map/contents}) 상세 응답에서 대상 미션의 참가 이력을 한 번에 읽는다.
+     * 서비스의 공통 완료 판정기로 수락 상태와 팀 완료 여부를 확인하여 {@code locations[].mission.isCompleted}를 구성한다.
+     * 여러 팀의 동일 미션 이력은 서비스가 공통 미션 ID로 모아 완료 여부를 판단한다.
+     */
+    @EntityGraph(attributePaths = "cooperativeMissionProgress.cooperativeMission")
+    @Query("""
+            select p from CooperativeMissionParticipant p
+            where p.user.id = :userId
+              and p.cooperativeMissionProgress.cooperativeMission.missionId in :missionIds
+            """)
+    List<CooperativeMissionParticipant> findAllByUserIdAndMissionIds(
+            @Param("userId") Long userId, @Param("missionIds") Collection<Long> missionIds);
 
     /**
      * 결과: 팀 진행도({@code progressId})의 참가자 전체를 ID 오름차순으로 비관적 쓰기 잠금 조회한다.
