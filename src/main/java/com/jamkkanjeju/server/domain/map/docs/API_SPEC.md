@@ -17,6 +17,8 @@
 
 미션이나 방명록이 없는 장소도 반환한다. 장소에 연결된 활성 미션은 `mission` 하나로 반환하고, 없거나 비활성 미션만 있으면 `null`로 반환한다. 장소에 활성 미션이 둘 이상 연결된 경우에는 조회 전체가 서버 오류로 처리된다.
 
+방명록은 상태가 `ACTIVE`인 기록만 지도에 포함한다. 길바닥 방명록 목록·장소별 방명록 수·본인의 미션 방명록 작성 여부 모두 같은 기준을 적용하며 `INACTIVE`인 기록은 제외한다.
+
 `isClustered=false`이면 장소 상세 정보·단일 미션·방명록 수·이미지·현재 사용자의 수령 쿠폰과 길바닥 방명록 상세 정보를 반환한다. `isClustered=true`이면 같은 범위의 항목에 대해 클러스터링에 필요한 ID·좌표와 장소의 미션 ID·유형만 반환한다. 서버가 여러 항목을 하나의 클러스터로 합치지는 않는다.
 
 ---
@@ -88,8 +90,8 @@ Status Code : `200 OK`
 | `locations[].mission.missionType` | string | 미션 유형. `TREASURE` 또는 `COOPERATIVE` |
 | `locations[].mission.missionTitle` | string | 미션 제목 |
 | `locations[].mission.isCompleted` | boolean | 현재 사용자가 해당 미션을 완료한 이력이 있는지 여부 |
-| `locations[].mission.hasWrittenGuestbook` | boolean \| null | 완료한 해당 미션과 장소를 참조하여 본인이 방명록을 작성했는지 여부. 미션 미완료이면 null |
-| `locations[].guestbooksCount` | integer | 해당 장소의 방명록 수. 없으면 0 |
+| `locations[].mission.hasWrittenGuestbook` | boolean \| null | 완료한 해당 미션과 장소를 참조하여 본인이 작성한 ACTIVE 방명록이 있는지 여부. 미션 미완료이면 null |
+| `locations[].guestbooksCount` | integer | 해당 장소의 ACTIVE 방명록 수. 없으면 0 |
 | `locations[].representativeImageUrl` | string \| null | TourAPI 장소 대표 이미지 URL. 제공하지 못하면 null |
 | `locations[].receivedCoupons` | object[] \| null | 현재 사용자가 실제 지급받은 쿠폰 중 해당 장소의 쿠폰 목록. 없으면 null |
 | `locations[].receivedCoupons[].couponPrice` | integer | 쿠폰 금액 |

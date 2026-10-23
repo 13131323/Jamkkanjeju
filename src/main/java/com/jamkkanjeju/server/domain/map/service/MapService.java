@@ -6,6 +6,7 @@ import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
+import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository.LocationCount;
 import com.jamkkanjeju.server.domain.guestbook.repository.RoadGuestbookRepository;
@@ -86,7 +87,8 @@ public class MapService {
     private GetClusteredMapContentsResponse clusteredContents(List<Location> locations, List<Long> locationIds,
                                                               MapViewport viewport) {
         var roadGuestbooks = roadGuestbookRepository.findPositionsByBounds(
-                viewport.minLatitude(), viewport.maxLatitude(), viewport.minLongitude(), viewport.maxLongitude());
+                viewport.minLatitude(), viewport.maxLatitude(), viewport.minLongitude(), viewport.maxLongitude(),
+                GuestbookStatus.ACTIVE);
         if (locationIds.isEmpty()) {
             return GetClusteredMapContentsResponse.of(List.of(), roadGuestbooks);
         }
@@ -108,8 +110,9 @@ public class MapService {
     private GetMapContentsResponse detailedContents(Long userId, GetMapContentsRequest request,
                                                     List<Location> locations, List<Long> locationIds,
                                                     MapViewport viewport) {
-        var roadGuestbooks = roadGuestbookRepository.findAllByLatitudeBetweenAndLongitudeBetween(
-                viewport.minLatitude(), viewport.maxLatitude(), viewport.minLongitude(), viewport.maxLongitude());
+        var roadGuestbooks = roadGuestbookRepository.findAllByGuestbookStatusAndLatitudeBetweenAndLongitudeBetween(
+                GuestbookStatus.ACTIVE, viewport.minLatitude(), viewport.maxLatitude(),
+                viewport.minLongitude(), viewport.maxLongitude());
         var roadItems = roadGuestbooks.stream().map(RoadGuestbookInfo::from).toList();
         if (locationIds.isEmpty()) {
             return GetMapContentsResponse.of(List.of(), roadItems);
@@ -119,7 +122,8 @@ public class MapService {
         Map<Long, LocatedMission> missions = detailedMissions(locationIds);
         Set<Long> completedIds = completedMissionIds(userId, missions.values());
         Set<MissionGuestbookKey> writtenGuestbooks = writtenMissionGuestbooks(userId, missions, completedIds);
-        Map<Long, Long> guestbookCounts = locationGuestbookRepository.countByLocationIds(locationIds).stream()
+        Map<Long, Long> guestbookCounts = locationGuestbookRepository
+                .countByLocationIdsAndStatus(locationIds, GuestbookStatus.ACTIVE).stream()
                 .collect(Collectors.toMap(LocationCount::getLocationId, LocationCount::getGuestbookCount));
         Map<Long, List<ReceivedCoupon>> coupons = receivedCoupons(userId, locationIds);
         Map<Long, String> imageUrls = locationImageUrls(locations);
@@ -198,7 +202,8 @@ public class MapService {
         if (locationIds.isEmpty()) {
             return Set.of();
         }
-        return locationGuestbookRepository.findMissionReferencesByUserIdAndLocationIds(userId, locationIds).stream()
+        return locationGuestbookRepository
+                .findMissionReferencesByUserIdAndLocationIdsAndStatus(userId, locationIds, GuestbookStatus.ACTIVE).stream()
                 .map(reference -> new MissionGuestbookKey(reference.getLocationId(), reference.getMissionId()))
                 .collect(Collectors.toSet());
     }

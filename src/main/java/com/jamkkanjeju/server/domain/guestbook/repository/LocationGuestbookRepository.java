@@ -1,5 +1,6 @@
 package com.jamkkanjeju.server.domain.guestbook.repository;
 
+import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
 import com.jamkkanjeju.server.domain.guestbook.entity.LocationGuestbook;
 import java.util.Collection;
 import java.util.List;
@@ -11,41 +12,45 @@ import org.springframework.data.repository.query.Param;
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
 
     /**
-     * 결과: 전달한 장소 ID별 장소 방명록 개수 목록이다. 모든 작성자·미션 연결 여부를 포함한다.
+     * 결과: 전달한 장소 ID별로 공통 방명록 상태가 {@code status}인 장소 방명록 개수 목록이다.
+     * 모든 작성자·미션 연결 여부를 포함한다.
      * 장소 참조가 없는 기록은 제외하며 방명록이 없는 장소의 행은 없고, 결과가 없으면 빈 목록이다.
      * 집계 프로젝션만 반환하며 연관 엔티티는 로딩하지 않는다.
      * 사용: 지도 홈 조회({@code GET /api/v2/map/contents}) 상세 응답의 {@code locations[].guestbooksCount}에 쓴다.
-     * 서비스가 장소 ID별로 조합하고 조회 행이 없는 장소는 0으로 구성한다.
+     * 서비스가 ACTIVE를 전달하고 장소 ID별로 조합하며 조회 행이 없는 장소는 0으로 구성한다.
      */
-    // TODO: 방명록 status별 공개·삭제 상태 정의가 확정되면 지도 조회·장소별 집계·작성 여부에 동일한 제외 기준을 적용한다.
     @Query("""
             select v.location.id as locationId, count(l) as guestbookCount
             from LocationGuestbook l
             join l.visitedLocation v
             where v.location.id in :locationIds
+              and l.guestbook.status = :status
             group by v.location.id
             """)
-    List<LocationCount> countByLocationIds(@Param("locationIds") Collection<Long> locationIds);
+    List<LocationCount> countByLocationIdsAndStatus(@Param("locationIds") Collection<Long> locationIds,
+                                                   @Param("status") GuestbookStatus status);
 
     /**
-     * 결과: 사용자({@code userId})가 지정한 장소들에서 작성한 방명록의 장소 ID·공통 미션 ID 조합 목록이다.
+     * 결과: 사용자({@code userId})가 지정한 장소들에서 작성하고 공통 방명록 상태가 {@code status}인
+     * 방명록의 장소 ID·공통 미션 ID 조합 목록이다.
      * 장소·미션 연결이 없는 기록은 제외하고 같은 조합은 한 번만 반환하며, 결과가 없으면 빈 목록이다.
      * 작성 참조 프로젝션만 반환하며 연관 엔티티나 방명록 본문은 로딩하지 않는다.
      * 사용: 지도 홈 조회({@code GET /api/v2/map/contents}) 상세 응답에서 서비스가 완료된 미션에 한해
      * 장소·미션 조합의 존재 여부로 {@code locations[].mission.hasWrittenGuestbook}를 구성한다.
-     * 완료 여부는 이 쿼리가 판정하지 않고, 미완료 미션은 서비스에서 null로 구성한다.
+     * 서비스가 ACTIVE를 전달한다. 완료 여부는 이 쿼리가 판정하지 않고, 미완료 미션은 서비스에서 null로 구성한다.
      */
-    // TODO: 방명록 status별 공개·삭제 상태 정의가 확정되면 지도 조회·장소별 집계·작성 여부에 동일한 제외 기준을 적용한다.
     @Query("""
             select distinct v.location.id as locationId, l.mission.id as missionId
             from LocationGuestbook l
             join l.visitedLocation v
             where l.guestbook.user.id = :userId
+              and l.guestbook.status = :status
               and v.location.id in :locationIds
               and l.mission is not null
             """)
-    List<MissionReference> findMissionReferencesByUserIdAndLocationIds(
-            @Param("userId") Long userId, @Param("locationIds") Collection<Long> locationIds);
+    List<MissionReference> findMissionReferencesByUserIdAndLocationIdsAndStatus(
+            @Param("userId") Long userId, @Param("locationIds") Collection<Long> locationIds,
+            @Param("status") GuestbookStatus status);
 
     /** 장소별 장소 방명록 집계 결과이다. */
     interface LocationCount {
