@@ -4,6 +4,9 @@ import com.jamkkanjeju.server.domain.auth.security.AuthUser;
 import com.jamkkanjeju.server.domain.map.dto.GetClusteredMapContentsResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
 import com.jamkkanjeju.server.domain.map.service.MapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,5 +41,16 @@ public class MapController {
     public Object getMapContents(@AuthenticationPrincipal AuthUser authUser,
                                  @Valid @ParameterObject @ModelAttribute GetMapContentsRequest request) {
         return mapService.getMapContents(authUser.userId(), request);
+    }
+
+    /** 선택한 장소 또는 길바닥 방명록의 모달 정보를 유형별 응답으로 반환한다. */
+    @Operation(summary = "지도 모달 조회")
+    @ApiResponse(responseCode = "200", description = "targetType에 따라 장소 또는 길바닥 방명록 모달 응답",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(oneOf = {GetLocationMapModalResponse.class, GetRoadGuestbookMapModalResponse.class})))
+    @GetMapping("/modals")
+    public Object getMapModal(@AuthenticationPrincipal AuthUser authUser,
+                              @Valid @ParameterObject @ModelAttribute GetMapModalRequest request) {
+        return mapService.getMapModal(authUser.userId(), request);
     }
 }

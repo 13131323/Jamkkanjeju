@@ -7,24 +7,39 @@ import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
 import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
+import com.jamkkanjeju.server.domain.guestbook.entity.RoadGuestbook;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository.LocationCount;
 import com.jamkkanjeju.server.domain.guestbook.repository.RoadGuestbookRepository;
+import com.jamkkanjeju.server.domain.guestbook.repository.RoadGuestbookRepository.Position;
+import com.jamkkanjeju.server.domain.home.entity.Coupon;
 import com.jamkkanjeju.server.domain.home.repository.AcquiredCouponRepository;
 import com.jamkkanjeju.server.domain.map.dto.GetClusteredMapContentsResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse.GuestbookInfo;
+import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse.RewardDetail;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.LocationInfo;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.MissionInfo;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.ReceivedCoupon;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.RoadGuestbookInfo;
+import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
 import com.jamkkanjeju.server.domain.map.entity.Location;
+import com.jamkkanjeju.server.domain.map.exception.MapErrorCode;
 import com.jamkkanjeju.server.domain.map.repository.LocationRepository;
+import com.jamkkanjeju.server.domain.map.repository.VisitedLocationRepository;
+import com.jamkkanjeju.server.domain.map.service.TravelEstimator.TravelEstimate;
 import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
+import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
 import com.jamkkanjeju.server.domain.mission.entity.MissionTypeCode;
 import com.jamkkanjeju.server.domain.mission.repository.LocationMissionReference;
+import com.jamkkanjeju.server.domain.mission.repository.MissionRewardStatusRepository;
 import com.jamkkanjeju.server.domain.mission.service.MissionCompletionChecker;
+import com.jamkkanjeju.server.domain.treasurehunt.entity.ArCharacter;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionProgressRepository;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionRepository;
 import java.util.ArrayList;
@@ -38,15 +53,18 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 확장 지도 범위의 장소·길바닥 방명록을 현재 사용자 기준의 상세 또는 간소 응답으로 구성한다. */
+/** 지도 홈과 선택한 장소·길바닥 방명록의 모달을 현재 사용자 기준으로 조회한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class MapService {
+
+    private static final int MODAL_GUESTBOOK_LIMIT = 3;
 
     private final UserRepository userRepository;
     private final LocationRepository locationRepository;
@@ -60,6 +78,8 @@ public class MapService {
     private final MissionCompletionChecker missionCompletionChecker;
     private final TravelEstimator travelEstimator;
     private final TourApiClient tourApiClient;
+    private final VisitedLocationRepository visitedLocationRepository;
+    private final MissionRewardStatusRepository missionRewardStatusRepository;
 
     /** 검증된 요청을 받아 플래그에 맞는 상세 또는 간소 DTO 자체를 반환한다. 공통 응답 래퍼는 만들지 않는다. */
     public Object getMapContents(Long userId, GetMapContentsRequest request) {
@@ -76,17 +96,137 @@ public class MapService {
                 viewport.minLatitude(), viewport.maxLatitude(), viewport.minLongitude(), viewport.maxLongitude());
         List<Long> locationIds = locations.stream().map(Location::getId).toList();
 
-        // 4~8. 간소 응답에서는 부가 정보 조회·계산을 호출하지 않는다
+        // 4. 응답 형식 분기 (간소 응답에서는 상세 정보 조회·계산을 생략한다)
         if (request.isClustered()) {
             return clusteredContents(locations, locationIds, viewport);
         }
-        return detailedContents(userId, request, locations, locationIds, viewport);
+
+        List<RoadGuestbook> roadGuestbooks = roadGuestbookRepository
+                .findAllByGuestbookStatusAndLatitudeBetweenAndLongitudeBetween(
+                        GuestbookStatus.ACTIVE, viewport.minLatitude(), viewport.maxLatitude(),
+                        viewport.minLongitude(), viewport.maxLongitude());
+        List<RoadGuestbookInfo> roadItems = roadGuestbooks.stream().map(RoadGuestbookInfo::from).toList();
+        if (locationIds.isEmpty()) {
+            return GetMapContentsResponse.of(List.of(), roadItems);
+        }
+
+        // 5. 장소별 활성 미션 조회 및 중복 검증
+        Map<Long, LocatedMission> missions = detailedMissions(locationIds);
+
+        // 6. 사용자별 완료·작성 여부와 장소별 방명록 수·수령 쿠폰 조회
+        Set<Long> completedIds = completedMissionIds(userId, missions.values());
+        Set<MissionGuestbookKey> writtenGuestbooks = writtenMissionGuestbooks(userId, missions, completedIds);
+        Map<Long, Long> guestbookCounts = locationGuestbookRepository
+                .countByLocationIdsAndStatus(locationIds, GuestbookStatus.ACTIVE).stream()
+                .collect(Collectors.toMap(LocationCount::getLocationId, LocationCount::getGuestbookCount));
+        Map<Long, List<ReceivedCoupon>> coupons = receivedCoupons(userId, locationIds);
+
+        // 7. 장소 대표 이미지 조회 및 거리·시간 구성
+        Map<Long, String> imageUrls = locationImageUrls(locations);
+        List<LocationInfo> items = locations.stream().map(location -> {
+            LocatedMission locatedMission = missions.get(location.getId());
+            MissionInfo missionInfo = null;
+            if (locatedMission != null) {
+                Mission mission = locatedMission.mission();
+                boolean completed = completedIds.contains(mission.getId());
+                Boolean hasWritten = completed
+                        ? writtenGuestbooks.contains(new MissionGuestbookKey(location.getId(), mission.getId())) : null;
+                missionInfo = MissionInfo.of(mission, completed, hasWritten);
+            }
+            TravelEstimate travel = travelEstimator.estimate(request.userLatitude(), request.userLongitude(), location);
+            return LocationInfo.of(location, travel, missionInfo,
+                    guestbookCounts.getOrDefault(location.getId(), 0L), imageUrls.get(location.getContentId()),
+                    coupons.get(location.getId()));
+        }).toList();
+
+        // 8. 상세 응답 구성
+        return GetMapContentsResponse.of(items, roadItems);
+    }
+
+    /** 현재 사용자를 확인하고 선택한 유형의 모달 DTO 자체를 반환한다. */
+    public Object getMapModal(Long userId, GetMapModalRequest request) {
+        // 1. 현재 사용자 확인 (요청값 검증은 DTO의 Bean Validation을 사용한다)
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2~4. 길바닥 방명록이면 활성 대상 조회 및 거리·시간 계산
+        if ("ROAD_GUESTBOOK".equals(request.targetType())) {
+            RoadGuestbook roadGuestbook = roadGuestbookRepository
+                    .findByGuestbookIdAndGuestbookStatus(request.targetId(), GuestbookStatus.ACTIVE)
+                    .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_MODAL_TARGET_NOT_FOUND));
+            TravelEstimate travel = travelEstimator.estimate(request.userLatitude(), request.userLongitude(),
+                    roadGuestbook.getLatitude(), roadGuestbook.getLongitude());
+
+            // 8~9. 작성자 닉네임·저장된 콘텐츠로 길바닥 방명록 응답 구성
+            return GetRoadGuestbookMapModalResponse.of(roadGuestbook, travel);
+        }
+
+        // 2~4. 장소 존재 확인 및 실제 사용자 위치 기준 거리·시간 계산
+        Location location = locationRepository.findById(request.targetId())
+                .orElseThrow(() -> new BusinessException(MapErrorCode.MAP_MODAL_TARGET_NOT_FOUND));
+        TravelEstimate travel = travelEstimator.estimate(request.userLatitude(), request.userLongitude(), location);
+
+        // 5. 미션 유형을 합쳐 활성 미션 중복 검증
+        ModalMission modalMission = locationModalMission(location.getId());
+
+        // 6. 대표 이미지·방문 여부·미션 완료·항목별 보상 수령 여부 구성 (조회 중 지급하지 않는다)
+        String imageUrl = tourApiClient.getLocationImageUrl(location.getContentId());
+        boolean visited = visitedLocationRepository.existsByUserIdAndLocationId(userId, location.getId());
+        GetLocationMapModalResponse.MissionInfo missionInfo = null;
+        if (modalMission != null) {
+            Mission mission = modalMission.mission();
+            boolean completed = isMissionCompleted(userId, mission);
+            MissionRewardStatus rewardStatus = missionRewardStatusRepository
+                    .findById(new MissionRewardStatusId(mission.getId(), userId)).orElse(null);
+            RewardDetail rewardDetail = RewardDetail.of(
+                    modalMission.arCharacter(), modalMission.point(), modalMission.coupon(), rewardStatus);
+            missionInfo = GetLocationMapModalResponse.MissionInfo.of(mission, completed, rewardDetail);
+        }
+
+        // 7. 같은 ACTIVE 조건으로 전체 개수와 최신 최대 세 건을 별도 조회
+        long guestbooksCount = locationGuestbookRepository
+                .countByLocationIdsAndStatus(List.of(location.getId()), GuestbookStatus.ACTIVE).stream()
+                .mapToLong(LocationCount::getGuestbookCount).sum();
+        List<GuestbookInfo> guestbooks = locationGuestbookRepository.findAllByLocationIdAndStatus(
+                        location.getId(), GuestbookStatus.ACTIVE, PageRequest.of(0, MODAL_GUESTBOOK_LIMIT)).stream()
+                .map(GuestbookInfo::from).toList();
+
+        // 9. 장소 모달 응답 구성
+        return GetLocationMapModalResponse.of(location, imageUrl, travel, visited, missionInfo,
+                guestbooksCount, guestbooks);
+    }
+
+    /** 보상까지 함께 조회한 두 유형의 후보를 기존 중복 검증에 전달한다. */
+    private ModalMission locationModalMission(Long locationId) {
+        List<ModalMission> candidates = new ArrayList<>();
+        treasureMissionRepository.findAllWithRewardsByLocationIdAndStatus(locationId, MissionActivationStatus.ACTIVE)
+                .forEach(mission -> candidates.add(new ModalMission(mission.getMission(),
+                        mission.getArCharacter(), mission.getPoint(), mission.getCoupon())));
+        cooperativeMissionRepository.findAllWithRewardsByLocationIdAndStatus(locationId, MissionActivationStatus.ACTIVE)
+                .forEach(mission -> candidates.add(new ModalMission(mission.getMission(),
+                        mission.getArCharacter(), mission.getPoint(), mission.getCoupon())));
+        return uniqueMissionsByLocation(candidates, candidate -> locationId,
+                candidate -> candidate.mission().getId() + ":" + candidate.mission().getMissionType().getType())
+                .get(locationId);
+    }
+
+    /** 모달 대상 미션의 사용자 이력을 조회하여 공통 판정기로 완료 여부를 확인한다. */
+    private boolean isMissionCompleted(Long userId, Mission mission) {
+        return switch (mission.getMissionType().getType()) {
+            case TREASURE -> treasureMissionProgressRepository
+                    .findByUserIdAndTreasureMissionMissionId(userId, mission.getId())
+                    .map(missionCompletionChecker::isCompleted).orElse(false);
+            case COOPERATIVE -> cooperativeMissionParticipantRepository
+                    .findAllByUserIdAndMissionId(userId, mission.getId()).stream()
+                    .anyMatch(missionCompletionChecker::isCompleted);
+            case CULTURE -> false;
+        };
     }
 
     /** 상세 콘텐츠를 조회하지 않고 장소·미션 참조와 길바닥 방명록 좌표로 간소 응답을 만든다. */
     private GetClusteredMapContentsResponse clusteredContents(List<Location> locations, List<Long> locationIds,
                                                               MapViewport viewport) {
-        var roadGuestbooks = roadGuestbookRepository.findPositionsByBounds(
+        List<Position> roadGuestbooks = roadGuestbookRepository.findPositionsByBounds(
                 viewport.minLatitude(), viewport.maxLatitude(), viewport.minLongitude(), viewport.maxLongitude(),
                 GuestbookStatus.ACTIVE);
         if (locationIds.isEmpty()) {
@@ -100,50 +240,10 @@ public class MapService {
                 LocationMissionReference::getLocationId,
                 reference -> reference.getMissionId() + ":" + reference.getMissionType());
 
-        var items = locations.stream()
+        List<GetClusteredMapContentsResponse.LocationInfo> items = locations.stream()
                 .map(location -> GetClusteredMapContentsResponse.LocationInfo.of(location, missions.get(location.getId())))
                 .toList();
         return GetClusteredMapContentsResponse.of(items, roadGuestbooks);
-    }
-
-    /** 사용자별 완료·작성·수령 이력과 공통 거리·이미지 정보를 붙여 상세 응답을 만든다. */
-    private GetMapContentsResponse detailedContents(Long userId, GetMapContentsRequest request,
-                                                    List<Location> locations, List<Long> locationIds,
-                                                    MapViewport viewport) {
-        var roadGuestbooks = roadGuestbookRepository.findAllByGuestbookStatusAndLatitudeBetweenAndLongitudeBetween(
-                GuestbookStatus.ACTIVE, viewport.minLatitude(), viewport.maxLatitude(),
-                viewport.minLongitude(), viewport.maxLongitude());
-        var roadItems = roadGuestbooks.stream().map(RoadGuestbookInfo::from).toList();
-        if (locationIds.isEmpty()) {
-            return GetMapContentsResponse.of(List.of(), roadItems);
-        }
-
-        // 활성 미션 중복을 먼저 확인하여 잘못된 데이터를 선택하거나 부가 조회를 계속하지 않는다
-        Map<Long, LocatedMission> missions = detailedMissions(locationIds);
-        Set<Long> completedIds = completedMissionIds(userId, missions.values());
-        Set<MissionGuestbookKey> writtenGuestbooks = writtenMissionGuestbooks(userId, missions, completedIds);
-        Map<Long, Long> guestbookCounts = locationGuestbookRepository
-                .countByLocationIdsAndStatus(locationIds, GuestbookStatus.ACTIVE).stream()
-                .collect(Collectors.toMap(LocationCount::getLocationId, LocationCount::getGuestbookCount));
-        Map<Long, List<ReceivedCoupon>> coupons = receivedCoupons(userId, locationIds);
-        Map<Long, String> imageUrls = locationImageUrls(locations);
-
-        List<LocationInfo> items = locations.stream().map(location -> {
-            LocatedMission locatedMission = missions.get(location.getId());
-            MissionInfo missionInfo = null;
-            if (locatedMission != null) {
-                Mission mission = locatedMission.mission();
-                boolean completed = completedIds.contains(mission.getId());
-                Boolean hasWritten = completed
-                        ? writtenGuestbooks.contains(new MissionGuestbookKey(location.getId(), mission.getId())) : null;
-                missionInfo = MissionInfo.of(mission, completed, hasWritten);
-            }
-            return LocationInfo.of(location,
-                    travelEstimator.estimate(request.userLatitude(), request.userLongitude(), location), missionInfo,
-                    guestbookCounts.getOrDefault(location.getId(), 0L), imageUrls.get(location.getContentId()),
-                    coupons.get(location.getId()));
-        }).toList();
-        return GetMapContentsResponse.of(items, roadItems);
     }
 
     /** 유형별 활성 미션을 합쳐 장소당 한 건인지 검증한 뒤 공통 미션 정보로 연결한다. */
@@ -225,6 +325,9 @@ public class MapService {
 
     /** 유형별 세부 미션에서 가져온 장소 ID와 공통 미션을 연결한다. */
     private record LocatedMission(Long locationId, Mission mission) { }
+
+    /** 모달의 전체 보상을 구성하기 위한 공통 미션과 유형별 보상 설정이다. */
+    private record ModalMission(Mission mission, ArCharacter arCharacter, Integer point, Coupon coupon) { }
 
     /** 다른 장소·다른 미션의 작성 이력을 섞지 않기 위한 조회 결과 식별자이다. */
     private record MissionGuestbookKey(Long locationId, Long missionId) { }
