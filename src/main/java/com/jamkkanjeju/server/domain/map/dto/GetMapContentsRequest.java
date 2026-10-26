@@ -18,16 +18,6 @@ public record GetMapContentsRequest(
         @NotNull Boolean isClustered
 ) {
 
-    /** 좌표에 NaN이나 무한대가 없는지 확인한다. 누락은 각 필드의 필수 검증에서 처리한다. */
-    @AssertTrue
-    @JsonIgnore
-    @Schema(hidden = true)
-    public boolean isFiniteCoordinates() {
-        return isFiniteOrNull(leftTopLatitude) && isFiniteOrNull(leftTopLongitude)
-                && isFiniteOrNull(rightBottomLatitude) && isFiniteOrNull(rightBottomLongitude)
-                && isFiniteOrNull(userLatitude) && isFiniteOrNull(userLongitude);
-    }
-
     /** 두 꼭짓점이 올바른 방향과 양수 너비·높이를 가진 사각형인지 확인한다. */
     @AssertTrue
     @JsonIgnore
@@ -40,8 +30,4 @@ public record GetMapContentsRequest(
         return leftTopLatitude > rightBottomLatitude && leftTopLongitude < rightBottomLongitude;
     }
 
-    /** 필수 검증과 별개로 값이 있는 좌표의 유한성만 확인한다. */
-    private static boolean isFiniteOrNull(Double value) {
-        return value == null || Double.isFinite(value);
-    }
 }

@@ -17,7 +17,12 @@ public class TravelEstimator {
         if (location == null) {
             return TravelEstimate.UNKNOWN;
         }
-        double distanceMeter = distanceMeter(latitude, longitude, location.getLatitude(), location.getLongitude());
+        return estimate(latitude, longitude, location.getLatitude(), location.getLongitude());
+    }
+
+    /** 요청 위치에서 목적지 좌표까지의 거리·시간을 공통 반올림 기준으로 구한다. */
+    public TravelEstimate estimate(double latitude, double longitude, double toLatitude, double toLongitude) {
+        double distanceMeter = distanceMeter(latitude, longitude, toLatitude, toLongitude);
         return new TravelEstimate(
                 (int) Math.round(distanceMeter),
                 (int) Math.round(durationMinutes(distanceMeter)));

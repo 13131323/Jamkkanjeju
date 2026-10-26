@@ -25,6 +25,7 @@ import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionProgress;
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionQuiz;
 import com.jamkkanjeju.server.domain.guestbook.entity.Guestbook;
+import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
 import com.jamkkanjeju.server.domain.guestbook.entity.LocationGuestbook;
 import com.jamkkanjeju.server.domain.guestbook.entity.RoadGuestbook;
 import com.jamkkanjeju.server.domain.guestbook.service.GuestbookCounter;
@@ -743,7 +744,7 @@ class HomeApiIntegrationTest extends MySqlIntegrationTestSupport {
                 .visitedAt(LocalDate.of(2026, 10, 1))
                 .contentWriting("즐거운 여행")
                 .savedAt(LocalDateTime.of(2026, 10, 1, 12, 0))
-                .status("ACTIVE")
+                .status(GuestbookStatus.ACTIVE)
                 .build();
         entityManager.persist(guestbook);
         entityManager.flush();

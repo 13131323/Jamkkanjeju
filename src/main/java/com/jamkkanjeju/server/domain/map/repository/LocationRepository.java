@@ -2,6 +2,8 @@ package com.jamkkanjeju.server.domain.map.repository;
 
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -12,6 +14,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 고른 장소로 응답의 {@code nextLocation}을 구성한다.
  */
 public interface LocationRepository extends JpaRepository<Location, Long> {
+
+    /**
+     * 결과: 장소 이름에 {@code keyword}가 연속된 부분 문자열로 포함되는 장소의 요청 페이지이다.
+     * 장소 ID 오름차순이며 전체 개수 집계 없이 다음 페이지 존재 여부를 제공한다.
+     * 연관 엔티티는 로딩하지 않고 미션 유무·사용자 거리로 제한하지 않는다. 없으면 내용이 빈 {@code Slice}이다.
+     * {@code Containing}이 포함 검색 패턴과 LIKE 특수문자 이스케이프를 처리하며 내부 공백은 유지한다.
+     * 사용: 지도 검색 결과 조회({@code GET /api/v2/map/search})에서 서비스가 정규화·검증된 검색어와
+     * 요청 페이지·크기(기본 0·20)를 전달하여 {@code locations}와 {@code locationsPage}를 구성한다.
+     * 미션·이미지·거리는 반환 페이지의 장소에 대해서만 별도로 조합한다.
+     */
+    // TODO: 추후 검색 정책 변경 시 검색 로직을 교체한다.
+    Slice<Location> findByTitleContainingOrderByIdAsc(String keyword, Pageable pageable);
 
     /**
      * 결과: 지정한 위도·경도 범위 내부와 경계에 있는 장소 전체 목록이다.

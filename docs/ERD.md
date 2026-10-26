@@ -327,7 +327,7 @@ GUESTBOOK {
     decimal(4,1) content_temperature_celsius
     varchar_20 content_color_code
     datetime saved_at "NOT NULL"
-    varchar_20 status "NOT NULL"
+    varchar_20 status "NOT NULL, Enum: ACTIVE, INACTIVE"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
