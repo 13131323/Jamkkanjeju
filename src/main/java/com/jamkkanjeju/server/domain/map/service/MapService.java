@@ -31,6 +31,9 @@ import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse.Guestb
 import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse.NearbyMissionInfo;
 import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapSearchRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetMapSearchResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapSearchResponse.LocationsPage;
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import com.jamkkanjeju.server.domain.map.exception.MapErrorCode;
 import com.jamkkanjeju.server.domain.map.repository.LocationRepository;
@@ -64,7 +67,7 @@ import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 지도 홈·장소 상세와 선택한 장소·길바닥 방명록의 모달을 현재 사용자 기준으로 조회한다. */
+/** 지도 홈·장소 상세·검색 결과와 선택한 장소·길바닥 방명록의 모달을 현재 사용자 기준으로 조회한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -268,6 +271,40 @@ public class MapService {
         // 9. 서비스 계산 결과를 값으로 전달하여 장소 상세 응답 구성
         return GetMapLocationDetailResponse.of(location, travel.distanceMeter(), travel.durationMinutes(), visited,
                 description, detailImages, nearbyMissions, guestbooks, pageInfo, locationMission);
+    }
+
+    /** 장소 이름의 포함 검색 결과를 ID순으로 조회하고 활성 미션·이미지·거리를 조합한다. */
+    public GetMapSearchResponse getMapSearch(Long userId, GetMapSearchRequest request) {
+        // 1. 현재 사용자 확인 (검색어 정규화·요청값 검증은 DTO에서 처리한다)
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2. 장소 ID 오름차순으로 요청 페이지와 다음 페이지 존재 여부 조회
+        Slice<Location> page = locationRepository.findByTitleContainingOrderByIdAsc(
+                request.keyword(), PageRequest.of(request.page(), request.size()));
+        List<Location> locations = page.getContent();
+        LocationsPage pageInfo = LocationsPage.of(request.page(), request.size(), page.hasNext());
+        if (locations.isEmpty()) {
+            return GetMapSearchResponse.of(List.of(), pageInfo);
+        }
+
+        // 3~4. 현재 페이지의 활성 보물찾기·협동 미션을 묶어 조회하고 장소별 중복 검증
+        List<Long> locationIds = locations.stream().map(Location::getId).toList();
+        Map<Long, LocatedMission> missions = detailedMissions(locationIds);
+
+        // 5. 현재 페이지의 대표 이미지와 실제 사용자 위치 기준 거리 구성
+        Map<Long, String> imageUrls = locationImageUrls(locations);
+        List<GetMapSearchResponse.LocationInfo> items = locations.stream().map(location -> {
+            LocatedMission locatedMission = missions.get(location.getId());
+            GetMapSearchResponse.MissionInfo mission = locatedMission == null ? null
+                    : GetMapSearchResponse.MissionInfo.from(locatedMission.mission());
+            TravelEstimate travel = travelEstimator.estimate(request.userLatitude(), request.userLongitude(), location);
+            return GetMapSearchResponse.LocationInfo.of(location, imageUrls.get(location.getContentId()),
+                    travel.distanceMeter(), mission);
+        }).toList();
+
+        // 6. 조회 순서를 유지한 단일 장소 목록과 페이지 정보 반환
+        return GetMapSearchResponse.of(items, pageInfo);
     }
 
     /** 선정된 미션의 보상 설정을 유형별로 묶어서 읽는다. 추천 후보 전체의 보상은 조회하지 않는다. */

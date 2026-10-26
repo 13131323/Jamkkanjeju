@@ -9,6 +9,8 @@ import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapSearchRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetMapSearchResponse;
 import com.jamkkanjeju.server.domain.map.service.MapService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -56,6 +58,14 @@ public class MapController {
     public Object getMapModal(@AuthenticationPrincipal AuthUser authUser,
                               @Valid @ParameterObject @ModelAttribute GetMapModalRequest request) {
         return mapService.getMapModal(authUser.userId(), request);
+    }
+
+    /** 장소 이름 검색 결과를 장소 ID순 페이지로 반환한다. */
+    @Operation(summary = "지도 검색 결과 조회")
+    @GetMapping("/search")
+    public GetMapSearchResponse getMapSearch(@AuthenticationPrincipal AuthUser authUser,
+                                            @Valid @ParameterObject @ModelAttribute GetMapSearchRequest request) {
+        return mapService.getMapSearch(authUser.userId(), request);
     }
 
     /** 장소 상세와 사용자 위치 기준 주변 미션·요청한 방명록 페이지를 반환한다. */
