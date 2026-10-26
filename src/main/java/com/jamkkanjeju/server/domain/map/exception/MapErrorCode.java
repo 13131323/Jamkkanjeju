@@ -6,7 +6,8 @@ import org.springframework.http.HttpStatus;
 /** 지도 도메인의 오류 코드를 정의한다. */
 public enum MapErrorCode implements ErrorCode {
 
-    MAP_MODAL_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "조회할 장소 또는 길바닥 방명록을 찾을 수 없습니다.");
+    MAP_MODAL_TARGET_NOT_FOUND(HttpStatus.NOT_FOUND, "조회할 장소 또는 길바닥 방명록을 찾을 수 없습니다."),
+    LOCATION_NOT_FOUND(HttpStatus.NOT_FOUND, "장소를 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

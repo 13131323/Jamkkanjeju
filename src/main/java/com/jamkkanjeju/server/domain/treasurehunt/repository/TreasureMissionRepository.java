@@ -14,6 +14,17 @@ import org.springframework.data.repository.query.Param;
 public interface TreasureMissionRepository extends JpaRepository<TreasureMission, Long> {
 
     /**
+     * 결과: 공통 미션 ID 목록과 일치하는 보물찾기 미션 전체 목록이며 활성 상태는 제한하지 않는다.
+     * {@code mission.missionType}, {@code location}, {@code arCharacter}, {@code coupon.location}을 함께 로딩한다.
+     * nullable 연관은 null로 유지하고 해당하는 미션이 없으면 빈 목록이다. 입력 ID 순서는 보장하지 않는다.
+     * 사용: 지도 장소 상세 조회({@code GET /api/v2/map/locations/{locationId}})에서 서비스가
+     * 활성·미완료·거리순 조건으로 선정한 미션들의 정보를 묶어 읽어 {@code nearbyMissions}를 구성한다.
+     * 추천 조건 판정과 최종 거리순 정렬은 서비스의 추천 모듈에서 수행한다.
+     */
+    @EntityGraph(attributePaths = {"mission.missionType", "location", "arCharacter", "coupon.location"})
+    List<TreasureMission> findAllWithRewardsByMissionIdIn(Collection<Long> missionIds);
+
+    /**
      * 결과: 장소와 활성 상태가 일치하는 보물찾기 미션 전체 목록이며 같은 장소의 여러 행도 모두 반환한다.
      * {@code mission.missionType}, {@code arCharacter}, {@code coupon.location}을 함께 로딩한다.
      * 보상·쿠폰 사용처가 없으면 해당 연관은 null이고, 미션이 없으면 빈 목록이다.
@@ -30,6 +41,8 @@ public interface TreasureMissionRepository extends JpaRepository<TreasureMission
      * 같은 장소의 여러 행을 합치거나 한 건만 선택하지 않는다.
      * 사용: 지도 홈 조회({@code GET /api/v2/map/contents})의 상세 응답에서 협동 미션 조회 결과와 합쳐
      * 장소별 활성 미션 중복을 서비스가 검증하고 {@code locations[].mission}을 구성한다.
+     * 지도 검색 결과 조회({@code GET /api/v2/map/search})에서도 현재 페이지의 장소 ID와 ACTIVE를 전달하고
+     * 같은 중복 검증 후 공통 미션 ID·유형·제목만 {@code locations[].mission}에 구성한다.
      */
     @EntityGraph(attributePaths = {"mission.missionType", "location"})
     List<TreasureMission> findAllByLocationIdInAndStatus(Collection<Long> locationIds, MissionActivationStatus status);

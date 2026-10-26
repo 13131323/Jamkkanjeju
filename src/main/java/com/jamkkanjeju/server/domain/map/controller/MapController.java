@@ -4,6 +4,8 @@ import com.jamkkanjeju.server.domain.auth.security.AuthUser;
 import com.jamkkanjeju.server.domain.map.dto.GetClusteredMapContentsResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetLocationMapModalResponse;
 import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
@@ -14,12 +16,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -52,5 +56,14 @@ public class MapController {
     public Object getMapModal(@AuthenticationPrincipal AuthUser authUser,
                               @Valid @ParameterObject @ModelAttribute GetMapModalRequest request) {
         return mapService.getMapModal(authUser.userId(), request);
+    }
+
+    /** 장소 상세와 사용자 위치 기준 주변 미션·요청한 방명록 페이지를 반환한다. */
+    @Operation(summary = "지도 장소 상세 조회")
+    @GetMapping("/locations/{locationId}")
+    public GetMapLocationDetailResponse getMapLocationDetail(@AuthenticationPrincipal AuthUser authUser,
+                                                            @PathVariable @Positive Long locationId,
+                                                            @Valid @ParameterObject @ModelAttribute GetMapLocationDetailRequest request) {
+        return mapService.getMapLocationDetail(authUser.userId(), locationId, request);
     }
 }

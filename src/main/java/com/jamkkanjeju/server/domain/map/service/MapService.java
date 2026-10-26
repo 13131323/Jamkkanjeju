@@ -7,6 +7,7 @@ import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionRepository;
 import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
+import com.jamkkanjeju.server.domain.guestbook.entity.LocationGuestbook;
 import com.jamkkanjeju.server.domain.guestbook.entity.RoadGuestbook;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository;
 import com.jamkkanjeju.server.domain.guestbook.repository.LocationGuestbookRepository.LocationCount;
@@ -24,12 +25,17 @@ import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.LocationInfo
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.MissionInfo;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.ReceivedCoupon;
 import com.jamkkanjeju.server.domain.map.dto.GetMapContentsResponse.RoadGuestbookInfo;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailRequest;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse.GuestbooksPage;
+import com.jamkkanjeju.server.domain.map.dto.GetMapLocationDetailResponse.NearbyMissionInfo;
 import com.jamkkanjeju.server.domain.map.dto.GetMapModalRequest;
 import com.jamkkanjeju.server.domain.map.dto.GetRoadGuestbookMapModalResponse;
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import com.jamkkanjeju.server.domain.map.exception.MapErrorCode;
 import com.jamkkanjeju.server.domain.map.repository.LocationRepository;
 import com.jamkkanjeju.server.domain.map.repository.VisitedLocationRepository;
+import com.jamkkanjeju.server.domain.map.service.NearbyMissionRecommender.RecommendedMission;
 import com.jamkkanjeju.server.domain.map.service.TravelEstimator.TravelEstimate;
 import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
@@ -54,10 +60,11 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 지도 홈과 선택한 장소·길바닥 방명록의 모달을 현재 사용자 기준으로 조회한다. */
+/** 지도 홈·장소 상세와 선택한 장소·길바닥 방명록의 모달을 현재 사용자 기준으로 조회한다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -65,6 +72,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MapService {
 
     private static final int MODAL_GUESTBOOK_LIMIT = 3;
+    private static final int DETAIL_IMAGE_LIMIT = 5;
 
     private final UserRepository userRepository;
     private final LocationRepository locationRepository;
@@ -80,6 +88,7 @@ public class MapService {
     private final TourApiClient tourApiClient;
     private final VisitedLocationRepository visitedLocationRepository;
     private final MissionRewardStatusRepository missionRewardStatusRepository;
+    private final NearbyMissionRecommender nearbyMissionRecommender;
 
     /** 검증된 요청을 받아 플래그에 맞는 상세 또는 간소 DTO 자체를 반환한다. 공통 응답 래퍼는 만들지 않는다. */
     public Object getMapContents(Long userId, GetMapContentsRequest request) {
@@ -196,7 +205,94 @@ public class MapService {
                 guestbooksCount, guestbooks);
     }
 
-    /** 보상까지 함께 조회한 두 유형의 후보를 기존 중복 검증에 전달한다. */
+    /** 장소 상세의 기본 정보·주변 미션·방명록 페이지와 현재 장소 미션을 조회한다. */
+    public GetMapLocationDetailResponse getMapLocationDetail(Long userId, Long locationId,
+                                                            GetMapLocationDetailRequest request) {
+        // 1. 현재 사용자 확인
+        userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
+
+        // 2. 장소 존재 확인
+        Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new BusinessException(MapErrorCode.LOCATION_NOT_FOUND));
+
+        // 3. 실제 사용자 위치 기준 거리·시간 및 방문 여부 구성
+        TravelEstimate travel = travelEstimator.estimate(request.userLatitude(), request.userLongitude(), location);
+        boolean visited = visitedLocationRepository.existsByUserIdAndLocationId(userId, locationId);
+
+        // 4. 장소 설명·상세 이미지 조회 (외부 부가 정보 없음은 null로 유지한다)
+        String description = tourApiClient.getLocationOverview(location.getContentId());
+        List<String> detailImages = tourApiClient.getLocationDetailImageUrls(location.getContentId(), DETAIL_IMAGE_LIMIT);
+
+        // 5. 활성·미완료 보물찾기와 협동 미션을 합쳐 가까운 최대 세 건 선정
+        List<RecommendedMission> recommended = nearbyMissionRecommender
+                .recommend(userId, request.userLatitude(), request.userLongitude());
+
+        // 6. 선정된 미션의 보상·지급 상태와 장소 대표 이미지만 조회하여 추천 순서대로 구성
+        Map<Long, ModalMission> rewardSettings = recommendedMissionRewards(recommended);
+        List<Long> recommendedIds = recommended.stream().map(item -> item.mission().getId()).toList();
+        Map<Long, MissionRewardStatus> rewardStatuses = recommendedIds.isEmpty() ? Map.of()
+                : missionRewardStatusRepository.findAllByIdUserIdAndIdMissionIdIn(userId, recommendedIds).stream()
+                        .collect(Collectors.toMap(status -> status.getId().getMissionId(), Function.identity()));
+        Map<Long, String> images = locationImageUrls(recommended.stream().map(RecommendedMission::location).toList());
+        List<NearbyMissionInfo> nearbyMissions = recommended.stream().map(item -> {
+            ModalMission settings = rewardSettings.get(item.mission().getId());
+            RewardDetail reward = RewardDetail.of(settings.arCharacter(), settings.point(), settings.coupon(),
+                    rewardStatuses.get(item.mission().getId()));
+            GetMapLocationDetailResponse.MissionInfo missionInfo = GetMapLocationDetailResponse.MissionInfo
+                    .of(item.mission(), false, reward);
+            return NearbyMissionInfo.of(missionInfo, item.location(), images.get(item.location().getContentId()));
+        }).toList();
+
+        // 7. ACTIVE 방명록의 요청 페이지와 다음 페이지 존재 여부 조회
+        Slice<LocationGuestbook> page = locationGuestbookRepository.findSliceByLocationIdAndStatus(
+                locationId, GuestbookStatus.ACTIVE, PageRequest.of(request.page(), request.size()));
+        List<GuestbookInfo> guestbooks = page.getContent().stream().map(GuestbookInfo::from).toList();
+        GuestbooksPage pageInfo = GuestbooksPage.of(request.page(), request.size(), page.hasNext());
+
+        // 8. 현재 장소의 활성 미션 중복 검증 및 완료·전체 보상 조합
+        ModalMission currentMission = locationModalMission(locationId);
+        GetMapLocationDetailResponse.MissionInfo locationMission = null;
+        if (currentMission != null) {
+            Mission mission = currentMission.mission();
+            MissionRewardStatus status = rewardStatuses.get(mission.getId());
+            if (!recommendedIds.contains(mission.getId())) {
+                status = missionRewardStatusRepository.findById(new MissionRewardStatusId(mission.getId(), userId))
+                        .orElse(null);
+            }
+            RewardDetail reward = RewardDetail.of(currentMission.arCharacter(), currentMission.point(),
+                    currentMission.coupon(), status);
+            locationMission = GetMapLocationDetailResponse.MissionInfo.of(mission, isMissionCompleted(userId, mission), reward);
+        }
+
+        // 9. 서비스 계산 결과를 값으로 전달하여 장소 상세 응답 구성
+        return GetMapLocationDetailResponse.of(location, travel.distanceMeter(), travel.durationMinutes(), visited,
+                description, detailImages, nearbyMissions, guestbooks, pageInfo, locationMission);
+    }
+
+    /** 선정된 미션의 보상 설정을 유형별로 묶어서 읽는다. 추천 후보 전체의 보상은 조회하지 않는다. */
+    private Map<Long, ModalMission> recommendedMissionRewards(List<RecommendedMission> recommended) {
+        List<Long> treasureIds = recommended.stream()
+                .filter(item -> item.mission().getMissionType().getType() == MissionTypeCode.TREASURE)
+                .map(item -> item.mission().getId()).toList();
+        List<Long> cooperativeIds = recommended.stream()
+                .filter(item -> item.mission().getMissionType().getType() == MissionTypeCode.COOPERATIVE)
+                .map(item -> item.mission().getId()).toList();
+        Map<Long, ModalMission> result = new HashMap<>();
+        if (!treasureIds.isEmpty()) {
+            treasureMissionRepository.findAllWithRewardsByMissionIdIn(treasureIds).forEach(mission ->
+                    result.put(mission.getMissionId(), new ModalMission(mission.getMission(),
+                            mission.getArCharacter(), mission.getPoint(), mission.getCoupon())));
+        }
+        if (!cooperativeIds.isEmpty()) {
+            cooperativeMissionRepository.findAllWithRewardsByMissionIdIn(cooperativeIds).forEach(mission ->
+                    result.put(mission.getMissionId(), new ModalMission(mission.getMission(),
+                            mission.getArCharacter(), mission.getPoint(), mission.getCoupon())));
+        }
+        return result;
+    }
+
+    /** 모달·상세의 현재 장소 미션을 보상과 함께 읽고 기존 중복 검증에 전달한다. */
     private ModalMission locationModalMission(Long locationId) {
         List<ModalMission> candidates = new ArrayList<>();
         treasureMissionRepository.findAllWithRewardsByLocationIdAndStatus(locationId, MissionActivationStatus.ACTIVE)

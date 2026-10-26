@@ -2,6 +2,8 @@ package com.jamkkanjeju.server.domain.mission.repository;
 
 import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
+import java.util.Collection;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -20,4 +22,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * 한 항목이라도 기지급이면 남은 항목도 추가 지급하지 않으며 실제 지급한 항목의 상태만 저장한다. 응답 본문은 없다.
  */
 public interface MissionRewardStatusRepository extends JpaRepository<MissionRewardStatus, MissionRewardStatusId> {
+
+    /**
+     * 결과: 사용자 ID와 공통 미션 ID 목록이 모두 일치하는 보상 지급 상태 목록이다.
+     * 연관 사용자·미션은 함께 로딩하지 않으며 상태 기록이 없는 미션의 행은 없고, 결과가 없으면 빈 목록이다.
+     * 사용: 지도 장소 상세 조회({@code GET /api/v2/map/locations/{locationId}})에서 현재 장소 미션과
+     * 추천 미션의 지급 상태를 묶어 조회하여 각 {@code rewardDetail}의 항목별 {@code isReceived}를 구성한다.
+     * 서비스가 미션 ID별로 연결하고 상태가 없는 미션은 미수령으로 처리하며 조회 중 새 기록을 만들지 않는다.
+     */
+    List<MissionRewardStatus> findAllByIdUserIdAndIdMissionIdIn(Long userId, Collection<Long> missionIds);
 }

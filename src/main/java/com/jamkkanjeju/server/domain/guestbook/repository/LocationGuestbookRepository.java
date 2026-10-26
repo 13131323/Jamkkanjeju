@@ -5,6 +5,7 @@ import com.jamkkanjeju.server.domain.guestbook.entity.LocationGuestbook;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -12,6 +13,25 @@ import org.springframework.data.repository.query.Param;
 
 /** 장소 방명록의 장소별 개수와 사용자별 미션 작성 참조를 묶어서 조회한다. */
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
+
+    /**
+     * 결과: 장소와 공통 방명록 상태가 일치하는 장소 방명록의 요청 페이지와 다음 페이지 존재 여부이다.
+     * 방문일 내림차순·공통 방명록 ID 내림차순이며 전체 개수 집계는 하지 않는다.
+     * {@code guestbook.user.onboardingResult}와 {@code mission.missionType}을 함께 로딩한다.
+     * 작성자·온보딩·미션이 없어도 방명록은 유지하고, 결과가 없으면 내용이 빈 {@code Slice}이다.
+     * 사용: 지도 장소 상세 조회({@code GET /api/v2/map/locations/{locationId}})에서 서비스가 ACTIVE와
+     * 요청 페이지·크기(기본 0·20)를 전달하여 {@code guestbooks}와 {@code guestbooksPage}를 구성한다.
+     */
+    @EntityGraph(attributePaths = {"guestbook.user.onboardingResult", "mission.missionType"})
+    @Query("""
+            select l from LocationGuestbook l
+            where l.visitedLocation.location.id = :locationId
+              and l.guestbook.status = :status
+            order by l.guestbook.visitedAt desc, l.guestbook.id desc
+            """)
+    Slice<LocationGuestbook> findSliceByLocationIdAndStatus(@Param("locationId") Long locationId,
+                                                          @Param("status") GuestbookStatus status,
+                                                          Pageable pageable);
 
     /**
      * 결과: 지정한 장소에 연결되고 공통 방명록 상태가 {@code status}인 장소 방명록 목록이다.
