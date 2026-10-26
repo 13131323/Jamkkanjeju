@@ -4,6 +4,8 @@ import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
 import com.jamkkanjeju.server.domain.guestbook.entity.LocationGuestbook;
 import java.util.Collection;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,12 +14,33 @@ import org.springframework.data.repository.query.Param;
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
 
     /**
+     * 결과: 지정한 장소에 연결되고 공통 방명록 상태가 {@code status}인 장소 방명록 목록이다.
+     * 방문일 내림차순·공통 방명록 ID 내림차순으로 정렬하고 {@code pageable}의 범위만 조회한다.
+     * {@code guestbook.user.onboardingResult}와 {@code mission.missionType}을 함께 로딩한다.
+     * 작성자·온보딩 결과·미션이 없어도 방명록은 유지하며 해당 연관만 null이고, 결과가 없으면 빈 목록이다.
+     * 사용: 지도 모달 조회({@code GET /api/v2/map/modals})의 장소 응답에서 서비스가 ACTIVE와
+     * 첫 페이지 크기 3을 전달하여 {@code guestbooks}를 구성한다. 전체 개수는 별도 집계 결과를 사용한다.
+     */
+    @EntityGraph(attributePaths = {"guestbook.user.onboardingResult", "mission.missionType"})
+    @Query("""
+            select l from LocationGuestbook l
+            where l.visitedLocation.location.id = :locationId
+              and l.guestbook.status = :status
+            order by l.guestbook.visitedAt desc, l.guestbook.id desc
+            """)
+    List<LocationGuestbook> findAllByLocationIdAndStatus(@Param("locationId") Long locationId,
+                                                       @Param("status") GuestbookStatus status,
+                                                       Pageable pageable);
+
+    /**
      * 결과: 전달한 장소 ID별로 공통 방명록 상태가 {@code status}인 장소 방명록 개수 목록이다.
      * 모든 작성자·미션 연결 여부를 포함한다.
      * 장소 참조가 없는 기록은 제외하며 방명록이 없는 장소의 행은 없고, 결과가 없으면 빈 목록이다.
      * 집계 프로젝션만 반환하며 연관 엔티티는 로딩하지 않는다.
      * 사용: 지도 홈 조회({@code GET /api/v2/map/contents}) 상세 응답의 {@code locations[].guestbooksCount}에 쓴다.
      * 서비스가 ACTIVE를 전달하고 장소 ID별로 조합하며 조회 행이 없는 장소는 0으로 구성한다.
+     * 지도 모달 조회({@code GET /api/v2/map/modals})에서도 대상 장소 ID 한 건과 ACTIVE를 전달하여
+     * 최신 목록 길이와 무관한 {@code guestbooksCount}를 구성한다.
      */
     @Query("""
             select v.location.id as locationId, count(l) as guestbookCount

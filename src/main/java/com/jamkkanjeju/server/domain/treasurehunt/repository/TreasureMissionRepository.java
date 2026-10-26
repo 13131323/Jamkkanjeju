@@ -14,6 +14,17 @@ import org.springframework.data.repository.query.Param;
 public interface TreasureMissionRepository extends JpaRepository<TreasureMission, Long> {
 
     /**
+     * 결과: 장소와 활성 상태가 일치하는 보물찾기 미션 전체 목록이며 같은 장소의 여러 행도 모두 반환한다.
+     * {@code mission.missionType}, {@code arCharacter}, {@code coupon.location}을 함께 로딩한다.
+     * 보상·쿠폰 사용처가 없으면 해당 연관은 null이고, 미션이 없으면 빈 목록이다.
+     * 사용: 지도 모달 조회({@code GET /api/v2/map/modals})에서 서비스가 ACTIVE를 전달하고
+     * 협동 미션 목록과 합쳐 중복을 검증한 뒤 {@code mission}과 전체 {@code mission.rewardDetail}을 구성한다.
+     * 완료 여부와 사용자별 보상 수령 여부는 서비스가 별도 조회 결과로 판정한다.
+     */
+    @EntityGraph(attributePaths = {"mission.missionType", "arCharacter", "coupon.location"})
+    List<TreasureMission> findAllWithRewardsByLocationIdAndStatus(Long locationId, MissionActivationStatus status);
+
+    /**
      * 결과: 장소 ID 목록({@code locationIds})에 연결되고 활성 상태가 {@code status}인 보물찾기 미션 전체 목록이다.
      * {@code mission.missionType}과 {@code location}을 함께 로딩하며 결과가 없으면 빈 목록이다.
      * 같은 장소의 여러 행을 합치거나 한 건만 선택하지 않는다.

@@ -3,6 +3,7 @@ package com.jamkkanjeju.server.domain.guestbook.repository;
 import com.jamkkanjeju.server.domain.guestbook.entity.GuestbookStatus;
 import com.jamkkanjeju.server.domain.guestbook.entity.RoadGuestbook;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -10,6 +11,17 @@ import org.springframework.data.repository.query.Param;
 
 /** 길바닥 방명록을 자체 좌표 범위로 조회한다. */
 public interface RoadGuestbookRepository extends JpaRepository<RoadGuestbook, Long> {
+
+    /**
+     * 결과: 공통 방명록 ID와 공통 방명록 상태가 일치하는 길바닥 방명록 한 건이다.
+     * {@code guestbook.user}를 함께 로딩하며 작성자가 없어도 방명록은 유지하고 사용자만 null이다.
+     * 해당 ID가 없거나 상태가 다르면 빈 {@code Optional}이다.
+     * 사용: 지도 모달 조회({@code GET /api/v2/map/modals})에서 서비스가 ACTIVE를 전달하여
+     * 위치 별칭·거리·시간의 좌표와 작성자 닉네임·방문일·저장된 콘텐츠를 구성한다.
+     * 빈 결과는 서비스에서 조회 대상 없음 오류로 처리한다.
+     */
+    @EntityGraph(attributePaths = "guestbook.user")
+    Optional<RoadGuestbook> findByGuestbookIdAndGuestbookStatus(Long guestbookId, GuestbookStatus status);
 
     /**
      * 결과: 공통 방명록 상태가 {@code status}이고 지정한 위도·경도 범위 내부와 경계인 길바닥 방명록 목록이다.
