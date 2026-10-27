@@ -11,7 +11,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 장소 방명록의 장소별 개수와 사용자별 미션 작성 참조를 묶어서 조회한다. */
+/**
+ * 장소 방명록의 장소별 개수와 사용자별 미션 작성 참조를 묶어서 조회한다.
+ * 결과: 상속받은 {@code save()}는 공통 방명록과 PK를 공유하는 장소 방명록을 저장한다.
+ * 본인의 방문 기록과 선택 미션을 참조하며 연관 엔티티를 함께 조회하지 않는다.
+ * 사용: 방명록 작성({@code POST /api/v2/guestbooks})의 GENERAL 요청에서 검증한 방문·미션을 연결하고,
+ * 저장된 공통 내용과 함께 응답의 {@code guestbookId}, {@code locationId}, {@code missionId}를 구성한다.
+ */
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
 
     /**

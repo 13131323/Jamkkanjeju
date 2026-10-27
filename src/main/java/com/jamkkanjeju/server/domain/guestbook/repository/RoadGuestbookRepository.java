@@ -9,7 +9,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** 길바닥 방명록을 자체 좌표 범위로 조회한다. */
+/**
+ * 길바닥 방명록을 자체 좌표 범위로 조회한다.
+ * 결과: 상속받은 {@code save()}는 공통 방명록과 PK를 공유하는 길바닥 방명록을 저장한다.
+ * 장소 별칭·좌표를 보관하며 연관 엔티티를 함께 조회하지 않는다.
+ * 사용: 방명록 작성({@code POST /api/v2/guestbooks})의 ROAD 요청에서 새 유형별 기록을 저장하고,
+ * 공통 내용과 함께 응답의 {@code guestbookId}, {@code locationAlias}, {@code latitude}, {@code longitude}를 구성한다.
+ */
 public interface RoadGuestbookRepository extends JpaRepository<RoadGuestbook, Long> {
 
     /**

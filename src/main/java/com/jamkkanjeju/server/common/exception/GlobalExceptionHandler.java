@@ -47,7 +47,7 @@
             return toResponse(CommonErrorCode.INVALID_REQUEST);
         }
 
-        /** 컨트롤러 호출 전 발생한 사진 업로드 용량 초과를 명세의 개별 오류로 변환한다. */
+        /** 컨트롤러 호출 전 발생한 업로드 용량 초과를 각 API 명세의 개별 오류로 변환한다. */
         @ExceptionHandler(MaxUploadSizeExceededException.class)
         public ResponseEntity<ErrorResponse> handleUploadSizeExceeded(
                 MaxUploadSizeExceededException exception, HttpServletRequest request) {
@@ -57,17 +57,23 @@
             if (isCooperativeRoleVerification(request)) {
                 return toResponse(CooperativeMissionErrorCode.IMAGE_SIZE_EXCEEDED);
             }
-            return handleException(exception);
+            return handleMultipartException(exception, request);
         }
 
-        /** 사진 저장의 잘못된 multipart 요청은 공통 요청 오류로, 다른 API는 기존 방식으로 처리한다. */
+        /** 사진·방명록 저장의 잘못된 multipart 요청은 공통 요청 오류로, 다른 API는 기존 방식으로 처리한다. */
         @ExceptionHandler(MultipartException.class)
         public ResponseEntity<ErrorResponse> handleMultipartException(
                 MultipartException exception, HttpServletRequest request) {
-            if (isPictureUpload(request) || isCooperativeRoleVerification(request)) {
+            if (isPictureUpload(request) || isCooperativeRoleVerification(request) || isGuestbookCreation(request)) {
                 return toResponse(CommonErrorCode.INVALID_REQUEST);
             }
             return handleException(exception);
+        }
+
+        /** 방명록의 전체 요청 용량·multipart 오류를 핸들러 선택 전에 경로로 식별한다. */
+        private boolean isGuestbookCreation(HttpServletRequest request) {
+            return "POST".equals(request.getMethod())
+                    && request.getRequestURI().equals(request.getContextPath() + "/api/v2/guestbooks");
         }
 
         /** multipart 파싱은 핸들러 선택 전 실패할 수 있으므로 사진 업로드 경로를 직접 확인한다. */

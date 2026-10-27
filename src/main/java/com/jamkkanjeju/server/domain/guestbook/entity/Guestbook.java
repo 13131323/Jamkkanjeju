@@ -74,4 +74,11 @@ public class Guestbook extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private GuestbookStatus status;
+
+    /** 업로드한 단일 파일 URL과 사용자 제목을 반영하며 오디오가 없으면 제목도 비운다. */
+    public void attachMedia(String imageUrl, String audioUrl, String audioTitle) {
+        this.contentImgUrl = imageUrl;
+        this.contentAudioUrl = audioUrl;
+        this.audioTitle = audioUrl == null ? null : audioTitle;
+    }
 }

@@ -4,10 +4,9 @@ spring:
 
   servlet:
     multipart:
-      # MB 접미사는 1024 기준으로 해석되므로 정확한 바이트 수를 지정한다.
-      max-file-size: 10000000B
-      # 파일 외 multipart 경계·헤더를 포함할 수 있도록 전체 요청은 여유를 둔다.
-      max-request-size: 11000000B
+      # 서블릿 기본 제한 대신 이미지·오디오 공통 검증에서 각각 10MB를 적용한다.
+      max-file-size: -1
+      max-request-size: -1
 
   datasource:
     url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
@@ -40,6 +39,9 @@ spring:
       mode: never
 
 app:
+  audio:
+    ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
+
   blob-storage:
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING:}
     container: ${AZURE_STORAGE_CONTAINER:}
