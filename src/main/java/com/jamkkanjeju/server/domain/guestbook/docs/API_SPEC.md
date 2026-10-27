@@ -333,3 +333,241 @@ Status Code : `409 Conflict`
   "message": "방문한 장소에만 방명록을 작성할 수 있습니다."
 }
 ```
+
+---
+
+# 방명록 조회 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 방명록 조회 |
+| HTTP 메서드 | `GET` |
+| 도메인 | `GUESTBOOK` |
+| 엔드포인트 | `/api/v2/guestbooks` |
+
+### API 설명
+
+작성자와 관계없이 활성 일반 방명록과 길바닥 방명록을 조회한다. `scope`로 조회 범위를 구분하지 않는다.
+
+일반 방명록은 `generalGuestbooks`, 길바닥 방명록은 `roadGuestbooks` 배열로 구분한다. 두 목록의 페이지와 크기를 따로 지정하며 기본값은 각각 첫 페이지·10개다. 각 배열은 저장 시각 내림차순, 같은 시각이면 방명록 ID 내림차순으로 정렬한다.
+
+일반 방명록 중 장소 연결이 없어진 기록은 조회에서 제외한다. 작성자가 없어진 방명록은 유지하고 작성자 정보만 `null`로 반환한다.
+
+현재 사용자가 방문한 장소는 `visitedLocations`로 별도 반환한다. 방명록의 페이지와 관계없이 본인의 방문 장소 전체를 반환하며 같은 장소를 중복해서 포함하지 않는다.
+
+조회 결과가 없거나 요청 페이지의 범위를 벗어나도 정상 응답한다. 해당 목록은 빈 배열, 해당 페이지의 `hasNext`는 `false`로 반환한다.
+
+---
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+
+---
+
+### 요청 Query
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `generalPage` | integer | 선택 | 일반 방명록 페이지 번호. 0 이상의 정수. 생략하면 0 |
+| `generalSize` | integer | 선택 | 일반 방명록 페이지 크기. 1 이상의 정수. 생략하면 10 |
+| `roadPage` | integer | 선택 | 길바닥 방명록 페이지 번호. 0 이상의 정수. 생략하면 0 |
+| `roadSize` | integer | 선택 | 길바닥 방명록 페이지 크기. 1 이상의 정수. 생략하면 10 |
+
+- 두 유형을 합쳐서 10개로 제한하지 않는다. 기본 요청에서는 일반 최대 10개·길바닥 최대 10개를 반환한다.
+- 한 유형의 페이지나 크기를 변경해도 다른 유형의 페이지 조건은 바뀌지 않는다.
+
+요청 예시:
+
+```http
+GET /api/v2/guestbooks?generalPage=0&generalSize=10&roadPage=1&roadSize=10
+Authorization: Bearer {accessToken}
+```
+
+---
+
+### 요청 Path
+
+없음
+
+---
+
+### 요청 Body
+
+없음
+
+---
+
+### 정상 응답 데이터
+
+Status Code : `200 OK`
+
+방문 장소와 두 유형의 방명록 페이지가 정상적으로 조회된 경우. 결과가 없어도 정상 응답한다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `visitedLocations` | object[] | 현재 사용자의 방문 장소 전체 목록. 최근 방문 시각 내림차순, 같은 시각이면 장소 ID 내림차순. 없으면 빈 배열 |
+| `visitedLocations[].id` | integer | 장소 ID |
+| `visitedLocations[].locationTitle` | string | 장소 이름 |
+| `generalGuestbooks` | object[] | 장소 연결이 있는 활성 일반 방명록의 요청 페이지. 없으면 빈 배열 |
+| `generalGuestbooks[].id` | integer | 공통 방명록 ID |
+| `generalGuestbooks[].userId` | integer \| null | 작성자 ID. 작성자가 없으면 null |
+| `generalGuestbooks[].characterImgUrl` | string \| null | 작성자의 온보딩 프로필 이미지 URL. 작성자나 온보딩 결과가 없으면 null |
+| `generalGuestbooks[].userNickname` | string \| null | 작성자 닉네임. 작성자나 닉네임이 없으면 null |
+| `generalGuestbooks[].location` | object | 연결된 장소 정보. 장소 연결이 없는 일반 방명록은 목록에서 제외 |
+| `generalGuestbooks[].location.id` | integer | 장소 ID |
+| `generalGuestbooks[].location.locationTitle` | string | 장소 이름 |
+| `generalGuestbooks[].location.locationAddress` | string | 장소 주소 |
+| `generalGuestbooks[].location.locationCategory` | string | 장소 분류 |
+| `generalGuestbooks[].location.latitude` | number | 장소 위도 |
+| `generalGuestbooks[].location.longitude` | number | 장소 경도 |
+| `generalGuestbooks[].visitedAt` | string | 기록한 방문 날짜. `yyyy-MM-dd` 형식 |
+| `generalGuestbooks[].contentImageUrl` | string \| null | 저장된 단일 이미지 URL. 없으면 null |
+| `generalGuestbooks[].contentWriting` | string \| null | 저장된 글 내용. 없으면 null |
+| `generalGuestbooks[].contentAudioUrl` | string \| null | 저장된 단일 오디오 URL. 없으면 null |
+| `generalGuestbooks[].audioTitle` | string \| null | 사용자가 입력해 저장한 오디오 제목. 없으면 null |
+| `generalGuestbooks[].contentWeather` | string \| null | 저장된 날씨. 없으면 null |
+| `generalGuestbooks[].contentTemperatureCelsius` | number \| null | 저장된 섭씨 기온. 소수 첫째 자리까지. 없으면 null |
+| `generalGuestbooks[].contentColorCode` | string \| null | 저장된 색상 코드. 없으면 null |
+| `generalGuestbooks[].isLiked` | boolean | 현재 사용자의 좋아요가 있으면 true, 없으면 false |
+| `generalGuestbooks[].likeCount` | integer | 작성자와 관계없이 해당 방명록에 존재하는 전체 좋아요 수. 없으면 0 |
+| `generalGuestbooks[].savedAt` | string | 서버 저장 시각. KST 기준 offset 없는 ISO 8601 형식 |
+| `generalGuestbooks[].mission` | object \| null | 작성 시 연결한 미션 정보. 연결된 미션이 없으면 null |
+| `generalGuestbooks[].mission.id` | integer | 공통 미션 ID |
+| `generalGuestbooks[].mission.missionType` | string | `CULTURE \| COOPERATIVE \| TREASURE` |
+| `generalGuestbooks[].mission.missionTitle` | string | 미션 제목 |
+| `roadGuestbooks` | object[] | 활성 길바닥 방명록의 요청 페이지. 없으면 빈 배열 |
+| `roadGuestbooks[].id` | integer | 공통 방명록 ID |
+| `roadGuestbooks[].userId` | integer \| null | 작성자 ID. 작성자가 없으면 null |
+| `roadGuestbooks[].characterImgUrl` | string \| null | 작성자의 온보딩 프로필 이미지 URL. 작성자나 온보딩 결과가 없으면 null |
+| `roadGuestbooks[].userNickname` | string \| null | 작성자 닉네임. 작성자나 닉네임이 없으면 null |
+| `roadGuestbooks[].locationAlias` | string | 장소 별칭 |
+| `roadGuestbooks[].latitude` | number | 길바닥 방명록 위도 |
+| `roadGuestbooks[].longitude` | number | 길바닥 방명록 경도 |
+| `roadGuestbooks[].visitedAt` | string | 기록한 방문 날짜. `yyyy-MM-dd` 형식 |
+| `roadGuestbooks[].contentImageUrl` | string \| null | 저장된 단일 이미지 URL. 없으면 null |
+| `roadGuestbooks[].contentWriting` | string \| null | 저장된 글 내용. 없으면 null |
+| `roadGuestbooks[].contentAudioUrl` | string \| null | 저장된 단일 오디오 URL. 없으면 null |
+| `roadGuestbooks[].audioTitle` | string \| null | 사용자가 입력해 저장한 오디오 제목. 없으면 null |
+| `roadGuestbooks[].contentWeather` | string \| null | 저장된 날씨. 없으면 null |
+| `roadGuestbooks[].contentTemperatureCelsius` | number \| null | 저장된 섭씨 기온. 소수 첫째 자리까지. 없으면 null |
+| `roadGuestbooks[].contentColorCode` | string \| null | 저장된 색상 코드. 없으면 null |
+| `roadGuestbooks[].isLiked` | boolean | 현재 사용자의 좋아요가 있으면 true, 없으면 false |
+| `roadGuestbooks[].likeCount` | integer | 작성자와 관계없이 해당 방명록에 존재하는 전체 좋아요 수. 없으면 0 |
+| `roadGuestbooks[].savedAt` | string | 서버 저장 시각. KST 기준 offset 없는 ISO 8601 형식 |
+| `generalGuestbooksPage` | object | 일반 방명록 페이지 정보 |
+| `generalGuestbooksPage.page` | integer | 요청한 일반 방명록 페이지 번호 |
+| `generalGuestbooksPage.size` | integer | 요청한 일반 방명록 페이지 크기. 기본 10 |
+| `generalGuestbooksPage.hasNext` | boolean | 다음 일반 방명록 페이지가 있으면 true |
+| `roadGuestbooksPage` | object | 길바닥 방명록 페이지 정보 |
+| `roadGuestbooksPage.page` | integer | 요청한 길바닥 방명록 페이지 번호 |
+| `roadGuestbooksPage.size` | integer | 요청한 길바닥 방명록 페이지 크기. 기본 10 |
+| `roadGuestbooksPage.hasNext` | boolean | 다음 길바닥 방명록 페이지가 있으면 true |
+
+```json
+{
+  "visitedLocations": [
+    {
+      "id": 39,
+      "locationTitle": "성산일출봉"
+    }
+  ],
+  "generalGuestbooks": [
+    {
+      "id": 101,
+      "userId": 1,
+      "characterImgUrl": "https://example.com/profiles/traveler.png",
+      "userNickname": "여행자",
+      "location": {
+        "id": 39,
+        "locationTitle": "성산일출봉",
+        "locationAddress": "제주특별자치도 서귀포시 성산읍",
+        "locationCategory": "관광지",
+        "latitude": 33.4582,
+        "longitude": 126.9331
+      },
+      "visitedAt": "2026-10-27",
+      "contentImageUrl": "https://example.com/guestbooks/101.jpg",
+      "contentWriting": "산책하기 좋았어요.",
+      "contentAudioUrl": "https://example.com/guestbooks/101.m4a",
+      "audioTitle": "제주의 새소리",
+      "contentWeather": "맑음",
+      "contentTemperatureCelsius": 24.5,
+      "contentColorCode": "#84C7AE",
+      "isLiked": true,
+      "likeCount": 3,
+      "savedAt": "2026-10-27T15:30:00",
+      "mission": {
+        "id": 31,
+        "missionType": "TREASURE",
+        "missionTitle": "오구포구 보물찾기"
+      }
+    }
+  ],
+  "roadGuestbooks": [
+    {
+      "id": 102,
+      "userId": null,
+      "characterImgUrl": null,
+      "userNickname": null,
+      "locationAlias": "성산 바다 앞",
+      "latitude": 33.4582,
+      "longitude": 126.9331,
+      "visitedAt": "2026-10-27",
+      "contentImageUrl": null,
+      "contentWriting": "바다가 잘 보이는 길이에요.",
+      "contentAudioUrl": null,
+      "audioTitle": null,
+      "contentWeather": "흐림",
+      "contentTemperatureCelsius": 21.3,
+      "contentColorCode": "#7AA7D9",
+      "isLiked": false,
+      "likeCount": 0,
+      "savedAt": "2026-10-27T15:10:00"
+    }
+  ],
+  "generalGuestbooksPage": {
+    "page": 0,
+    "size": 10,
+    "hasNext": false
+  },
+  "roadGuestbooksPage": {
+    "page": 1,
+    "size": 10,
+    "hasNext": false
+  }
+}
+```
+
+- `visitedLocations`는 방명록 작성자와 무관하게 현재 사용자 기준이다. 현재 사용자의 좋아요도 전체 좋아요 수에 포함한다.
+- 두 방명록 목록과 두 페이지 정보는 항상 포함하며 전체 개수·전체 페이지 수는 반환하지 않는다.
+- 연결 미션은 저장된 연결을 기준으로 표시한다. 조회 시점에 미션이 비활성 상태이거나 현재 사용자가 해당 미션을 완료하지 않았어도 연결 정보를 숨기지 않는다.
+- 파일 URL은 배열로 감싸지 않고 저장된 문자열을 반환한다. nullable 필드의 키는 생략하지 않는다.
+
+방문 장소와 두 유형의 방명록이 모두 없는 기본 요청의 응답:
+
+```json
+{
+  "visitedLocations": [],
+  "generalGuestbooks": [],
+  "roadGuestbooks": [],
+  "generalGuestbooksPage": {
+    "page": 0,
+    "size": 10,
+    "hasNext": false
+  },
+  "roadGuestbooksPage": {
+    "page": 0,
+    "size": 10,
+    "hasNext": false
+  }
+}
+```
+
+---
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다.
