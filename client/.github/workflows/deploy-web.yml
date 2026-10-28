@@ -1,0 +1,163 @@
+name: Deploy Web
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.dockerignore'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-web-production
+  # 배포는 취소하지 않고 줄을 세운다. cancel-in-progress는 러너 프로세스만 죽일 뿐
+  # 이미 ARM에 접수된 컨테이너 설정 변경·재시작은 Azure 쪽에서 계속 진행된다.
+  # 중간에 끊긴 상태에서 다음 실행이 같은 App Service에 또 쓰기를 걸면 재시작이
+  # 겹치고, 그때 Microsoft.Web이 429 Too Many Requests를 돌려준다.
+  cancel-in-progress: false
+
+env:
+  ACR_LOGIN_SERVER: jankkanjejuacr.azurecr.io
+  IMAGE_NAME: jamkkan-jeju-web
+  RESOURCE_GROUP: jankkan-jeju-rg
+  WEBAPP_NAME: jankkan-jeju-web
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate build configuration
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+          NEXT_PUBLIC_KAKAO_MAP_KEY: ${{ vars.NEXT_PUBLIC_KAKAO_MAP_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_API_BASE_URL" ]; then
+            echo "Repository variable NEXT_PUBLIC_API_BASE_URL is required."
+            exit 1
+          fi
+          if [ -z "$NEXT_PUBLIC_KAKAO_MAP_KEY" ]; then
+            echo "Repository variable NEXT_PUBLIC_KAKAO_MAP_KEY is required."
+            echo "web/src/shared/config/env.ts validates it at module load, so the build fails while prerendering /map without it."
+            exit 1
+          fi
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./web/Dockerfile
+          push: true
+          platforms: linux/amd64
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            NEXT_PUBLIC_KAKAO_MAP_KEY=${{ vars.NEXT_PUBLIC_KAKAO_MAP_KEY }}
+            NEXT_PUBLIC_JUDGE_MODE_CODE=${{ vars.NEXT_PUBLIC_JUDGE_MODE_CODE }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy image to Azure App Service
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          IMAGE_REF: ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # 실패 분석용. ubuntu-latest에 미리 깔린 az는 러너 이미지가 갱신될 때마다
+          # 같이 올라가므로, 이 레포가 그대로여도 az/Python/SDK 조합이 바뀔 수 있다.
+          az version --output json || true
+
+          # Microsoft.Web은 구독 단위로 쓰기 요청을 스로틀링한다. 429가 오면 az가
+          # LRO 폴링 중 JSON이 아닌 본문을 만나 model_base.py에서 traceback을 뱉고
+          # 최종적으로 returned an invalid status "Too Many Requests"로 죽는다.
+          # 스로틀링은 시간이 지나면 풀리는 상태이므로 지수 백오프로 다시 시도한다.
+          retry_arm() {
+            local attempt=1 max=5 delay=15
+            # 인자 전체를 로그에 찍지 않는다. container set 인자에는 ACR 비밀번호가
+            # 섞여 있어서, GitHub의 시크릿 마스킹에만 기대면 값이 그대로 남을 수 있다.
+            local label="$1 $2 $3 $4"
+            until "$@"; do
+              if [ "$attempt" -ge "$max" ]; then
+                echo "ARM 호출이 ${max}회 모두 실패했습니다: ${label}" >&2
+                return 1
+              fi
+              echo "ARM 호출 실패(시도 ${attempt}/${max}). ${delay}초 후 재시도합니다: ${label}" >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          # WEBSITES_PORT는 사이트에 남는 영구 설정이라 값이 바뀌지 않는다.
+          # 그런데도 매 배포마다 다시 쓰면 ARM 쓰기 한 번과 앱 재시작 한 번이
+          # 값과 무관하게 그대로 발생한다. 읽기는 쓰기보다 스로틀 한도가 훨씬
+          # 넉넉하므로 먼저 읽고, 실제로 다를 때만 쓴다.
+          current_port="$(retry_arm az webapp config appsettings list \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEBAPP_NAME" \
+            --query "[?name=='WEBSITES_PORT'].value | [0]" \
+            --output tsv)"
+
+          if [ "$current_port" != "3000" ]; then
+            echo "WEBSITES_PORT=${current_port:-<unset>} → 3000 으로 설정합니다."
+            retry_arm az webapp config appsettings set \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "$WEBAPP_NAME" \
+              --settings WEBSITES_PORT=3000 \
+              --output none
+          fi
+
+          # 이미지 태그가 커밋 SHA라 배포마다 참조가 실제로 바뀐다. 따라서 이
+          # 설정 변경만으로 App Service가 새 이미지를 받아 컨테이너를 다시 띄운다.
+          # 뒤에 az webapp restart를 또 붙이면 이미 재시작 중인 사이트를 한 번 더
+          # 재시작시키는 것이라 ARM 쓰기만 늘고 기동은 오히려 늦어진다.
+          # (:latest처럼 태그가 고정된 경우에만 명시적 재시작이 필요하다.)
+          retry_arm az webapp config container set \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WEBAPP_NAME" \
+            --container-image-name "$IMAGE_REF" \
+            --container-registry-url "https://$ACR_LOGIN_SERVER" \
+            --container-registry-user "$ACR_USERNAME" \
+            --container-registry-password "$ACR_PASSWORD" \
+            --output none
+
+      - name: Verify deployment
+        run: |
+          curl --fail --silent --show-error \
+            --retry 12 \
+            --retry-delay 10 \
+            --retry-all-errors \
+            "https://${{ env.WEBAPP_NAME }}.azurewebsites.net/" > /dev/null

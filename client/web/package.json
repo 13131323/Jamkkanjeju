@@ -1,0 +1,51 @@
+{
+  "name": "@tamnalog/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "generate": "orval",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
+  },
+  "dependencies": {
+    "@packages/shared": "workspace:*",
+    "@sentry/nextjs": "^10.58.0",
+    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/react-query-devtools": "^5.101.0",
+    "axios": "^1.17.0",
+    "html-to-image": "^1.11.13",
+    "immer": "^11.1.8",
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zod": "^3.25.51",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@chromatic-com/storybook": "^5.2.1",
+    "@storybook/addon-a11y": "^10.4.4",
+    "@storybook/addon-docs": "^10.4.4",
+    "@storybook/addon-vitest": "^10.4.4",
+    "@storybook/nextjs-vite": "^10.4.4",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react-dom": "^19",
+    "@vitest/browser-playwright": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "eslint-plugin-storybook": "^10.4.4",
+    "playwright": "^1.60.0",
+    "storybook": "^10.4.4",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  }
+}

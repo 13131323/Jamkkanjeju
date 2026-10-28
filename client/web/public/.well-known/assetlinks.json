@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.tamnalog.app",
+      "sha256_cert_fingerprints": ["D0:F7:8F:18:D8:53:48:71:3D:64:C2:2B:02:90:B6:EA:DA:AD:84:92:C0:28:94:9B:8B:F1:78:FB:C0:93:26:4E"]
+    }
+  }
+]

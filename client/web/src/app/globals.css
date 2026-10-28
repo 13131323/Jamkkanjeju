@@ -1,0 +1,158 @@
+@import 'tailwindcss';
+
+/* 안전영역 크기. Android WebView는 RN 뷰 계층의 자식이라 시스템 바를 몰라
+   env(safe-area-inset-*)가 항상 0이다. 그래서 네이티브가 값을 덮어쓴다
+   (app/src/components/HomeWebView/safeAreaScript.ts).
+
+   --safe-area-top    : 앱 WebView에서 실제 상태바 높이가 들어온다.
+                        앱 루트 레이아웃은 상단을 건드리지 않으므로 web이 직접 처리해야 한다.
+   --safe-area-bottom : 앱 WebView에서는 항상 0이다. 하단 inset은 앱 루트 레이아웃
+                        (SafeAreaPadding)이 네이티브에서 먹여 WebView 뷰포트가 이미
+                        네비게이션바 위에서 끝난다. 여기서 또 띄우면 이중 여백이 된다.
+
+   브라우저로 직접 열었을 때는 아래 env() 기본값이 쓰인다(iOS 홈 인디케이터 등). */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@theme {
+  /* 기본 breakpoint 전부 제거 */
+  --breakpoint-sm: initial;
+  --breakpoint-md: initial;
+  --breakpoint-lg: initial;
+  --breakpoint-xl: initial;
+  --breakpoint-2xl: initial;
+
+  /* tablet breakpoint만 추가 (현재는 사용 안 함) */
+  --breakpoint-tablet: 768px;
+
+  /* ============================================
+   * Design Tokens (Penpot "탐라로그 V2" > Design System — Color / Typography / Spacing & Radius, 2026-07 기준)
+   * ============================================ */
+
+  /* Color — Primary (● base: 800) */
+  --color-primary-50: #ecf9fd;
+  --color-primary-100: #c5edfa;
+  --color-primary-200: #9ee0f7;
+  --color-primary-300: #75d4f4;
+  --color-primary-400: #4dc9f2;
+  --color-primary-500: #24bdf0;
+  --color-primary-600: #0da8dc;
+  --color-primary-700: #0a8ab5;
+  --color-primary-800: #076c8d;
+  --color-primary-900: #063e51;
+  --color-primary-950: #021217;
+  --color-primary: var(--color-primary-800);
+
+  /* Color — Tertiary (● base: 200) */
+  --color-tertiary-50: #f1f9e8;
+  --color-tertiary-100: #e2f2d2;
+  --color-tertiary-200: #cbe7b1;
+  --color-tertiary-300: #b0da8b;
+  --color-tertiary-400: #94cc65;
+  --color-tertiary-500: #82c34a;
+  --color-tertiary-600: #77be36;
+  --color-tertiary-700: #5d992a;
+  --color-tertiary-800: #45741f;
+  --color-tertiary-900: #2d4f14;
+  --color-tertiary-950: #152a09;
+  --color-tertiary: var(--color-tertiary-200);
+
+  /* Color — Warm Neutral (● base: 700) */
+  --color-warm-neutral-50: #f6f5f4;
+  --color-warm-neutral-100: #e2deda;
+  --color-warm-neutral-200: #cfc8c0;
+  --color-warm-neutral-300: #bbb2a7;
+  --color-warm-neutral-400: #a89b8d;
+  --color-warm-neutral-500: #958573;
+  --color-warm-neutral-600: #7c6e5e;
+  --color-warm-neutral-700: #63584b;
+  --color-warm-neutral-800: #463f36;
+  --color-warm-neutral-900: #2a2621;
+  --color-warm-neutral-950: #0e0d0b;
+  --color-warm-neutral: var(--color-warm-neutral-700);
+
+  /* Color — Cool Neutral (base 없음, white 포함) */
+  --color-cool-neutral-50: #f9f9f9;
+  --color-cool-neutral-100: #efefef;
+  --color-cool-neutral-200: #dddddd;
+  --color-cool-neutral-300: #c6c6c6;
+  --color-cool-neutral-400: #aaaaaa;
+  --color-cool-neutral-500: #888888;
+  --color-cool-neutral-600: #6a6a6a;
+  --color-cool-neutral-700: #4e4e4e;
+  --color-cool-neutral-800: #333333;
+  --color-cool-neutral-900: #222222;
+  --color-cool-neutral-950: #111111;
+  --color-cool-neutral-white: #ffffff;
+
+  /* Color — Sunny Yellow (base 없음) */
+  --color-sunny-yellow-50: #fef9e1;
+  --color-sunny-yellow-100: #fdf2bb;
+  --color-sunny-yellow-200: #fbe884;
+  --color-sunny-yellow-300: #f8dc4c;
+  --color-sunny-yellow-400: #f2d21e;
+  --color-sunny-yellow-500: #d5b615;
+  --color-sunny-yellow-600: #b19210;
+  --color-sunny-yellow-700: #8b6f0f;
+  --color-sunny-yellow-800: #685210;
+  --color-sunny-yellow-900: #4a390f;
+  --color-sunny-yellow-950: #2c2109;
+  --color-sunny-yellow-975: #231903;
+
+  /* Typography — font family (Pretendard Variable, next/font/local로 로드 → src/shared/fonts/pretendard.ts) */
+  --font-sans: var(--font-pretendard), -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+
+  /* Typography — type scale (font-size + line-height). Weight는 font-normal(400)/font-medium(500)/font-semibold(600)/font-bold(700) 유틸을 조합해서 사용 */
+  --text-display-lg: 36px;
+  --text-display-lg--line-height: 40px;
+  --text-display-md: 30px;
+  --text-display-md--line-height: 36px;
+
+  --text-heading-h1: 32px;
+  --text-heading-h1--line-height: 48px;
+  --text-heading-h2: 24px;
+  --text-heading-h2--line-height: 36px;
+  --text-heading-h3: 20px;
+  --text-heading-h3--line-height: 30px;
+  --text-heading-h4: 18px;
+  --text-heading-h4--line-height: 26px;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 22px;
+  --text-body-sm: 12px;
+  --text-body-sm--line-height: 18px;
+
+  --text-label-lg: 16px;
+  --text-label-lg--line-height: 24px;
+  --text-label-md: 14px;
+  --text-label-md--line-height: 20px;
+  --text-label-sm: 12px;
+  --text-label-sm--line-height: 16px;
+
+  /* Spacing — 기본 배수(--spacing)를 rem 대신 px로 고정. Penpot spacing/N 값은 아래처럼 기본 유틸로 그대로 매핑됨
+     spacing/2→p-0.5, /4→p-1, /8→p-2, /10→p-2.5, /12→p-3, /16→p-4, /24→p-6, /30→p-7.5, /32→p-8 */
+  --spacing: 4px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* Animation — 홈 배경 바다 Ken Burns (03홈무빙정리.md) */
+  --animate-ken-burns: ken-burns 24s ease-in-out infinite alternate;
+}
+
+@keyframes ken-burns {
+  from {
+    transform: scale(1.1) translate(0, 0);
+  }
+  to {
+    transform: scale(1.2) translate(-2.5%, -1.5%);
+  }
+}
