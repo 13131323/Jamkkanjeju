@@ -1,0 +1,25 @@
+{
+  "name": "@tamnalog/client",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @tamnalog/web dev",
+    "dev:app": "node app/scripts/run-android-device.js",
+    "build:web": "pnpm --filter @tamnalog/web build",
+    "build:app": "pnpm --filter @tamnalog/app build:android",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "generate": "pnpm --filter @tamnalog/app generate && pnpm --filter @tamnalog/web generate",
+    "verify:orval": "node scripts/verify-orval-layout.mjs",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "dotenv": "^16.6.1",
+    "orval": "^7.9.0",
+    "prettier": "^3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "typescript": "~5.9.2"
+  },
+  "packageManager": "pnpm@10.11.0"
+}

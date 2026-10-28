@@ -1,33 +1,19 @@
-target/
-.env
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
-
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
-
-### VS Code ###
+# IDE와 운영체제 로컬 파일
+.idea/
 .vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 실제 환경변수는 제외하고 예제 파일만 공유한다.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# 설치된 의존성·빌드 결과·로그
+node_modules/
+target/
+dist/
+build/
+*.log

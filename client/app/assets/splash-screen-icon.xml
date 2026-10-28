@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ 네이티브 스플래시(windowSplashScreenAnimatedIcon)에 쓰이는 아이콘.
+
+  왜 XML로 한 겹 감싸는가:
+  expo-splash-screen 플러그인의 android.drawable.icon은 지정한 파일을 가공 없이
+  res/drawable/splashscreen_logo.xml 로 복사한다. 즉 XML 드로어블만 넣을 수 있고,
+  PNG를 그대로 주면 확장자만 .xml 인 PNG가 되어 AAPT 파싱에서 빌드가 죽는다.
+
+  그래서 이미 적응형 아이콘용으로 생성되는 @mipmap/ic_launcher_foreground
+  (app.json의 android.adaptiveIcon.foregroundImage에서 만들어짐)를 참조한다.
+  아이콘 에셋을 바꾸면 이 스플래시 아이콘도 자동으로 따라간다 — 파일을 두 벌 두지 않는다.
+
+  전체화면 스플래시(assets/splash.png)와는 별개다. 그쪽은 app/_layout.tsx가
+  가상 스플래시로 직접 렌더하므로 이 설정과 서로 영향을 주지 않는다.
+-->
+<bitmap
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@mipmap/ic_launcher_foreground"
+    android:gravity="center" />
