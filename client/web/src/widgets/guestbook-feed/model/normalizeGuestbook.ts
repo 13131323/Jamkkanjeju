@@ -14,11 +14,14 @@ export type NormalizedGuestbook = {
   kind: GuestbookKind;
   displayLocationName: string; // GENERAL: location.locationTitle, ROAD: locationAlias
   locationTitle: string | null; // GENERAL 전용 위치 필터용 원본 값 (ROAD는 null)
+  characterImgUrl: string | null;
+  userNickname: string | null;
   visitedAt: string;
   savedAt: string;
   contentImageUrls: string[] | null;
   contentWriting: string | null;
   contentAudioUrls: string[] | null;
+  audioTitle: string | null;
   contentWeather: string | null;
   contentColorCode: string | null;
   mission: NormalizedGuestbookMission | null;
@@ -34,11 +37,14 @@ export function normalizeGeneralGuestbook(record: GeneratedApi.GeneralGuestbookR
     kind: 'GENERAL',
     displayLocationName: record.location.locationTitle,
     locationTitle: record.location.locationTitle,
+    characterImgUrl: record.characterImgUrl ?? null,
+    userNickname: record.userNickname ?? null,
     visitedAt: record.visitedAt,
     savedAt: record.savedAt,
     contentImageUrls: record.contentImageUrls ?? null,
     contentWriting: record.contentWriting ?? null,
     contentAudioUrls: record.contentAudioUrls ?? null,
+    audioTitle: record.audioTitle ?? null,
     contentWeather: record.contentWeather ?? null,
     contentColorCode: record.contentColorCode ?? null,
     mission: record.mission ?? null,
@@ -54,11 +60,14 @@ export function normalizeRoadGuestbook(record: GeneratedApi.RoadGuestbookRespons
     kind: 'ROAD',
     displayLocationName: record.locationAlias,
     locationTitle: null,
+    characterImgUrl: record.characterImgUrl ?? null,
+    userNickname: record.userNickname ?? null,
     visitedAt: record.visitedAt,
     savedAt: record.savedAt,
     contentImageUrls: record.contentImageUrls ?? null,
     contentWriting: record.contentWriting ?? null,
     contentAudioUrls: record.contentAudioUrls ?? null,
+    audioTitle: record.audioTitle ?? null,
     contentWeather: record.contentWeather ?? null,
     contentColorCode: record.contentColorCode ?? null,
     mission: null,

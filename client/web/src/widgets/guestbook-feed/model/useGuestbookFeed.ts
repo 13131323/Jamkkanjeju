@@ -7,27 +7,39 @@ import { assignCardTypes } from './assignCardTypes';
 import { buildCardData } from './buildCardData';
 import { getCardCandidates } from './cardCandidates';
 import { applyCardTypeFilter, applyLocationFilter, getLocationFilterOptions, type FeedFilterValue, type LocationFilterValue } from './filters';
+import { resolveSeededLocationFilter } from './locationFilterSeed';
 import { normalizeGeneralGuestbook, normalizeRoadGuestbook, type NormalizedGuestbook } from './normalizeGuestbook';
-import { sortGuestbooks, type SortOption } from './sort';
+import { filterGuestbooksBySortOption, sortGuestbooks, type SortOption } from './sort';
 import type { CardType, GuestbookCardData } from './types';
 
-export function useGuestbookFeed() {
-  const [onlyMine, setOnlyMine] = useState(false);
-  const { data, isLoading, isError } = useGuestbooks(onlyMine ? ('MINE' satisfies GeneratedApi.GuestbookScope) : undefined);
-
-  const [locationFilter, setLocationFilter] = useState<LocationFilterValue>({ type: 'all' });
+/** seedLocationTitle: 지도 상세의 "더보기"가 ?location=으로 넘긴 장소명 */
+export function useGuestbookFeed(seedLocationTitle: string | null = null) {
+  const [pickedLocationFilter, setPickedLocationFilter] = useState<LocationFilterValue | null>(null);
   const [cardTypeFilter, setCardTypeFilter] = useState<FeedFilterValue>('all');
   const [sortOption, setSortOption] = useState<SortOption>('latest');
+
+  // '내가 남긴 흔적'은 서버 scope(MINE)로 조회한다 — '마음에 담은 흔적'(좋아요)은 그런 scope가 없어 client에서 거른다(sort.ts 참고).
+  const { data, isLoading, isError } = useGuestbooks(sortOption === 'mine' ? ('MINE' satisfies GeneratedApi.GuestbookScope) : undefined);
 
   const allRecords = useMemo<NormalizedGuestbook[]>(() => {
     if (!data) return [];
     return [...data.generalGuestbooks.map(normalizeGeneralGuestbook), ...data.roadGuestbooks.map(normalizeRoadGuestbook)];
   }, [data]);
 
-  const locationOptions = useMemo(() => getLocationFilterOptions(allRecords), [allRecords]);
+  const locationOptions = useMemo(() => getLocationFilterOptions(data?.visitedLocations ?? []), [data]);
+
+  // 사용자가 칩을 누르기 전까지는 쿼리로 받은 시드를 쓴다. 칩을 한 번이라도 누르면 그쪽이 이긴다 —
+  // 시드를 state 초기값으로만 두면 목록이 늦게 도착했을 때 폴백 판단을 할 수 없다.
+  const locationFilter = useMemo(
+    () => pickedLocationFilter ?? resolveSeededLocationFilter({ seedTitle: seedLocationTitle, locationOptions, isLoading }),
+    [pickedLocationFilter, seedLocationTitle, locationOptions, isLoading],
+  );
 
   // 정렬은 카드 배분보다 먼저 확정되어야 한다 — 배분 알고리즘이 순서 의존적이라서 (02.md 9장)
-  const filteredAndSorted = useMemo(() => sortGuestbooks(applyLocationFilter(allRecords, locationFilter), sortOption), [allRecords, locationFilter, sortOption]);
+  const filteredAndSorted = useMemo(
+    () => sortGuestbooks(filterGuestbooksBySortOption(applyLocationFilter(allRecords, locationFilter), sortOption), sortOption),
+    [allRecords, locationFilter, sortOption],
+  );
 
   const assignedTypes = useMemo(() => assignCardTypes(filteredAndSorted, getCardCandidates), [filteredAndSorted]);
 
@@ -49,12 +61,10 @@ export function useGuestbookFeed() {
     orderedGuestbooks: visibleRecords,
     locationOptions,
     locationFilter,
-    setLocationFilter,
+    setLocationFilter: setPickedLocationFilter,
     cardTypeFilter,
     setCardTypeFilter,
     sortOption,
     setSortOption,
-    onlyMine,
-    setOnlyMine,
   };
 }

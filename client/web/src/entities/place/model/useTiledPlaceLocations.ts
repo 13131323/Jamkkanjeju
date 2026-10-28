@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react';
 import { keepPreviousData, useQueries } from '@tanstack/react-query';
-import type { GeneratedApi } from '@packages/shared';
 import { boundsContains, centerOf, surroundingTileIds, tileBoundsOf, tileCenterOf, type Bounds } from '@shared/config/geo';
 import { buildMapContentsParams } from '@shared/lib/buildMapContentsParams';
-import { getGetMapContentsApiV1MapContentsGetQueryKey, getMapContentsApiV1MapContentsGet } from '@/services/api/map/map';
+import { getMapContents, getMapContentsQueryKey, type MapContentsLocation } from '@shared/api/mapContents';
+import { useCurrentCoords } from '@entities/location';
 import { toPlaceLocation, type PlaceLocation } from './types';
 
 // isClustered=false(개별 장소 상세) 조회를 뷰포트가 아니라 고정 타일(placeTileGrid.ts) 단위로 캐싱한다.
@@ -15,13 +15,14 @@ import { toPlaceLocation, type PlaceLocation } from './types';
 // 배열 기반이라 useQuery를 반복 호출하는 것보다 Rules of Hooks에 안전하기 때문이다.
 export function useTiledPlaceLocations(bounds: Bounds | null, enabled: boolean): { locations: PlaceLocation[]; isLoading: boolean } {
   const tiles = bounds ? surroundingTileIds(centerOf(bounds)) : [];
+  const userCoords = useCurrentCoords();
 
   const results = useQueries({
     queries: tiles.map((tile) => {
-      const params = buildMapContentsParams(tileBoundsOf(tile), tileCenterOf(tile), false);
+      const params = buildMapContentsParams(tileBoundsOf(tile), userCoords ?? tileCenterOf(tile), false);
       return {
-        queryKey: getGetMapContentsApiV1MapContentsGetQueryKey(params),
-        queryFn: ({ signal }: { signal: AbortSignal }) => getMapContentsApiV1MapContentsGet(params, undefined, signal),
+        queryKey: getMapContentsQueryKey(params),
+        queryFn: ({ signal }: { signal: AbortSignal }) => getMapContents(params, signal),
         enabled,
         throwOnError: false,
         placeholderData: keepPreviousData,
@@ -34,7 +35,7 @@ export function useTiledPlaceLocations(bounds: Bounds | null, enabled: boolean):
     // id 기준으로 한 번만 남긴다(경계를 겹치지 않게 나누는 것보다 훨씬 단순하고 확실하다).
     const merged = new Map<number, PlaceLocation>();
     for (const result of results) {
-      const data = result.data as { locations: GeneratedApi.MapLocationResponse[] } | undefined;
+      const data = result.data as { locations: MapContentsLocation[] } | undefined;
       if (!data) continue;
       for (const raw of data.locations) {
         const location = toPlaceLocation(raw);

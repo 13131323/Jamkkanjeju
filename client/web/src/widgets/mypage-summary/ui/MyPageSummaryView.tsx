@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import type { GeneratedApi } from '@packages/shared';
-import { useMyPage, useTravelEndingElements } from '@entities/user';
+import { resolveArCharacterColorFamily, type ArCharacterColorFamily } from '@entities/ar-character';
+import { useMyPage } from '@entities/user';
 import { useStepCount } from '@features/app-bridge';
 import charactorRounded from '@shared/lib/images/mypage/charactor-rounded01.png';
+import aiPostMainImage from '@shared/lib/images/ai-post-main-image.png';
 import { resumeMission, useMissionProgress, type MissionProgressCardData } from '../model/useMissionProgress';
+import { MyPageSkeleton } from './MyPageSkeleton';
 
 const POSTCARD_COPY = {
   title: '엽서로 이번 여행을\n완성해보세요',
@@ -90,27 +93,24 @@ function StatsRow({ summary }: { summary: GeneratedApi.SummaryResponse }) {
 function PostcardCtaCard() {
   const router = useRouter();
   const { title, description, ctaLabel } = POSTCARD_COPY;
-  const { data } = useTravelEndingElements();
-  // 방문 장소·완료 미션이 각각 최소 1개는 있어야 엽서를 만들 수 있다(요소를 고르는 화면의 실제 제약과 맞춘 값).
-  const hasElements = (data?.visitedLocationCount ?? 0) > 0 && (data?.completedMissionCount ?? 0) > 0;
 
   return (
     <div className="bg-cool-neutral-white flex flex-col gap-5 rounded-2xl p-5 shadow-[4px_4px_14px_rgba(0,0,0,0.12)]">
-      <div className="flex items-start justify-between gap-3">
+      <div className="relative flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1.5">
           <p className="text-heading-h4 text-warm-neutral-900 font-bold whitespace-pre-line">{title}</p>
-          <p className="text-body-sm text-warm-neutral-600">{description}</p>
+          <p className="text-body-sm text-warm-neutral-800">{description}</p>
         </div>
-        <div className="relative h-16 w-20 shrink-0" aria-hidden="true">
-          <span className="bg-cool-neutral-100 border-cool-neutral-200 absolute top-1 right-0 h-14 w-12 rotate-6 rounded-md border" />
-          <span className="bg-cool-neutral-50 border-cool-neutral-200 absolute top-0 left-1 h-14 w-12 -rotate-3 rounded-md border" />
+        {/* absolute라 이 줄의 높이엔 영향을 안 주고, 그만큼 아래 버튼 쪽으로 자연스럽게 걸쳐 내려온다.
+            버튼에 z-10을 줘서 겹치는 부분은 버튼이 위에 그려지도록(이미지가 버튼 뒤로 살짝 가려짐) 한다. */}
+        <div className="absolute top-0 right-0 h-28 w-32" aria-hidden="true">
+          <Image src={aiPostMainImage} alt="" fill className="object-contain" />
         </div>
       </div>
       <button
         type="button"
-        disabled={!hasElements}
         onClick={() => router.push('/mypage/travel-ending')}
-        className="bg-cool-neutral-900 text-label-lg text-cool-neutral-white w-full rounded-full py-3.5 font-bold disabled:opacity-40"
+        className="bg-cool-neutral-900 text-label-lg text-cool-neutral-white relative z-10 w-full rounded-full py-3.5 font-bold"
       >
         {ctaLabel}
       </button>
@@ -205,21 +205,25 @@ function MissionProgressSection() {
   );
 }
 
-function CharacterEntryThumbnail({
-  character,
-  forceUnlocked,
-  onSelect,
-}: {
-  character: GeneratedApi.ArCharacterCollectionResponse;
-  forceUnlocked: boolean;
-  onSelect: () => void;
-}) {
-  const unlocked = forceUnlocked || (character.isAcquired ?? false);
+// characterColor 계열별 도감 타일 배경. Tailwind가 동적 클래스명을 인식 못해 완성된 문자열로 매핑해 둔다
+// (ArCharacterPage.tsx의 COLOR_THEME과 같은 이유).
+const CHARACTER_TILE_BACKGROUND: Record<ArCharacterColorFamily, string> = {
+  primary: 'bg-primary-100',
+  tertiary: 'bg-tertiary-100',
+  sunnyYellow: 'bg-sunny-yellow-100',
+  warmNeutral: 'bg-warm-neutral-100',
+  coolNeutral: 'bg-cool-neutral-100',
+  vibrantOrange: 'bg-vibrant-orange-100',
+};
+
+function CharacterEntryThumbnail({ character, onSelect }: { character: GeneratedApi.ArCharacterCollectionResponse; onSelect: () => void }) {
+  const unlocked = character.isAcquired ?? false;
+  const tileBackground = unlocked ? CHARACTER_TILE_BACKGROUND[resolveArCharacterColorFamily(character.characterColor)] : 'bg-cool-neutral-100';
 
   return (
     // 시안: 정사각 타일에 라운딩 14, 그림은 타일을 거의 꽉 채운다(안쪽 여백이 좁다)
     <button type="button" onClick={onSelect} className="flex w-19 shrink-0 flex-col items-center gap-2">
-      <span className={`flex h-19 w-19 items-center justify-center overflow-hidden rounded-[14px] p-1.5 ${unlocked ? 'bg-tertiary-100' : 'bg-cool-neutral-100'}`}>
+      <span className={`flex h-19 w-19 items-center justify-center overflow-hidden rounded-[14px] p-1.5 ${tileBackground}`}>
         {unlocked ? (
           // 원격 URL이라 next/image 최적화 대상이 아니다(ProfileCard 아바타와 동일한 이유).
           // eslint-disable-next-line @next/next/no-img-element
@@ -239,6 +243,9 @@ function CharacterCollectionSection({ arCharacters }: { arCharacters: GeneratedA
 
   if (arCharacters.length === 0) return null;
 
+  // 얻은 캐릭터를 먼저 보여준다(기획 요청) — 그룹 안에서의 순서(서버가 내려준 순서)는 그대로 둔다.
+  const sortedCharacters = [...arCharacters].sort((a, b) => Number(b.isAcquired ?? false) - Number(a.isAcquired ?? false));
+
   function handleSelect(character: GeneratedApi.ArCharacterCollectionResponse, unlocked: boolean) {
     if (unlocked) {
       router.push(`/ar/${character.id}`);
@@ -253,13 +260,9 @@ function CharacterCollectionSection({ arCharacters }: { arCharacters: GeneratedA
       <h2 className="text-label-lg text-warm-neutral-900 font-bold">AR 캐릭터 도감</h2>
 
       <div className="flex scrollbar-none gap-2.5 overflow-x-auto [&::-webkit-scrollbar]:hidden">
-        {arCharacters.map((character, index) => {
-          // 첫번째 캐릭터는 실제 isAcquired 값과 무관하게 항상 해금된 것처럼 보여준다(기획 요청).
-          const forceUnlocked = index === 0;
-          const unlocked = forceUnlocked || (character.isAcquired ?? false);
-          return (
-            <CharacterEntryThumbnail key={character.id} character={character} forceUnlocked={forceUnlocked} onSelect={() => handleSelect(character, unlocked)} />
-          );
+        {sortedCharacters.map((character) => {
+          const unlocked = character.isAcquired ?? false;
+          return <CharacterEntryThumbnail key={character.id} character={character} onSelect={() => handleSelect(character, unlocked)} />;
         })}
       </div>
 
@@ -342,7 +345,7 @@ export function MyPageSummaryView() {
   const { data, isLoading, isError } = useMyPage();
 
   if (isLoading) {
-    return <p className="text-body-sm text-warm-neutral-600 w-full px-4 py-12 text-center">불러오는 중...</p>;
+    return <MyPageSkeleton />;
   }
   if (isError || !data) {
     return <p className="text-body-sm text-warm-neutral-600 w-full px-4 py-12 text-center">마이페이지를 불러오지 못했어요. 다시 시도해주세요</p>;

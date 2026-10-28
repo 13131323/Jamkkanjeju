@@ -1,1 +1,1 @@
-export { couponStorageKey, isCouponUsed, markCouponUsed, subscribeUsedCoupons, usedCouponServerSnapshot } from './model/usedCoupons';
+export { couponStorageKey, isCouponUsed, markCouponUsed, subscribeUsedCoupons, usedCouponServerSnapshot, usedCouponsVersion } from './model/usedCoupons';

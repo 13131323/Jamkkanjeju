@@ -35,7 +35,7 @@ const GLYPH_STROKE = 2;
  *
  * 앞서는 브랜드를 피하려고 밋밋한 타원 말풍선을 뒀는데, 그러면 어느 앱으로 가는 버튼인지 알아볼 수가
  * 없어서 다시 그렸다. 라인을 라인으로 읽히게 하는 건 두 가지다 — **브랜드 그린 바탕**과 **흰 말풍선**.
- * 바탕은 원이 맡는다(`INVITE_SHARE_ICON_COLORS.line`이 원을 `#06c755`로 채운다). 여기서는 그 위에
+ * 바탕은 원이 맡는다(`SHARE_ICON_COLORS.line`이 원을 `#06c755`로 채운다). 여기서는 그 위에
  * 올라갈 흰 말풍선만 그린다. 그래서 이 글리프만 선이 아니라 **채움(fill)**이다 — 시안의 첫 원(카카오톡)도
  * 꽉 찬 브랜드색 위에 채운 말풍선이었으므로 무게가 그대로 맞는다.
  *
@@ -67,7 +67,7 @@ export function LineGlyph({ color }: GlyphProps) {
  *
  * 라인 원도 말풍선이지만 둘은 무게로 갈린다 — 라인은 꽉 찬 초록 원 위의 **흰 채움** 말풍선,
  * 문자는 연한 분홍 원 위의 **분홍 2px 선** 말풍선이다(색 근거는 styles.ts의
- * `INVITE_SHARE_ICON_COLORS.sms`).
+ * `SHARE_ICON_COLORS.sms`).
  */
 export function MessageGlyph({ color }: GlyphProps) {
   return (

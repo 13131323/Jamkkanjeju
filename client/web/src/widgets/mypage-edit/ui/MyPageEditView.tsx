@@ -17,7 +17,8 @@ import {
 } from '@packages/shared';
 import { useUpdateUserProfile, useUserInfo } from '@entities/user';
 import charactorImage from '@shared/lib/images/mypage/charactor02.png';
-import { STEP_GOAL_POINT_REWARD, STEP_GOAL_PRESETS } from '../model/constants';
+import { MIN_STEP_GOAL, STEP_GOAL_POINT_REWARD, STEP_GOAL_PRESETS } from '../model/constants';
+import { MyPageEditSkeleton } from './MyPageEditSkeleton';
 
 const PAGE_TITLE = '프로필 수정';
 const NICKNAME_MAX_LENGTH = 12;
@@ -43,10 +44,7 @@ function IconClear() {
 
 function Header({ canSave, onBack, onSave }: { canSave: boolean; onBack: () => void; onSave: () => void }) {
   return (
-    <div
-      className="relative flex w-full shrink-0 items-center justify-between px-4"
-      style={{ height: `calc(56px + var(--safe-area-top))`, paddingTop: `var(--safe-area-top)` }}
-    >
+    <div className="relative flex w-full shrink-0 items-center justify-between px-4" style={{ height: `calc(56px + var(--safe-area-top))`, paddingTop: `var(--safe-area-top)` }}>
       <button type="button" aria-label="뒤로가기" onClick={onBack} className="flex items-center justify-center rounded-full p-1">
         <IconChevronLeft />
       </button>
@@ -157,6 +155,7 @@ function StepGoalSection({
   onSelectPreset,
   onSelectCustom,
   onChangeCustomValue,
+  onBlurCustomValue,
 }: {
   stepsGoal: number;
   selectedPreset: number | null;
@@ -164,6 +163,7 @@ function StepGoalSection({
   onSelectPreset: (value: number) => void;
   onSelectCustom: () => void;
   onChangeCustomValue: (value: string) => void;
+  onBlurCustomValue: () => void;
 }) {
   const isCustomSelected = selectedPreset === null;
 
@@ -193,6 +193,7 @@ function StepGoalSection({
           inputMode="numeric"
           value={customValue}
           onChange={(e) => onChangeCustomValue(e.target.value)}
+          onBlur={onBlurCustomValue}
           placeholder="목표 걸음 수를 입력해주세요"
           className="border-cool-neutral-200 text-body-md text-warm-neutral-900 placeholder:text-cool-neutral-400 w-full rounded-2xl border px-4 py-3.5 outline-none"
         />
@@ -230,10 +231,11 @@ function MyPageEditForm({ userInfo }: MyPageEditFormProps) {
   const [transportation, setTransportation] = useState<TransportationId | null>(() => toTransportationId(userInfo.transportation));
   const initialPreset = STEP_GOAL_PRESETS.includes(userInfo.targetStepCount as (typeof STEP_GOAL_PRESETS)[number]) ? userInfo.targetStepCount : null;
   const [stepGoalPreset, setStepGoalPreset] = useState<number | null>(initialPreset);
-  const [customStepGoal, setCustomStepGoal] = useState(initialPreset === null ? String(userInfo.targetStepCount) : '');
+  // 직접 입력의 최소값이자 기본값은 1000이다(사용자 요청) — 서버 값이 그 밑이어도 방어적으로 올린다.
+  const [customStepGoal, setCustomStepGoal] = useState(initialPreset === null ? String(Math.max(MIN_STEP_GOAL, userInfo.targetStepCount)) : '');
 
-  const stepsGoal = stepGoalPreset ?? (Number(customStepGoal) || 0);
-  const canSave = nickname.trim().length > 0 && !isPending;
+  const stepsGoal = stepGoalPreset ?? Math.max(MIN_STEP_GOAL, Number(customStepGoal) || 0);
+  const canSave = nickname.trim().length > 0 && travelInterests.length > 0 && !isPending;
 
   function handleToggleInterest(id: TravelInterestId) {
     setTravelInterests((prev) => {
@@ -282,8 +284,13 @@ function MyPageEditForm({ userInfo }: MyPageEditFormProps) {
             setStepGoalPreset(value);
             setCustomStepGoal('');
           }}
-          onSelectCustom={() => setStepGoalPreset(null)}
+          onSelectCustom={() => {
+            setStepGoalPreset(null);
+            // 프리셋에서 막 넘어와 비어있으면 최소값을 기본으로 채워준다.
+            setCustomStepGoal((prev) => prev || String(MIN_STEP_GOAL));
+          }}
           onChangeCustomValue={(value) => setCustomStepGoal(value.replace(/[^0-9]/g, ''))}
+          onBlurCustomValue={() => setCustomStepGoal((prev) => String(Math.max(MIN_STEP_GOAL, Number(prev) || 0)))}
         />
       </div>
     </div>
@@ -294,7 +301,7 @@ export function MyPageEditView() {
   const { data, isLoading, isError } = useUserInfo();
 
   if (isLoading) {
-    return <p className="text-body-sm text-warm-neutral-600 w-full px-4 py-12 text-center">불러오는 중...</p>;
+    return <MyPageEditSkeleton />;
   }
   if (isError || !data) {
     return <p className="text-body-sm text-warm-neutral-600 w-full px-4 py-12 text-center">프로필을 불러오지 못했어요. 다시 시도해주세요</p>;

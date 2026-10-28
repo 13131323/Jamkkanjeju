@@ -30,8 +30,8 @@ export const missionIntroStyles = StyleSheet.create({
     flexWrap: 'wrap',
     columnGap: 6,
   },
-  // decoAbsolute의 left/top이 디자인 좌표와 그대로 맞도록 행을 콘텐츠 폭(360-48=312)에 고정하고
-  // 타이틀은 그 안에서 가운데 정렬한다 — 행 폭이 텍스트 길이에 따라 변하면 기준점이 흔들린다
+  // 행을 블록 콘텐츠 폭 전체로 늘린다. 이 폭은 기기 너비를 따라가므로 decoAbsolute의 가로 좌표는
+  // 가운데 기준으로 환산해 얹는다(MissionIntroLayout의 DECO_DESIGN_CONTENT_WIDTH).
   titleRowStretch: { alignSelf: 'stretch' },
   // flex 1 — 텍스트가 행 전체(312)를 차지해야 Penpot의 312 폭 텍스트 박스와 같은 지점에서 줄이 바뀐다
   titleCentered: { flex: 1, textAlign: 'center' },
@@ -80,7 +80,17 @@ export const missionIntroStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rewardBadgeMarkText: { fontFamily: 'Pretendard-Medium', fontSize: 12, lineHeight: 16 },
+  /**
+   * 원 안의 "?"가 살짝 아래로 내려가 보이던 문제(사용자 지적).
+   *
+   * 두 가지가 겹쳐 있었다. 원의 테두리 안쪽 높이는 14(16 - 1*2)인데 `lineHeight: 16`이라
+   * 글자 상자가 담길 자리보다 컸고, 안드로이드는 `includeFontPadding` 기본값이 true라
+   * 폰트의 ascent/descent 여백을 상자에 더한다 — 그 여백이 위아래가 달라 글리프를 아래로 민다.
+   *
+   * `lineHeight`를 빼고 부모의 `justifyContent: 'center'`가 상자를 가운데 놓게 둔다.
+   * 폰트 패딩을 끄고 `textAlignVertical: 'center'`로 상자 안에서도 가운데에 오게 한다.
+   */
+  rewardBadgeMarkText: { fontFamily: 'Pretendard-Medium', fontSize: 12, includeFontPadding: false, textAlignVertical: 'center' },
 
   // 디자인 pitch 100(x=50/150/250) = 항목 폭 + gap. 링은 항목 안에서 가운데 정렬되므로
   // 폭과 gap을 합이 100이 되게 바꾸면 링 중심(80/180/280)은 그대로 있고 라벨만 넓어진다.

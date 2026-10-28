@@ -73,7 +73,7 @@ export interface MissionCompleteLayoutProps {
   distanceBadgeTextColor: string;
   /** ResultCard / placeCard의 틴트 그림자 색. 미션 테마색이라 화면마다 다르다 */
   cardShadowColor: string;
-  /** CTA 1개면 전체 폭으로 늘어나고, 2개면 160 고정폭으로 나란히 놓인다(spec Mission_Complete 기준) */
+  /** CTA 1개면 전체 폭으로 늘어나고, 2개면 화면을 반씩 나눠 나란히 놓인다(spec Mission_Complete 기준) */
   ctas: MissionCompleteCta[];
 }
 
@@ -146,13 +146,13 @@ function PlaceThumb({ url }: { url: string | null }) {
  * CTA 한 개. map 안에서 훅을 부를 수 없어(연타 차단은 버튼마다 독립된 ref가 필요하다)
  * 별도 컴포넌트로 떼어냈다.
  */
-function CtaButton({ cta, fixedWidth }: { cta: MissionCompleteCta; fixedWidth: boolean }) {
+function CtaButton({ cta, half }: { cta: MissionCompleteCta; half: boolean }) {
   const handlePress = useSinglePress(cta.onPress);
 
   return (
     <Pressable
       onPress={handlePress}
-      style={[styles.ctaButton, fixedWidth && styles.ctaButtonFixed, { backgroundColor: cta.backgroundColor }, cta.borderColor ? { borderWidth: 1, borderColor: cta.borderColor } : null]}
+      style={[styles.ctaButton, half && styles.ctaButtonHalf, { backgroundColor: cta.backgroundColor }, cta.borderColor ? { borderWidth: 1, borderColor: cta.borderColor } : null]}
     >
       <Text numberOfLines={1} style={[styles.ctaButtonText, { color: cta.textColor }]}>
         {cta.text}
@@ -272,7 +272,7 @@ export function MissionCompleteLayout({
 
         <View style={[styles.ctaWrapper, ctas.length > 1 && styles.ctaWrapperRow, { paddingBottom: ctaBottomPadding(insets.bottom) }]}>
           {ctas.map((cta) => (
-            <CtaButton key={cta.text} cta={cta} fixedWidth={ctas.length > 1} />
+            <CtaButton key={cta.text} cta={cta} half={ctas.length > 1} />
           ))}
         </View>
       </LinearGradient>

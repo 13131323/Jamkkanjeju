@@ -103,7 +103,10 @@ export function toMissionRewards(remainingReward: GeneratedApi.RemainingRewardRe
     // (cdn.jamkkan-jeju.dev)는 DNS가 없어서(NXDOMAIN) 로드가 실패하고 원이 통째로 비어
     // 보상이 2개만 있는 것처럼 보인다. CDN이 살아나면 실제 그림이 그대로 나와야 하므로
     // URL은 그대로 두고, 실패했을 때만 갈아끼울 번들 그림을 함께 넘긴다.
-    rewards.push({ image: { uri: arCharacter.imageUrl }, fallbackImage: images.arCharacter, label: arCharacter.name });
+    //
+    // cache: 'force-cache'(iOS)는 서버 cache-control 헤더와 무관하게 한 번 받은 그림을 그대로
+    // 재사용한다 — 헤더가 no-cache면 리렌더마다 다시 받아 깜빡이므로 우선순위를 명시한다.
+    rewards.push({ image: { uri: arCharacter.imageUrl, cache: 'force-cache' }, fallbackImage: images.arCharacter, label: arCharacter.name });
   }
   // 0P도 서버가 내려주면 남은 보상이다 — null(지급 완료)과 구분해야 하므로 falsy 검사를 쓰지 않는다.
   if (point !== null && point !== undefined) {

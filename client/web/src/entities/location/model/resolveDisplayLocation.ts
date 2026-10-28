@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { LocationPermissionStatus } from '@shared/lib/bridge';
 import { JEJU_ISLAND_BOUNDS, type Coordinates } from '@shared/config/geo';
 import { useForcedJejuCoords } from './forcedLocation';
+import { useIsJudgeModeHydrated } from './judgeMode';
 import { useLocationStore } from './store';
 
 // 제주 본섬을 감싸는 사각형 영역 밖이면 제주 밖으로 간주.
@@ -25,7 +26,7 @@ export type DisplayLocation = {
 // 1) granted-precise/approximate + 제주 안(JEJU_BOUNDS 사각형 내부) → 실시간 좌표 표시, level 5
 // 2) 그 외 + 수동 지정 좌표 있음 → 수동 좌표 표시, level 5
 // 3) 그 외 + 수동 지정 좌표도 없음 → 마커 없음, JEJU_CENTER 중심, level 9
-function isOutsideJeju(coords: Coordinates): boolean {
+export function isOutsideJeju(coords: Coordinates): boolean {
   return coords.lat < JEJU_BOUNDS.minLat || coords.lat > JEJU_BOUNDS.maxLat || coords.lng < JEJU_BOUNDS.minLng || coords.lng > JEJU_BOUNDS.maxLng;
 }
 
@@ -63,6 +64,22 @@ export function useDisplayLocation(): DisplayLocation {
   const manualCoords = useLocationStore((s) => s.manualCoords);
   // 심사위원용 모드는 실행 중에 켜고 꺼지므로 훅으로 구독한다 — 함수로 한 번 읽으면 토글해도 화면이 그대로다
   const forcedCoords = useForcedJejuCoords();
+  const isJudgeModeHydrated = useIsJudgeModeHydrated();
 
-  return useMemo(() => resolveDisplayLocation(permissionStatus, coords, manualCoords, forcedCoords), [permissionStatus, coords, manualCoords, forcedCoords]);
+  /**
+   * **모드 되살리기가 끝나기 전에는 위치를 정하지 않는다.**
+   *
+   * 스토어 초기값은 항상 꺼짐이고(judgeMode.ts — SSR에는 localStorage가 없다) 저장값은 마운트 뒤
+   * effect에서 복원된다. 그 한 틱 동안 `forcedCoords`가 null이라 **실좌표로 마커를 찍었다가**,
+   * 복원 직후 제주시청으로 옮겨 간다 — 앱을 켤 때마다 마커가 한 번 튀어 보이던 것이 이것이다
+   * (기기에서 확인). 계정에 묶인 조회를 같은 이유로 기다리게 한 것과 같은 규칙이다
+   * (useHomeData·useAddressDisplay).
+   *
+   * 기다리는 동안은 `coords: null`이라 마커를 아예 그리지 않는다 — 틀린 자리에 찍었다 옮기는 것보다
+   * 한 틱 늦게 맞는 자리에 한 번 찍는 편이 낫다. 모드가 꺼진 사용자에게도 결과는 같다(한 틱 뒤 동일).
+   */
+  return useMemo(
+    () => (isJudgeModeHydrated ? resolveDisplayLocation(permissionStatus, coords, manualCoords, forcedCoords) : { coords: null, initialLevel: 9 }),
+    [isJudgeModeHydrated, permissionStatus, coords, manualCoords, forcedCoords],
+  );
 }

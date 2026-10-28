@@ -57,12 +57,56 @@ function missionTypeOf(location: ClusteredPlaceLocation | PlaceLocation): 'treas
   return null;
 }
 
+// receivedCoupons는 detail 응답(PlaceLocation)에만 있다 — wide/wideSplit이 쓰는 클러스터 응답
+// (ClusteredPlaceLocation)엔 필드 자체가 없어 항상 false다.
+function hasReceivedCoupons(location: ClusteredPlaceLocation | PlaceLocation): boolean {
+  return 'receivedCoupons' in location && location.receivedCoupons.length > 0;
+}
+
 // 미션 없는 장소는 필터(보물찾기/협동미션) 대상이 아니라 항상 보여야 한다 — detail 티어에서 늘 노출.
+// 'coupon' 필터는 미션 유무와 무관하게 쿠폰 사용처만 남긴다(미션 마커는 숨김).
 function matchesFilter(location: ClusteredPlaceLocation | PlaceLocation, filter: PlaceFilter): boolean {
+  if (filter === 'coupon') return hasReceivedCoupons(location);
   if (filter === 'all') return true;
   const type = missionTypeOf(location);
   if (type === null) return true;
   return type === filter;
+}
+
+// detail(1~5) 안에서 줌아웃할수록 미션 없는 장소를 줄여서 보여준다. id 기반 무작위 표본은 좌표를 전혀
+// 고려하지 않아 우연히 가까운 장소끼리 같이 살아남아 마커가 겹쳐 보이는 문제가 있었다 — 그래서 좌표 기반
+// 최소 거리 필터링(그리디 thinning)으로 대체한다: 살아남은 장소끼리는 항상 최소 거리 이상 떨어지도록 보장한다.
+// 정확한 비율(70%/50%/30%)은 더 이상 보장되지 않는다(밀집 지역일수록 더 많이 걸러지고, 외딴 장소는 그대로
+// 남음) — 대신 "겹쳐 보이지 않는다"는 실제 요구사항을 직접 만족시킨다.
+//
+// 레벨 3/4/5로 갈수록 최소 거리를 늘리되, 각 단계는 이전 단계의 생존자만 대상으로 추가 필터링한다.
+// 그래야 레벨5 결과가 항상 레벨4 결과의 부분집합, 레벨4는 레벨3의 부분집합이 되어(예: 레벨5에서 보이는
+// 장소는 레벨3에서도 항상 보임) 줌 인/아웃 시 장소가 오락가락 나타나지 않는다(이전 요구사항 유지).
+// 값은 임의로 설정한 것 — 실기기 확인 후 조정 가능(PLACE_CLUSTER_DISTANCE_METERS와 동일한 성격).
+const NO_MISSION_MIN_DISTANCE_METERS: [level: number, meters: number][] = [
+  [3, 80],
+  [4, 150],
+  [5, 250],
+];
+
+// 이미 선택된 장소들과 최소 거리보다 가까운 장소를 걸러낸다. 앞에 오는 항목이 우선권을 갖는 그리디 방식이라,
+// 입력 순서(=id 오름차순, 아래 sampleNoMissionPlacesAt 참고)가 항상 같아야 결과가 결정적이다.
+function thinByMinDistance<T extends { coords: Coordinates }>(places: T[], minDistanceMeters: number): T[] {
+  const kept: T[] = [];
+  for (const place of places) {
+    const tooClose = kept.some((keptPlace) => distanceMeters(keptPlace.coords, place.coords) < minDistanceMeters);
+    if (!tooClose) kept.push(place);
+  }
+  return kept;
+}
+
+function sampleNoMissionPlacesAt(places: PlaceLocation[], level: number): PlaceLocation[] {
+  let survivors = [...places].sort((a, b) => a.id - b.id);
+  for (const [stageLevel, minDistanceMeters] of NO_MISSION_MIN_DISTANCE_METERS) {
+    if (level < stageLevel) break;
+    survivors = thinByMinDistance(survivors, minDistanceMeters);
+  }
+  return survivors;
 }
 
 // wide: 미션 있는 장소를 위치 기준으로 뭉뚱그린 원마커(좌표만 아는 클러스터 응답)
@@ -76,7 +120,7 @@ function matchesFilter(location: ClusteredPlaceLocation | PlaceLocation, filter:
 // (useCouponLocationCoords.ts가 쿠폰 사용처 조회에 이미 쓰던 것과 같은 패턴).
 // detailResult는 개별 장소가 너무 많아 전역을 한 번에 받을 수 없어서, 고정 타일 격자로 캐싱한다
 // (useTiledPlaceLocations.ts 참고).
-export function usePlaceGroups(bounds: Bounds | null, filter: PlaceFilter, tier: MapZoomTier, enabled: boolean): PlaceGroupResult {
+export function usePlaceGroups(bounds: Bounds | null, filter: PlaceFilter, tier: MapZoomTier, level: number, enabled: boolean): PlaceGroupResult {
   const isDetailTier = tier === 'detail';
 
   const clusteredResult = useMapLocations({ bounds: JEJU_ISLAND_BOUNDS, center: JEJU_CENTER, isClustered: true, enabled: enabled && !isDetailTier });
@@ -84,7 +128,15 @@ export function usePlaceGroups(bounds: Bounds | null, filter: PlaceFilter, tier:
 
   return useMemo(() => {
     if (tier === 'detail') {
-      const places = detailResult.locations.filter((place) => matchesFilter(place, filter));
+      const filtered = detailResult.locations.filter((place) => matchesFilter(place, filter));
+      // 쿠폰 사용처는 "가야 할 가게를 찍어주는" 화면이라 미션 없는 장소처럼 줄여 보여주면(thinning)
+      // 안 된다 — 항상 전부 그린다. 미션이 있어도 쿠폰이 있으면 이 갈래로 빠져 마커 하나만 그려진다
+      // (usePlaceMarkers가 쿠폰 마커를 우선하므로 중복 마커는 생기지 않는다).
+      const withCoupon = filtered.filter((place) => place.receivedCoupons.length > 0);
+      const withoutCoupon = filtered.filter((place) => place.receivedCoupons.length === 0);
+      const withMission = withoutCoupon.filter((place) => place.mission !== null);
+      const withoutMission = withoutCoupon.filter((place) => place.mission === null);
+      const places = [...withCoupon, ...withMission, ...sampleNoMissionPlacesAt(withoutMission, level)];
       return { tier: 'detail', places, isLoading: detailResult.isLoading };
     }
 
@@ -105,5 +157,5 @@ export function usePlaceGroups(bounds: Bounds | null, filter: PlaceFilter, tier:
     const groups = clusterByDistance(withMission, 'wide-cluster');
 
     return { tier: 'wide', groups, isLoading: clusteredResult.isLoading };
-  }, [tier, filter, clusteredResult.locations, clusteredResult.isLoading, detailResult.locations, detailResult.isLoading]);
+  }, [tier, filter, level, clusteredResult.locations, clusteredResult.isLoading, detailResult.locations, detailResult.isLoading]);
 }

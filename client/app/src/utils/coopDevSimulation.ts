@@ -50,10 +50,37 @@ export function realParticipants<T extends { participantId: number }>(participan
 }
 
 /**
- * 가짜 인증 사진 자리. 실제로 뜨지 않는 주소여도 되지만 **빈 문자열이면 안 된다** —
+ * 가짜 인증 사진의 **폴백** 주소. 실제로 뜨지 않는 주소여도 되지만 **빈 문자열이면 안 된다** —
  * 화면이 "사진 있음"을 문자열 유무로 판정하므로 빈 값은 미인증으로 읽힌다.
+ *
+ * 호출부가 `itemPhotoByRole`(아래 `SimulateOptions`)을 넘기면 역할에 맞는 사진을 쓰고,
+ * 이 값은 사진을 못 받은 경우(예: 이 파일만 부르는 테스트)에만 쓰인다. 예전에는 이 상수 하나가
+ * 항상 쓰여서, 실기기에서 step3의 "함께하는 역할" 사진 자리가 **죽은 주소 때문에 영원히
+ * 빈 스켈레톤**으로 남았다(RoleVerify.tsx가 로드 실패 주소는 다시 그리지 않는다) — 사용자가
+ * 신고한 "다른 팀원 사진이 비어 있다"의 원인이 이것이다.
  */
 const DEV_SIM_ITEM_IMG_URL = 'https://dev.invalid/tamnalog/coop-sim-item.png';
+
+/**
+ * 가짜 팀원의 인증 사진. **역할명으로 고른다.**
+ *
+ * 참여자 id로 골랐더니 바로 옆의 "이런 장소를 찾아보세요" 칩과 사진이 어긋났다 — 그 칩은
+ * 역할 카드의 `locationToFind`에서 나오므로(RoleDetail.tsx), 사진도 같은 역할에서 나와야
+ * 물지기 칩 옆에 물 사진이 선다.
+ *
+ * 역할은 한 사람당 하나라 "인원마다 각자 사진"은 그대로 성립한다. 수락·거절로 명단이 바뀌어
+ * 역할 배정이 달라지면 사진도 그 역할을 따라간다 — 칩과 맞추는 것이 목적이므로 그게 맞다.
+ *
+ * 랜덤이 아니라 조회다 — 2초 폴링마다, 리렌더마다 같은 역할은 같은 사진을 낸다.
+ * 모르는 역할명이면 받은 사진 중 첫 장으로 떨어진다(빈 값이면 화면이 미인증으로 읽는다).
+ */
+export function simPhotoForRole(roleName: string, byRole: Readonly<Record<string, string>>): string {
+  const matched = byRole[roleName];
+  if (matched) return matched;
+
+  const [first] = Object.values(byRole);
+  return first ?? DEV_SIM_ITEM_IMG_URL;
+}
 
 /** 진행도 id도 음수로. 이유는 participantId와 같고, 참여자 id에서 파생시켜 서로 겹치지 않게 한다 */
 function simRoleProgressId(participantId: number): number {
@@ -80,8 +107,11 @@ function simParticipant(member: (typeof DEV_SIM_MEMBERS)[number], acceptedSimIds
  * 역할 카드는 **아직 아무도 맡지 않은 카드**에서 앞에서부터 고른다 — 이미 배정된 카드를 다시 쓰면
  * 같은 역할이 둘이 되어 화면의 역할 목록과 서버 집계가 어긋난다. 남는 카드가 없으면 그 사람은
  * 건너뛴다(카드보다 사람이 많은 것은 정상이다).
+ *
+ * 인증 사진은 여기서 정한 **역할명**으로 고른다(`simPhotoForRole`) — 같은 카드에서 나오는
+ * "이런 장소를 찾아보세요" 칩과 사진이 어긋나지 않게 하려는 것이다.
  */
-function simRoleProgresses(acceptedMembers: readonly (typeof DEV_SIM_MEMBERS)[number][], availableCards: readonly RoleCard[]): RoleProgress[] {
+function simRoleProgresses(acceptedMembers: readonly (typeof DEV_SIM_MEMBERS)[number][], availableCards: readonly RoleCard[], itemPhotoByRole: Readonly<Record<string, string>>): RoleProgress[] {
   return acceptedMembers.slice(0, availableCards.length).map((member, index) => ({
     roleProgressId: simRoleProgressId(member.participantId),
     participantId: member.participantId,
@@ -89,7 +119,7 @@ function simRoleProgresses(acceptedMembers: readonly (typeof DEV_SIM_MEMBERS)[nu
     roleCardId: availableCards[index].roleCardId,
     roleName: availableCards[index].roleName,
     progressStatus: ROLE_PROGRESS_STATUS.COMPLETED,
-    itemImgUrl: DEV_SIM_ITEM_IMG_URL,
+    itemImgUrl: simPhotoForRole(availableCards[index].roleName, itemPhotoByRole),
   }));
 }
 
@@ -105,6 +135,12 @@ export interface SimulateOptions {
    * 팀원에게 배정할 카드를 못 찾아 "함께하는 역할"이 비어 버린다.
    */
   fallbackRoleCards?: RoleCard[];
+  /**
+   * 역할명 → 가짜 팀원 인증 사진. 실제 로컬 에셋을 URI로 바꿔 둔 값을 호출부(useCoopMission.ts)가
+   * 넘긴다 — 이 파일은 RN을 import하지 않는 순수 모듈이라(위 주석·테스트 참고) 에셋을 직접
+   * `require`하지 않는다. 넘기지 않으면 `DEV_SIM_ITEM_IMG_URL` 폴백을 쓴다.
+   */
+  itemPhotoByRole?: Record<string, string>;
   enabled: boolean;
 }
 
@@ -119,7 +155,7 @@ export interface SimulateOptions {
  * 1단계는 참여자만, 2·3단계는 역할까지, 4단계는 참여자 자체가 `null`이라 손댈 것이 없다.
  */
 export function simulateCoopStatus(status: CoopMissionProgressResponse, options: SimulateOptions): CoopMissionProgressResponse {
-  const { acceptedSimIds, rejectedSimIds = [], fallbackRoleCards = [], enabled } = options;
+  const { acceptedSimIds, rejectedSimIds = [], fallbackRoleCards = [], itemPhotoByRole = {}, enabled } = options;
 
   if (!enabled) return status;
   if (status.currentStep === COOP_STEP.COMPLETE) return status;
@@ -163,7 +199,7 @@ export function simulateCoopStatus(status: CoopMissionProgressResponse, options:
   const sourceCards = status.roleCards ?? fallbackRoleCards;
   const availableCards = sourceCards.filter((card) => !takenRoleCardIds.has(card.roleCardId));
 
-  const added = simRoleProgresses(members, availableCards);
+  const added = simRoleProgresses(members, availableCards, itemPhotoByRole);
   // 붙일 것이 없으면 역할 필드를 건드리지 않는다. `null`을 `[]`로 바꾸면 mergeCoopStatus가
   // "값이 왔다"로 읽어 직전 응답의 역할 목록을 덮어 버린다.
   if (added.length === 0) return { ...status, participants };

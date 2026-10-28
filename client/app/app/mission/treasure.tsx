@@ -2,11 +2,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TREASURE_PLACE_SUMMARY_MAX_LENGTH, TREASURE_TARGET_COUNT } from '@packages/shared';
+import { isRewardExhausted, TREASURE_TARGET_COUNT } from '@packages/shared';
 import { FullBleed } from '@/components/FullBleed/FullBleed';
 import { MissionCancelModal } from '@/components/Mission/MissionCancelModal/MissionCancelModal';
+import { SkeletonBlock } from '@/components/SkeletonBlock/SkeletonBlock';
 import { TreasureEnterSheet } from '@/components/Treasure/TreasureEnterSheet/TreasureEnterSheet';
 import { TreasureHuntCamera } from '@/components/Treasure/TreasureHuntCamera/TreasureHuntCamera';
 import { TreasureHuntMap } from '@/components/Treasure/TreasureHuntMap/TreasureHuntMap';
@@ -27,7 +28,7 @@ import {
   resolveTreasureRewardLabel,
   resolveTreasureStartOutcome,
   toFoundTreasureIndexes,
-  toPlaceSummary,
+  toPlaceDescription,
   toTreasureSpots,
 } from '@/constants/treasureMission';
 import { useMissionCancelGuard } from '@/hooks/useMissionCancelGuard';
@@ -43,6 +44,7 @@ import { useMissionCompleteStore } from '@/store/missionComplete';
 import { useTreasureProgressStore } from '@/store/treasureProgress';
 import { MIN_BOTTOM_INSET } from '@/styles/safeArea';
 import { navigate } from '@/utils/navigate';
+import { resolveStopCoordinates } from '@/utils/missionStopCoords';
 import { resolveApproachTarget } from '@/utils/treasureApproachSimulation';
 import { resolveNearestTreasure, resolveSheetVisibility, shouldLeaveCamera } from '@/utils/treasureProximity';
 
@@ -57,7 +59,8 @@ import { resolveNearestTreasure, resolveSheetVisibility, shouldLeaveCamera } fro
  * 서버 연동(진행도 API):
  * - 진입 시 POST .../{treasureMissionId}/progress — 새로 만들면 201, 진행 중이면 200으로 같은 진행도를
  *   돌려준다. 상태 코드로는 둘을 구분하지 않지만 응답의 `missionProgressStatus`는 본다 —
- *   돌려받은 진행도가 이미 COMPLETED면 사냥 화면을 그리지 않고 인트로로 되돌린다(아래 effect).
+ *   돌려받은 진행도가 이미 COMPLETED면 사냥 화면을 그리지 않고 인트로 또는 완료 화면으로 내보낸다
+ *   (아래 effect. 어느 쪽인지는 인트로의 완료 판정과 맞춰 정한다).
  *   장소·보물 좌표·보물 개수·이미 찾은 보물이 전부 이 응답에서 온다.
  * - 보물을 하나 획득할 때마다 PATCH .../{progressId}/progress — 보상이 **한 개씩** 지급되고,
  *   마지막 보물에서 COMPLETED + 다음 장소가 온다.
@@ -149,7 +152,17 @@ export default function TreasureHuntScreen() {
    * 캐릭터는 촬영을 마쳐야 획득이라 촬영 시점에는 아직 지급 전이고, 그때 이름과 이미지를
    * 알 수 있는 곳은 미션 홈뿐이다. intro가 같은 쿼리를 이미 불러 뒀으므로 대개 캐시에서 온다.
    */
-  const { data: missionHome } = useGetMissionHomeApiV1MissionsMissionTypeMissionIdGet(MISSION_TYPE_INPUT.treasure, treasureMissionId);
+  const { data: missionHome, isPending: isMissionHomePending } = useGetMissionHomeApiV1MissionsMissionTypeMissionIdGet(MISSION_TYPE_INPUT.treasure, treasureMissionId);
+
+  /**
+   * 인트로가 이 미션을 완료로 보는지. 응답을 기다리는 동안은 `null`(아직 모른다)이다.
+   *
+   * 끝난 진행도를 돌려받았을 때 **어디로 내보낼지**가 이 값으로 갈린다
+   * (constants/treasureMission.ts의 resolveTreasureStartOutcome 표). 같은 쿼리를 인트로가
+   * 이미 불러 뒀으므로 인트로를 거쳐 들어오면 캐시에서 즉시 온다 — 홈의 "진행중인 미션"으로
+   * 곧장 들어온 경우에만 한 번 기다린다.
+   */
+  const introCompletion = isMissionHomePending ? null : isRewardExhausted(missionHome?.remainingReward);
   const grantedArCharacter = useTreasureProgressStore((state) => state.grantedReward?.arCharacter ?? null);
   const arCharacter = grantedArCharacter ?? missionHome?.remainingReward?.arCharacter ?? null;
   /**
@@ -180,7 +193,13 @@ export default function TreasureHuntScreen() {
   const clearCompleteResult = useMissionCompleteStore((state) => state.clear);
 
   // 진입 시 1회만 진행도를 만든다(이미 진행 중이면 서버가 기존 것을 돌려준다).
-  const { mutate: startMission, data: started, isPending: isStarting, isError: hasStartFailed } = useStartTreasureMissionApiV1TreasureMissionsTreasureMissionIdProgressPost();
+  const {
+    mutate: startMission,
+    mutateAsync: startMissionAsync,
+    data: started,
+    isPending: isStarting,
+    isError: hasStartFailed,
+  } = useStartTreasureMissionApiV1TreasureMissionsTreasureMissionIdProgressPost();
   const saveProgress = useSaveTreasureMissionProgressApiV1TreasureMissionsTreasureMissionProgressIdProgressPatch();
   const stopProgress = useStopTreasureMissionApiV1TreasureMissionsTreasureMissionProgressIdProgressStopPatch();
 
@@ -215,31 +234,6 @@ export default function TreasureHuntScreen() {
     syncedProgressId.current = started.treasureMissionProgressId;
     syncStarted(started.treasureMissionProgressId, started.treasureCount, toFoundTreasureIndexes(started.treasureItems));
   }, [started, syncStarted]);
-
-  /**
-   * 서버가 **이미 끝난 진행도**를 돌려줬으면 사냥 화면을 그리지 않고 인트로로 되돌린다.
-   *
-   * 시작 응답에는 `missionProgressStatus`가 들어 있는데(TreasureMissionStartResponse) 예전에는
-   * 이 값을 한 번도 읽지 않고 `treasureItems`의 `isFound`만 복원했다. 그래서 끝난 진행도로
-   * 들어오면 — 홈의 "진행중인 미션" 카드는 인트로의 완료 판정(isRewardExhausted)을 거치지 않고
-   * 이 화면으로 바로 온다 — 진행 중인 것처럼 보이는 화면이 그려졌다.
-   * - 셋 다 찾은 진행도: 남은 보물이 없어 진입 시트가 뜨지 않는다. 3/3 지도에 갇힌다.
-   * - 중단("포기 할래요")으로 끝난 진행도: 찾은 보물이 3개가 아니라 시트가 뜬다. 실제로 그 보물까지
-   *   걸어가 눌러야 PATCH가 404로 떨어지고, 그제야 보상 없는 완료 화면으로 밀려난다.
-   *
-   * 인트로로 보내는 이유: 완료 화면(`/mission/complete`)은 이 회차에 방금 받은 보상과 다음 장소를
-   * 보여주는 자리인데 시작 응답에는 둘 다 없다. 인트로는 서버(미션 홈의 남은 보상)로 완료를 다시
-   * 판정해 완료 시각·쿠폰·근처 미션이 있는 "이미 완료한 미션" 화면을 그린다 —
-   * 이탈 모달의 "잠깐 쉴게요"가 가는 곳과 같다.
-   *
-   * `?start=photo`는 예외다. 그 경로 자체가 끝낸 미션에 사진만 찍으러 들어오는 길이라
-   * COMPLETED가 정상이다(판정은 constants/treasureMission.ts의 resolveTreasureStartOutcome).
-   */
-  useEffect(() => {
-    if (!started || resolveTreasureStartOutcome(started.missionProgressStatus, photoOnly) !== 'already-complete') return;
-
-    navigate.replace({ pathname: '/mission/intro', params: { mission: 'treasure', missionId: String(treasureMissionId) } });
-  }, [started, photoOnly, treasureMissionId]);
 
   /** 서버가 준 보물 목록 + 화면 에셋 */
   const treasures = useMemo(() => toTreasures(toTreasureSpots(started?.treasureItems ?? [])), [started]);
@@ -279,7 +273,7 @@ export default function TreasureHuntScreen() {
    * 설명이 없으면 null이고 카드를 그리지 않는다 — 예전 폴백 문구 "보물 세 개가 숨어 있어요"는
    * 장소 설명이 아니라 보물 개수 얘기라 진행도 카드(n/3)와 중복이었다. 없는 소개를 지어내지 않는다.
    */
-  const placeSummary = toPlaceSummary(started?.location.locationDescription, TREASURE_PLACE_SUMMARY_MAX_LENGTH);
+  const placeDescription = toPlaceDescription(started?.location.locationDescription);
 
   // 매 렌더 새 객체로 만들면 TreasureHuntMap의 마커 전송 effect가 매 렌더 다시 돈다 —
   // heading이 초당 수십 번 갱신되는 화면이라 그만큼 WebView로 postMessage가 쏟아졌다.
@@ -336,7 +330,7 @@ export default function TreasureHuntScreen() {
   // "반경 밖에서만 토스트"만으로는 부족하다 — resolveSheetVisibility가 진입 500m / 유지 1km
   // 히스테리시스를 쓰기 때문에, 500m로 들어가 시트를 띄운 뒤 700m로 물러나면 시트는 열린 채
   // 거리 조건은 "밖"이 되어 둘이 같은 화면에 겹친다. 시트가 곧 그 안내를 대신하므로 끈다.
-  useTreasureDistanceToast(nearestDistance, !photoOnly && phase === 'map' && !isSheetOpen, placeSummary === null ? null : summaryCardHeight);
+  useTreasureDistanceToast(nearestDistance, !photoOnly && phase === 'map' && !isSheetOpen, placeDescription === null ? null : summaryCardHeight);
 
   // 500m 진입 시 열고, 1km를 벗어나면 닫는다(prompt §9).
   // 이 setState는 위치 구독(외부 시스템)이 밀어주는 값을 화면 상태로 편입하는 동작이라
@@ -363,19 +357,78 @@ export default function TreasureHuntScreen() {
     setSelectedTreasure(null);
   }, [phase, nearestDistance]);
 
-  /** 지금까지 누적된 보상을 들고 완료 화면으로 넘긴다 */
-  const goToComplete = useCallback(
+  /**
+   * 완료 화면이 읽을 값을 스토어에 담아 둔다(이동은 하지 않는다).
+   *
+   * 이동과 떼어 놓은 이유: 사람이 누른 결과로 가는 경우(아래 goToComplete)와 서버 응답이 정한
+   * 결과로 가는 경우(끝난 진행도 가드)가 **서로 다른 화면전환 API**를 써야 하기 때문이다
+   * (utils/navigate.ts의 replace / replaceProgrammatic).
+   */
+  const saveCompletion = useCallback(
     (reward: Parameters<typeof saveCompleteResult>[1]['reward'], nextLocation: Parameters<typeof saveCompleteResult>[1]['nextLocation']) => {
       markComplete(new Date().toISOString());
       // completedLocationId — 완료 화면의 "방명록 남기기"가 이 장소에 글을 붙인다.
       // 서버 완료 응답에는 없는 값이고, 진행도 생성 응답(started.location)을 받은 이 화면만
       // 알고 있어서 여기서 실어 보낸다. 없으면 방명록이 좌표만 가진 형태로 열린다.
-      saveCompleteResult('treasure', { reward, nextLocation, completedLocationId: locationId });
+      // completedLocationName도 함께 보낸다 — 없으면 방명록 화면이 장소명 입력칸을 잠그기만 하고
+      // 채우지는 못한다(빈 채로 잠김).
+      saveCompleteResult('treasure', { reward, nextLocation, completedLocationId: locationId, completedLocationName: placeName });
+    },
+    [markComplete, saveCompleteResult, locationId, placeName],
+  );
+
+  /** 지금까지 누적된 보상을 들고 완료 화면으로 넘긴다 */
+  const goToComplete = useCallback(
+    (reward: Parameters<typeof saveCompleteResult>[1]['reward'], nextLocation: Parameters<typeof saveCompleteResult>[1]['nextLocation']) => {
+      saveCompletion(reward, nextLocation);
       // replace — 완료 화면에서 뒤로가기로 플로우에 되돌아오면 이미 다 찾은 상태라 갈 곳이 없다
       navigate.replace({ pathname: '/mission/complete', params: { mission: 'treasure' } });
     },
-    [markComplete, saveCompleteResult, locationId],
+    [saveCompletion],
   );
+
+  /**
+   * 서버가 **이미 끝난 진행도**를 돌려줬으면 사냥 화면을 그리지 않고 내보낸다.
+   *
+   * 시작 응답에는 `missionProgressStatus`가 들어 있는데(TreasureMissionStartResponse) 예전에는
+   * 이 값을 한 번도 읽지 않고 `treasureItems`의 `isFound`만 복원했다. 그래서 끝난 진행도로
+   * 들어오면 — 홈의 "진행중인 미션" 카드는 인트로의 완료 판정(isRewardExhausted)을 거치지 않고
+   * 이 화면으로 바로 온다 — 진행 중인 것처럼 보이는 화면이 그려졌다.
+   * - 셋 다 찾은 진행도: 남은 보물이 없어 진입 시트가 뜨지 않는다. 3/3 지도에 갇힌다.
+   * - 중단("포기 할래요")으로 끝난 진행도: 찾은 보물이 3개가 아니라 시트가 뜬다. 실제로 그 보물까지
+   *   걸어가 눌러야 PATCH가 404로 떨어지고, 그제야 보상 없는 완료 화면으로 밀려난다.
+   *
+   * **나갈 곳은 인트로의 판정에 달렸다.** 인트로도 완료로 보면(남은 보상이 없다) 인트로가 완료 시각·
+   * 쿠폰·근처 미션이 있는 "이미 완료한 미션" 화면을 그리므로 그리로 되돌린다. 인트로가 아직 완료로
+   * 보지 않으면(중단으로 끝나 보상이 남았다) 되돌려 봐야 "미션 시작하기"가 다시 뜨고, 그걸 누르면
+   * 같은 응답을 받아 또 되돌아온다 — **무한 되먹임**이라 사용자 눈에는 버튼이 죽은 것으로 보인다.
+   * 그 경우에는 완료 화면으로 낸다(진행도 저장이 404로 떨어졌을 때와 같은 서버 상태·같은 처리).
+   *
+   * 두 전환 모두 **Programmatic**이다. 목적지를 고른 것이 사람이 아니라 서버 응답이고, 사용자가
+   * 인트로에서 "미션 시작하기"를 누른 지 400ms 안에 응답이 오면 연타 게이트가 이 전환을 조용히
+   * 버려서(utils/navigationGate.ts) 끝난 진행도의 지도에 그대로 갇힌다 — 가드가 막으려던 바로
+   * 그 상태다. 심사위원용 모드는 측위를 건너뛰어 응답까지가 더 짧으므로 특히 그렇다.
+   *
+   * `?start=photo`는 예외다. 그 경로 자체가 끝낸 미션에 사진만 찍으러 들어오는 길이라
+   * COMPLETED가 정상이다(판정은 constants/treasureMission.ts의 resolveTreasureStartOutcome).
+   */
+  useEffect(() => {
+    // 인트로의 판정을 아직 모르는 동안(미션 홈 응답 대기)에는 어디로 낼지 정할 수 없다
+    if (!started || introCompletion === null) return;
+
+    const outcome = resolveTreasureStartOutcome(started.missionProgressStatus, photoOnly, introCompletion);
+    if (outcome === 'play') return;
+
+    if (outcome === 'already-complete') {
+      navigate.replaceProgrammatic({ pathname: '/mission/intro', params: { mission: 'treasure', missionId: String(treasureMissionId) } });
+      return;
+    }
+
+    // 'finished' — 이 회차에 받은 보상은 없다(스토어 누적값이 비어 있으면 항상 세 항목이 null인
+    // 객체가 되어 완료 화면이 "받은 보상 없음"으로 그린다). 다음 장소도 시작 응답에는 없어 null이다.
+    saveCompletion(mergeGrantedRewards(useTreasureProgressStore.getState().grantedReward, null), null);
+    navigate.replaceProgrammatic({ pathname: '/mission/complete', params: { mission: 'treasure' } });
+  }, [started, photoOnly, treasureMissionId, introCompletion, saveCompletion]);
 
   /**
    * 마지막 보물까지 저장을 마친 뒤 들고 있는 완료 정보.
@@ -485,20 +538,37 @@ export default function TreasureHuntScreen() {
     // 병합 결과는 항상 객체라서 "아무것도 못 받았다"가 그대로 전달된다.
     const accumulatedReward = mergeGrantedRewards(useTreasureProgressStore.getState().grantedReward, null);
 
-    const coords = progressId === null ? null : await readCoordinates();
-    // 좌표가 없으면 중단 요청도 보내지 않는다. 지어낸 좌표로 보내면 완료 화면의 '다음 장소'가
-    // 있지도 않은 곳 기준으로 뽑힌다 — 요청 실패와 같은 취급으로 화면만 빠져나간다.
-    if (progressId !== null && coords) {
+    // 좌표를 끝내 못 얻어도 **중단은 반드시 보낸다.** 안 보내면 서버가 미션을 계속 진행중으로
+    // 들고 있어 홈의 "진행중인 미션"에 남는다(사용자 확인). 완료 화면의 '다음 장소'가 부정확해지는
+    // 것보다 그 편이 낫다는 판단이다(missionStopCoords.ts). 미션을 끝내는 길이라 보물 좌표를 새로
+    // 뽑지 않으므로, readCoordinates 주석이 경고하는 "걸어서 닿을 수 없는 미션"은 생기지 않는다.
+    const coords = resolveStopCoordinates(await readCoordinates());
+
+    // 진입 직후 시작 POST가 끝나기 전에 포기하면 서버엔 진행도가 생겼는데 앱은 id를 모른다.
+    // 시작 엔드포인트는 이미 진행 중이면 기존 진행도를 그대로 돌려주므로, 한 번 더 불러 id를 얻는다.
+    let stopTargetId = progressId;
+    if (stopTargetId === null) {
       try {
-        const stopped = await stopProgress.mutateAsync({ treasureMissionProgressId: progressId, params: coords });
-        goToComplete(accumulatedReward, stopped.nextLocation);
-        return;
-      } catch {
-        // 중단 요청이 실패해도 사용자를 화면에 붙잡아 둘 이유는 없다
+        stopTargetId = (await startMissionAsync({ treasureMissionId, params: coords })).treasureMissionProgressId;
+      } catch (error) {
+        console.error('[treasure] 포기: 진행도 id 확보 실패', error);
+      }
+    }
+
+    if (stopTargetId !== null) {
+      for (const attempt of [1, 2]) {
+        try {
+          const stopped = await stopProgress.mutateAsync({ treasureMissionProgressId: stopTargetId, params: coords });
+          goToComplete(accumulatedReward, stopped.nextLocation);
+          return;
+        } catch (error) {
+          // 첫 실패는 조용히 한 번 더 시도한다. 두 번째도 실패하면 사용자를 붙잡지 않고 내보낸다
+          if (attempt === 2) console.error('[treasure] 포기 중단 요청 실패', error);
+        }
       }
     }
     goToComplete(accumulatedReward, null);
-  }, [clearCompleteResult, progressId, stopProgress, goToComplete]);
+  }, [clearCompleteResult, progressId, stopProgress, goToComplete, startMissionAsync, treasureMissionId]);
 
   const handleSelectTreasure = useCallback((treasure: Treasure, alreadyFound: boolean) => {
     setSelectedTreasure(treasure);
@@ -655,7 +725,14 @@ export default function TreasureHuntScreen() {
       {(isStarting || ((hasStartFailed || hasLocationFailed) && treasures.length === 0)) && (
         <View style={{ position: 'absolute', left: 16, right: 16, top: insets.top + HEADER_HEIGHT + 150, alignItems: 'center' }}>
           {isStarting ? (
-            <ActivityIndicator />
+            // 실패 안내와 **같은 두 줄 자리**를 잡는다: 아래 Text는 14/22라 두 줄이면 44다.
+            // 막대(14) 위아래에 4씩 둬서 한 줄을 22로 맞춘다 — 높이가 다르면 로딩에서 실패 문구로
+            // 넘어갈 때 이 안내 블록이 위아래로 튄다(최근에 홈에서 같은 결함을 고쳤다).
+            // 색은 기본값(흰색) 그대로다. 이 자리의 글자도 흰색이고, 아래는 지도라 유색 배경 위다.
+            <View style={{ alignItems: 'center' }} accessible accessibilityLabel="보물 정보를 불러오는 중">
+              <SkeletonBlock width={200} height={14} radius={7} style={{ marginVertical: 4 }} />
+              <SkeletonBlock width={160} height={14} radius={7} style={{ marginVertical: 4 }} />
+            </View>
           ) : (
             <Text style={{ color: '#ffffff', fontFamily: 'Pretendard-Regular', fontSize: 14, lineHeight: 22, textAlign: 'center' }}>
               {/* 측위 실패는 "잠시 후"가 아니라 위치를 켜야 풀리는 문제라 문구를 따로 둔다 */}
@@ -671,7 +748,7 @@ export default function TreasureHuntScreen() {
           레이어이므로 겹침은 순서로 해결하면 된다(시트를 아래 JSX에서 뒤에 그린다).
           거리 안내 토스트만 시트가 떠 있는 동안 끈다(useTreasureDistanceToast의 enabled).
           아래 여백은 거리 토스트가 이 카드를 비켜 가는 계산과 같은 상수를 쓴다(useTreasureDistanceToast) */}
-      {placeSummary !== null && (
+      {placeDescription !== null && (
         <View
           style={{
             position: 'absolute',
@@ -680,7 +757,7 @@ export default function TreasureHuntScreen() {
             bottom: Math.max(insets.bottom, MIN_BOTTOM_INSET) + TREASURE_PLACE_SUMMARY_BOTTOM_GAP,
           }}
         >
-          <TreasurePlaceSummaryCard summary={placeSummary} onHeightChange={setSummaryCardHeight} />
+          <TreasurePlaceSummaryCard summary={placeDescription} onHeightChange={setSummaryCardHeight} />
         </View>
       )}
 
@@ -690,8 +767,6 @@ export default function TreasureHuntScreen() {
           visible={isSheetOpen}
           treasureOrder={nearest.treasure.treasureIndex}
           image={nearest.treasure.closedIcon}
-          // 아래 장소 소개 카드는 이 시트가 덮으므로 같은 문구를 시트 안에서 이어 보여 준다
-          placeSummary={placeSummary}
           onOpenCamera={() => setPhase('camera')}
           onDismiss={() => setIsSheetDismissed(true)}
         />

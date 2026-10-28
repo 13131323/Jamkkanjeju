@@ -1,7 +1,11 @@
 import { StyleSheet } from 'react-native';
 
 /**
- * 협동 미션 초대 공유 시트.
+ * 공유 시트의 치수·색.
+ *
+ * 원래는 협동 미션 초대 전용(`Coop/InviteShareSheet/styles.ts`)이었다. AI 엽서도 같은 시트를 쓰게
+ * 되면서 컴포넌트와 함께 여기로 옮겼고, **값은 하나도 바꾸지 않았다** — 초대 시트가 기기에서 보이던
+ * 모습이 그대로여야 한다. 아래 근거가 전부 "협동 미션 초대 시안"을 가리키는 것은 그래서다.
  *
  * **시안 기준 — `app/assets/images/ShareBottomSheetContainer.png`.**
  * 시안은 폭 360dp 카드로 그려져 있어 1dp = 1px로 읽을 수 있다. 아래 값은 그 PNG를 실제로 재서 옮겼다
@@ -55,7 +59,7 @@ const CTA_RADIUS = CTA_HEIGHT / 2;
  */
 const NOTICE_GAP = 16;
 
-export const inviteShareSheetStyles = StyleSheet.create({
+export const shareSheetStyles = StyleSheet.create({
   // 시안에 없음 — PhotoGuideSheet의 Dark_Overlay(#000 55%)를 그대로 쓴다
   overlay: {
     position: 'absolute',
@@ -118,7 +122,7 @@ export const inviteShareSheetStyles = StyleSheet.create({
     gap: 12,
   },
   // 눌린 순간의 표시(pressed)는 없다 — NativeWind JSX 런타임이 Pressable의 함수형 style을 흘려서
-  // `({ pressed }) => …`를 쓰면 이 아래 카드·아이콘·CTA 스타일이 통째로 사라진다. 근거는 InviteShareSheet.tsx 설명.
+  // `({ pressed }) => …`를 쓰면 이 아래 카드·아이콘·CTA 스타일이 통째로 사라진다. 근거는 ShareSheet.tsx 설명.
   /**
    * 링크는 한 줄로 자른다. flex 1이 있어야 남는 폭을 다 쓰고 그 폭 기준으로 말줄임이 걸린다.
    * 시안도 꼬리 말줄임이다(`.../invite/ab...`) — 주소를 눈으로 다 읽을 필요가 없다.
@@ -162,7 +166,7 @@ export const inviteShareSheetStyles = StyleSheet.create({
    * 즉 "시안 radius가 20이라 공용 버튼을 못 쓴다"던 원래 이유는 없어졌다.
    *
    * 그래도 여기서 직접 그리는 건 남은 이유가 하나 있어서다: 이 시트의 `Pressable`은 style을 반드시
-   * 객체로 줘야 하는데(NativeWind JSX 런타임이 함수형 style을 흘린다 — InviteShareSheet.tsx 설명),
+   * 객체로 줘야 하는데(NativeWind JSX 런타임이 함수형 style을 흘린다 — ShareSheet.tsx 설명),
    * 공용 `Button`이 내부에서 무엇을 쓰는지에 이 시트의 레이아웃을 걸어 두고 싶지 않다. 실제로 그
    * 문제로 CTA가 화면에서 사라진 적이 있다. 공용 버튼으로 되돌리는 건 기기에서 높이 52가 그대로
    * 나오는 걸 확인한 다음에 할 일이다. 연타 방지는 지금도 공용 버튼과 같은 `useSinglePress`를 쓴다.
@@ -221,7 +225,7 @@ export const inviteShareSheetStyles = StyleSheet.create({
  * (`kakaolink://`는 Kakao SDK와 앱키 등록이 필요한데 이 저장소엔 없다), 인스타그램도 텍스트를
  * 실어 보내는 공개 경로가 없어 둘 다 빠졌다. 그 자리를 라인·문자가 채웠다.
  */
-export const INVITE_SHARE_ICON_COLORS = {
+export const SHARE_ICON_COLORS = {
   /**
    * 라인 — 원 전체를 라인 브랜드 그린 `#06c755`으로 채우고 글리프를 흰색으로 둔다.
    *

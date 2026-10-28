@@ -7,6 +7,7 @@ import { resolveWebViewUrl } from '@/config/webUrl';
 import { DEFAULT_TREASURE_MAP_PATH } from '@/components/Treasure/TreasureHuntMap/TreasureHuntMap';
 import { reissueWebViewAuth } from '@/components/HomeWebView/reissueWebViewAuth';
 import { buildWebViewBootstrapScript } from '@/components/HomeWebView/webViewBootstrapScript';
+import { useWebViewRecovery } from '@/hooks/useWebViewRecovery';
 
 /**
  * 보물찾기 intro에서 지도 페이지를 미리 받아 둔다.
@@ -25,6 +26,19 @@ import { buildWebViewBootstrapScript } from '@/components/HomeWebView/webViewBoo
 export function TreasureMapPrefetch() {
   const webViewRef = useRef<WebView | null>(null);
 
+  /**
+   * 렌더러가 죽어도 **다시 만들지 않는다**(`maxAttempts: 0`). 다른 WebView 화면은 2회까지 재생성해
+   * 되살리지만(useWebViewRecovery) 여기만 다른 이유:
+   *
+   * - 렌더러를 죽이는 건 대개 메모리 압박이다. 그 와중에 **화면에 보이지도 않는** 캐시 워밍용
+   *   WebView를 다시 띄우면, 사용자가 실제로 보고 있는 intro·step0이 쓸 메모리를 빼앗는다.
+   * - 실패해도 사용자에게 보이는 손해는 "시작하기 후 지도가 조금 늦게 뜬다"뿐이다.
+   *   `onError`를 조용히 넘기는 것과 같은 판단이다.
+   *
+   * 포기하면 WebView를 아예 렌더하지 않아 죽은 인스턴스가 트리에서 사라진다.
+   */
+  const recovery = useWebViewRecovery({ feature: 'treasure-map-prefetch', maxAttempts: 0 });
+
   // onMessage 자체는 꽂아야 한다. 없으면 react-native-webview가 messaging을 켜지 않아
   // web 쪽 `window.ReactNativeWebView`에 postMessage가 붙지 않는데, 주입 스크립트 때문에
   // **전역 객체는 만들어진다** — web의 sendToApp이 그 반쪽 상태를 오류로 기록하므로
@@ -38,19 +52,27 @@ export function TreasureMapPrefetch() {
     })(event);
   }, []);
 
+  // 워밍은 부가 기능이라 실패를 알릴 화면이 없다. 조용히 그만둔다
+  if (recovery.hasGivenUp) return null;
+
   return (
     <View style={styles.offscreen} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <WebView
+        key={recovery.webViewKey}
         ref={webViewRef}
         source={{
           uri: resolveWebViewUrl(process.env.EXPO_PUBLIC_WEB_URL, __DEV__, DEFAULT_TREASURE_MAP_PATH, process.env.EXPO_PUBLIC_DEV_WEB_URL),
         }}
         style={styles.webView}
+        // Android 시스템 글자 크기 설정을 WebView가 그대로 따라가면 디자인 폭(px 고정)이 깨진다
+        textZoom={100}
         // 캐시 워밍이 목적이므로 실패해도 조용히 넘어간다 — intro 화면을 방해하지 않는다
         onError={() => undefined}
         onMessage={onMessage}
         // 토큰·앱 정보를 문서 실행 전에 심는다. 빠져 있으면 워밍되는 것이 401 응답이다.
         injectedJavaScriptBeforeContentLoaded={buildWebViewBootstrapScript()}
+        // 렌더러 사망을 기록하고(didCrash 포함) 이 WebView를 접는다. 재시도는 하지 않는다 — 위 주석 참고
+        {...recovery.recoveryProps}
       />
     </View>
   );

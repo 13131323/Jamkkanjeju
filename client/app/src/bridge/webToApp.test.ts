@@ -83,6 +83,15 @@ describe('WebToAppMessageSchema', () => {
     expect(WebToAppMessageSchema.safeParse({ type: 'SAVE_IMAGE', payload: { dataUrl, fileName: 'a/b' }, traceId }).success).toBe(false);
   });
 
+  it('JUDGE_CODE_MODAL_STATE — 모달이 열렸는지를 불리언으로 받는다', () => {
+    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: true }, traceId }).success).toBe(true);
+    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: false }, traceId }).success).toBe(true);
+  });
+
+  it('JUDGE_CODE_MODAL_STATE — isOpen이 불리언이 아니면 거른다', () => {
+    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: 'true' }, traceId }).success).toBe(false);
+  });
+
   it('기존 메시지가 함께 유효하다 — union에 항목을 추가하며 깨뜨리지 않았는지 확인한다', () => {
     expect(WebToAppMessageSchema.safeParse({ type: 'PING', payload: { timestamp: 1 }, traceId }).success).toBe(true);
     expect(WebToAppMessageSchema.safeParse({ type: 'LOCATION_PERMISSION_REQUEST', payload: {}, traceId }).success).toBe(true);

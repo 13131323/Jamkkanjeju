@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { toCouponUsageConditions } from '@packages/shared';
 import { isCouponUsed, markCouponUsed, subscribeUsedCoupons, usedCouponServerSnapshot } from '@entities/coupon';
+import { toHttpsImageUrl } from '@shared/lib/imageUrl';
+import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 export type CouponModalPayload = {
   /** 쿠폰 사용처. 서버의 couponLocation */
@@ -100,26 +102,24 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
 
   // translateY의 100%는 **시트 자기 높이** 기준이라, 높이를 측정하지 않고도 "손잡이만 남기고 내리기"를
   // calc으로 그대로 쓸 수 있다(내용 길이에 따라 시트 높이가 달라지는 화면이라 측정은 리사이즈 관찰까지 끌고 온다).
-  const sheetTransform = !isVisible
-    ? 'translateY(100%)'
-    : isCollapsed
-      ? `translateY(calc(100% - ${COLLAPSED_PEEK_PX}px + ${dragY}px))`
-      : `translateY(${dragY}px)`;
+  const sheetTransform = !isVisible ? 'translateY(100%)' : isCollapsed ? `translateY(calc(100% - ${COLLAPSED_PEEK_PX}px + ${dragY}px))` : `translateY(${dragY}px)`;
 
   return (
     <>
-      {/* 뒤 배경은 펼친 상태에서만 깐다. 내린 상태에서도 깔면 지도 전체를 덮어 사용처 마커를
-          누를 수 없다 — 마커 탭이 시트를 되올리는 경로라 그러면 되돌릴 방법이 사라진다.
-          누르면 닫는 대신 내린다(닫으면 되돌아올 길이 없다). */}
-      {!isCollapsed && <div className="absolute inset-0 z-10" onClick={onCollapse} />}
+      {/* 바깥 탭을 받던 투명 레이어는 걷어냈다 — 지도를 통째로 덮어 시트가 떠 있는 동안 지도를 끌 수
+          없었다. 지금은 지도 탭이 내리는 신호다(MapView의 useDismissOnMapGesture). 닫지 않고 내리는
+          이유는 그대로다 — 닫으면 되돌아올 길이 없고, 마커 탭이 되올리는 유일한 경로다. */}
       <div
         className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[70%] flex-col rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
           isDragging ? '' : 'transition-transform duration-300 ease-out'
         }`}
         style={{ transform: sheetTransform }}
       >
+        {/* 손잡이 줄만 드래그 영역이면 잡을 곳이 28px뿐이라 끌기가 잘 인식되지 않았다 —
+            제목까지 드래그 영역에 넣는다. 그래서 제목은 스크롤 밖 고정이고 스크롤은 사진부터 시작한다.
+            드래그 중 제목 글자가 선택되지 않게 select-none을 건다 */}
         <div
-          className="shrink-0 px-4 pt-3"
+          className="shrink-0 px-4 pt-3 select-none"
           style={{ touchAction: 'none' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -129,22 +129,20 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           <div className="flex justify-center">
             <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
           </div>
+
+          <div className="flex flex-col gap-1 pt-4">
+            <span className="text-label-md text-warm-neutral-600 font-medium">{couponLocation}</span>
+            {/* 디자인 문구는 "천원 할인"이지만 서버는 금액을 숫자로 준다 — 한글 수사로 되돌릴 규칙이 없어 숫자 표기를 쓴다 */}
+            <h2 className="text-heading-h3 text-warm-neutral-900 font-bold">보물찾기 완료 {couponPrice.toLocaleString('ko-KR')}원 할인 쿠폰</h2>
+          </div>
         </div>
 
         <div className="flex grow flex-col gap-4 overflow-y-auto px-4 pt-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-label-md text-warm-neutral-600 font-medium">{couponLocation}</span>
-            {/* 디자인 문구는 "천원 할인"이지만 서버는 금액을 숫자로 준다 — 한글 수사로 되돌릴 규칙이 없어 숫자 표기를 쓴다 */}
-            <h2 className="text-heading-h3 text-warm-neutral-900 font-bold">
-              보물찾기 완료 {couponPrice.toLocaleString('ko-KR')}원 할인 쿠폰
-            </h2>
-          </div>
-
           {/* TourAPI 대표 이미지라 없을 수 있다. 빈 자리를 남기지 않고 회색 판으로 둔다 */}
           {locationImageUrl && !hasImageError ? (
             // 외부 이미지 도메인을 next.config에 등록하지 않아도 되도록 img를 그대로 쓴다
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={locationImageUrl} alt="" aria-hidden="true" onError={() => setHasImageError(true)} className="h-45 w-full rounded-lg object-cover" />
+            <img src={toHttpsImageUrl(locationImageUrl)} alt="" aria-hidden="true" onError={() => setHasImageError(true)} className="h-45 w-full rounded-lg object-cover" />
           ) : (
             <div className="bg-warm-neutral-100 h-45 w-full rounded-lg" />
           )}
@@ -169,16 +167,17 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           </div>
         </div>
 
-        <div className="shrink-0 px-4 pt-4" style={{ paddingBottom: `max(20px, var(--safe-area-bottom))` }}>
-          {/* 지도 모달의 CTA와 같은 pill 버튼 — MissionListItem의 "미션 시작"(rounded-full py-3
-              text-label-md font-medium)을 그대로 쓴다. 이 시트만 rounded-lg 각진 버튼이라 같은 지도
-              위에서 모양이 갈렸다. 색도 그 CTA의 tertiary-800에 맞춘다.
+        <div className="shrink-0 px-4 pt-4" style={{ paddingBottom: SHEET_BOTTOM_PADDING }}>
+          {/* 지도 모달의 CTA와 같은 pill 버튼 — MissionListItem의 "미션 시작"을 그대로 쓴다.
+              이 시트만 rounded-lg 각진 버튼이라 같은 지도 위에서 모양이 갈렸다. 색도 그 CTA의
+              tertiary-800에 맞춘다. 높이는 장소 상세의 "미션 시작하기"와 같은 h-12로 맞춰 둔다
+              (padding으로 높이를 만들면 글자 크기에 따라 버튼마다 높이가 갈린다).
               누르면 되돌릴 수 없으므로 disabled로 바꿔 두 번 눌리지 않게 한다 */}
           <button
             type="button"
             onClick={handleUseCoupon}
             disabled={isUsed}
-            className={`text-label-md text-cool-neutral-white w-full rounded-full py-3 font-medium ${isUsed ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
+            className={`text-label-md text-cool-neutral-white flex h-12 w-full items-center justify-center rounded-full font-medium ${isUsed ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
           >
             {isUsed ? '쿠폰 사용 완료' : '쿠폰 사용하기'}
           </button>
@@ -191,12 +190,7 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
 function PinIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true" className="shrink-0">
-      <path
-        d="M7 1.5c-2.2 0-4 1.75-4 3.9 0 2.8 4 7.1 4 7.1s4-4.3 4-7.1c0-2.15-1.8-3.9-4-3.9Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        className="text-warm-neutral-500"
-      />
+      <path d="M7 1.5c-2.2 0-4 1.75-4 3.9 0 2.8 4 7.1 4 7.1s4-4.3 4-7.1c0-2.15-1.8-3.9-4-3.9Z" stroke="currentColor" strokeWidth="1.2" className="text-warm-neutral-500" />
       <circle cx="7" cy="5.4" r="1.4" className="fill-warm-neutral-500" />
     </svg>
   );

@@ -9,6 +9,9 @@ import { StyleSheet } from 'react-native';
  */
 export const RESULT_FOOTER_BOTTOM = 32;
 
+/** 결과 화면 자리표시 색. 흰 배경(screen) 위라 흰색은 보이지 않는다 — cool-neutral-100 */
+export const RESULT_SKELETON_COLOR = '#efefef';
+
 export const onboardingResultStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#ffffff' },
   scroll: { flex: 1 },
@@ -62,16 +65,32 @@ export const onboardingResultStyles = StyleSheet.create({
     lineHeight: 30,
     textAlign: 'center',
   },
+  // 219 고정폭은 두세 단어마다 줄이 바뀌었다. contents의 좌우 16을 뺀 폭을 다 쓰되
+  // 큰 화면에서 한 줄이 지나치게 길어지지 않게 300에서 멈춘다(가운데 정렬 유지).
   characterDescription: {
     marginTop: 8,
     alignSelf: 'center',
-    width: 219,
+    width: '100%',
+    maxWidth: 300,
     color: '#7c6e5e',
     fontFamily: 'Pretendard-Regular',
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
   },
+
+  /**
+   * 저장 응답을 기다리는 동안 제목·설명 자리에 들어가는 자리표시 묶음.
+   *
+   * 바깥은 characterName과 같은 stretch, 안쪽은 가운데 정렬이다 — 실제 두 Text가
+   * (stretch + textAlign center) / (maxWidth 300 + alignSelf center)로 가운데에 오는 것과 같은 결과다.
+   * 위아래 여백(12 / 8)과 줄 높이(30 / 18 x 2)도 실제 글줄과 같은 값이라 값이 와도 아래가 밀리지 않는다.
+   */
+  analyzingSkeleton: { alignSelf: 'stretch', alignItems: 'center' },
+  analyzingTitleSkeleton: { marginTop: 12 },
+  analyzingDescriptionSkeleton: { marginTop: 8, alignItems: 'center' },
+  /** 막대 12 + 위아래 3 = 실제 설명 한 줄(12/18)과 같은 18 */
+  analyzingDescriptionLine: { marginVertical: 3 },
 
   keywords: {
     marginTop: 32,

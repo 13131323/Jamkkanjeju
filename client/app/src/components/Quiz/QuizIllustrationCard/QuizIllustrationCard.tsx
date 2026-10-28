@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
+import { SkeletonBlock } from '@/components/SkeletonBlock/SkeletonBlock';
 
 interface QuizIllustrationCardProps {
   /** 서버가 문제마다 주는 이미지 URL */
@@ -14,6 +15,9 @@ interface QuizIllustrationCardProps {
  * contain으로 전체를 보여준 뒤 모서리만 둥글린다.
  */
 const CARD_HEIGHT = 180;
+
+/** 자리표시 색. 아래 실패 안내의 배경(bg-cool-neutral-100)과 같은 값이라 두 상태가 같은 톤으로 보인다 */
+const SKELETON_COLOR = '#efefef';
 
 type LoadStatus = 'loading' | 'loaded' | 'failed';
 
@@ -43,9 +47,14 @@ export function QuizIllustrationCard({ imageUri }: QuizIllustrationCardProps) {
             onError={() => setLoad({ uri: imageUri, status: 'failed' })}
           />
           {status === 'loading' ? (
-            // 카드 높이를 그대로 유지해야 문제·보기 위치가 흔들리지 않아 이미지 위에 겹쳐 올린다
-            <View style={StyleSheet.absoluteFill} className="items-center justify-center">
-              <ActivityIndicator />
+            // 카드 높이를 그대로 유지해야 문제·보기 위치가 흔들리지 않아 이미지 위에 겹쳐 올린다.
+            //
+            // 가운데 스피너가 아니라 **카드를 통째로 덮는 자리표시**다. 곧 나타날 것이 이 상자를
+            // 채우는 그림 한 장이라, 그림이 들어올 자리를 그대로 그리는 편이 "무엇을 기다리는지"를
+            // 그대로 보여준다. 크기는 카드와 같은 CARD_HEIGHT · radius 20이라 어차피 튈 높이가 없다.
+            // 색은 로딩 실패 안내가 쓰는 배경(cool-neutral-100)과 같은 값으로, 흰 카드 위에서 보인다.
+            <View style={StyleSheet.absoluteFill}>
+              <SkeletonBlock width="100%" height={CARD_HEIGHT} radius={20} color={SKELETON_COLOR} />
             </View>
           ) : null}
         </>

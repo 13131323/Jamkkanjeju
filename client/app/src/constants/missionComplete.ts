@@ -32,6 +32,12 @@ export interface MissionCompleteResult {
    * null이면 방명록이 좌표만 가진 형태로 열린다(사용자가 장소명을 직접 적는다).
    */
   completedLocationId: number | null;
+  /**
+   * `completedLocationId`와 짝이 되는 장소명. 방명록 화면이 이 장소로 잠글 때 보여줄 값이라,
+   * completedLocationId가 있는데 이 값이 없으면 잠긴 입력칸이 빈 채로 보인다.
+   * completedLocationId가 null인 미션(문화·협동)은 이 값도 안 넘겨도 된다(옵셔널).
+   */
+  completedLocationName?: string | null;
 }
 
 /**

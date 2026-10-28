@@ -11,7 +11,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import { useCallback, useEffect, useState } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Dimensions, Image, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NetworkErrorScreen } from '@/components/NetworkErrorScreen/NetworkErrorScreen';
 import { ToastProvider } from '@/components/Toast/Toast';
@@ -34,6 +35,8 @@ Sentry.init({
 
 const queryClient = new QueryClient();
 
+/** 스플래시 원본 크기. 화면 폭에 맞춰 높이를 계산할 때 쓴다 */
+const SPLASH_SIZE = { width: 1080, height: 2400 };
 const splashImage = require('@assets/splash.png');
 
 /**
@@ -49,51 +52,52 @@ function SafeAreaPadding({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
 
   // 배경을 비워두면 하단 inset 띄에 안드로이드 윈도우 배경이 비친다.
-  // 이 padding을 받는 화면(온보딩·result·네트워크 에러)은 전부 흰 배경이라 맞춰둔다.
+  // 이 padding을 받는 화면(온보딩·result 등)은 전부 흰 배경이라 맞춰둔다.
+  // 네트워크 오류 화면은 여기 밖에서 그려진다(전체 화면을 덮어야 해서 안전영역을 직접 읽는다).
   // 유색 배경 화면은 FullBleed로 이 padding 자체를 취소한다.
   return <View style={{ flex: 1, backgroundColor: '#ffffff', paddingBottom: Math.max(insets.bottom, MIN_BOTTOM_INSET) }}>{children}</View>;
 }
 
 /**
- * 가상 스플래시의 push-in 연출.
- *
- * 시작 배율을 1보다 크게 두는 이유: resizeMode가 cover라 1.0에서는 이미지가 화면에 딱 맞고,
- * 여기서 더 줄이는 방향으로는 여백이 생긴다. 1.02에서 시작해 1.08까지 밀어 넣으면
- * 어느 구간에서도 빈 틈이 보이지 않는다.
- */
-const SPLASH_SCALE_FROM = 1.02;
-const SPLASH_SCALE_TO = 1.05;
-/** 확대에 걸리는 시간(ms). 준비가 더 빨리 끝나면 중간에 끊기지만 완만해서 튀지 않는다 */
-const SPLASH_SCALE_MS = 1600;
-
-/**
  * 가상 스플래시.
  *
  * 네이티브 스플래시를 감춘 뒤 폰트 로드와 네트워크 확인이 끝날 때까지 짧게 띄운다.
- * 정지 이미지만 두면 멈춘 화면처럼 보여서 아주 조금씩 확대해 살아 있는 느낌을 준다.
+ * 이미지는 확대 없이 그대로 둔다 — 네이티브 스플래시에서 넘어올 때 크기가 달라지면 화면이 튄다.
  *
  * onLayout으로 네이티브 스플래시를 감추는 책임은 호출부에 그대로 남겼다 —
  * 이 컴포넌트가 처음 그려진 시점이 곧 "네이티브 스플래시를 걷어도 되는 시점"이다.
+ *
+ * 네비게이션바를 비켜 가지 않는다(사용자 결정) — 바 위에서 끝나게 하려면 그만큼 이미지를 줄여야 하고,
+ * 그러면 원본 비율과 어긋난 만큼이 잘려 나간다. 화면을 꽉 채우는 쪽을 택했다.
  */
-function AnimatedSplash({ onLayout }: { onLayout: () => void }) {
-  // 렌더 중 ref 접근을 피하려고 지연 초기화 useState로 만든다(Toast.tsx와 같은 이유)
-  const [scale] = useState(() => new Animated.Value(SPLASH_SCALE_FROM));
+function AppSplash({ onLayout }: { onLayout: () => void }) {
+  /**
+   * 화면을 덮을 크기를 **숫자로 직접 계산해 넘긴다.**
+   *
+   * '100%'·aspectRatio·minHeight를 섞어 쓰면 Image가 스타일을 버리고 자기 원본 크기(1080x2400)를
+   * 그대로 써서 화면 한 귀퉁이만 보인다(두 번 겪었다).
+   *
+   * 기준 크기는 실제 레이아웃(onLayout)이다. `useWindowDimensions`는 안드로이드에서 시스템 바를 뺀
+   * 값이라 edge-to-edge 컨테이너보다 작아 아래에 흰 띠가 남는다. 첫 프레임용 초기값만 시스템 바를
+   * 포함하는 'screen'에서 읽는다.
+   */
+  const [size, setSize] = useState(() => {
+    const screen = Dimensions.get('screen');
+    return { width: screen.width, height: screen.height };
+  });
 
-  useEffect(() => {
-    const animation = Animated.timing(scale, {
-      toValue: SPLASH_SCALE_TO,
-      duration: SPLASH_SCALE_MS,
-      // 처음에 빠르게 밀고 끝에서 잦아들어야 "훅 들어왔다 멈추는" 느낌이 난다
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [scale]);
+  const handleLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) setSize({ width, height });
+    onLayout();
+  };
+
+  // cover와 같은 계산: 두 축 중 더 많이 키워야 하는 쪽에 배율을 맞추면 남는 쪽이 잘리며 꽉 찬다
+  const scale = Math.max(size.width / SPLASH_SIZE.width, size.height / SPLASH_SIZE.height);
 
   return (
-    <View style={styles.splashContainer} onLayout={onLayout}>
-      <Animated.Image source={splashImage} style={[styles.splashImage, { transform: [{ scale }] }]} />
+    <View style={styles.splashContainer} onLayout={handleLayout}>
+      <Image source={splashImage} style={[styles.splashImage, { width: Math.ceil(SPLASH_SIZE.width * scale), height: Math.ceil(SPLASH_SIZE.height * scale) }]} />
     </View>
   );
 }
@@ -134,23 +138,42 @@ function RootLayout() {
     SplashScreen.hide();
   }, []);
 
-  // 네트워크 상태 재확인과 토큰 재발급을 함께 돌린다.
+  // 부트스트랩 실패의 재시도: 네트워크 상태 재확인과 토큰 재발급을 함께 돌린다.
   // 서버 오류로 들어온 경우 네트워크는 이미 정상이라 refresh만으로는 아무 일도 안 일어난다.
   const bootstrapRetry = bootstrap.retry;
-  const handleRetry = useCallback(() => {
+  const handleBootstrapRetry = useCallback(() => {
     void refreshNetworkStatus();
     bootstrapRetry();
   }, [refreshNetworkStatus, bootstrapRetry]);
 
+  /**
+   * 오프라인 오버레이의 재시도: **네트워크만 다시 읽는다.**
+   *
+   * 여기서 `bootstrap.retry`를 함께 부르면 안 된다. 그 함수는 상태를 'checking'으로 되돌려
+   * `appReady`를 false로 만들고, 그러면 아래 스플래시 갈래가 Stack을 통째로 언마운트한다 —
+   * 오버레이로 화면을 지켜 놓고 재시도 버튼이 그 화면을 날리는 꼴이 된다.
+   * 이 갈래는 이미 세션이 준비된 뒤라 다시 발급받을 이유도 없다.
+   */
+  const handleNetworkRetry = useCallback(() => {
+    void refreshNetworkStatus();
+  }, [refreshNetworkStatus]);
+
   if (!appReady) {
-    return <AnimatedSplash onLayout={handleSplashLayout} />;
+    return <AppSplash onLayout={handleSplashLayout} />;
   }
 
-  if (networkStatus === 'offline' || bootstrap.status !== 'ready') {
-    // NetworkErrorScreen이 insets를 직접 읽으므로 이 갈래도 Provider 안에서 렌더해야 한다
+  /**
+   * 부트스트랩 실패는 화면을 통째로 막는다.
+   *
+   * 세션이 없으면 어느 화면도 자기 데이터를 열 수 없어 뒤에 무엇을 띄워 봐야 의미가 없다.
+   * 게다가 이 판정은 **앱 시작 때 한 번뿐이라**(useAppBootstrap의 effect는 재시도로만 다시 돈다)
+   * 이 갈래에 들어오는 시점에는 지켜 줄 화면 자체가 아직 없다.
+   * NetworkErrorScreen이 insets를 직접 읽으므로 이 갈래도 Provider 안에서 렌더해야 한다.
+   */
+  if (bootstrap.status !== 'ready') {
     return (
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <NetworkErrorScreen onRetry={handleRetry} variant={bootstrap.status === 'server-error' ? 'server' : 'offline'} />
+        <NetworkErrorScreen onRetry={handleBootstrapRetry} variant={bootstrap.status === 'server-error' ? 'server' : 'offline'} />
       </SafeAreaProvider>
     );
   }
@@ -184,20 +207,46 @@ function RootLayout() {
         </ToastProvider>
         <StatusBar style="auto" />
       </QueryClientProvider>
+      {/* 오프라인 안내는 Stack을 **덮기만 하고 걷어내지 않는다.**
+
+          예전에는 이 갈래에서 Stack 대신 NetworkErrorScreen을 return했는데, 그러면 루트
+          네비게이터가 언마운트되면서 expo-router가 들고 있던 화면 스택이 통째로 사라진다.
+          연결이 돌아와 Stack이 다시 마운트되면 초기 경로(index)부터 시작하므로, 사용자는
+          보고 있던 화면이 아니라 홈으로 떨어진다 — "나갔다 들어오면 이어서 못 쓴다"의 정체가
+          이것이다. 화면 안의 상태(미션 진행 중인 입력 등)도 함께 날아간다.
+
+          오버레이는 불투명한 전체 화면이라 보이는 모습은 그대로이고(터치도 여기서 막힌다),
+          연결이 돌아오면 오버레이만 사라져 원래 화면이 그 자리에 그대로 남는다.
+          QueryClientProvider 바깥에 두는 이유는 이 화면이 쿼리를 쓰지 않아서이고,
+          형제 중 마지막에 두는 이유는 RN에서 나중에 그려진 형제가 위에 오기 때문이다
+          (토스트까지 덮어야 한다). */}
+      {networkStatus === 'offline' && (
+        <View style={StyleSheet.absoluteFill}>
+          <NetworkErrorScreen onRetry={handleNetworkRetry} />
+        </View>
+      )}
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   splashContainer: {
-    // 네이티브 스플래시 배경(app.json의 expo-splash-screen backgroundColor)과 같은 값이어야
-    // 네이티브 → 가상 스플래시로 넘어가는 순간 배경색이 튀지 않는다.
-    // splash.png가 cover로 화면을 덮으므로 평소엔 보이지 않고, 이미지 디코딩 중에만 드러난다.
+    // 배경색은 네이티브 스플래시(app.json backgroundColor)와 같아야 넘어갈 때 튀지 않는다.
+    // 가운데 정렬 + overflow hidden — 화면보다 큰 쪽이 중앙 기준으로 잘려 나간다(cover와 같은 결과).
     flex: 1,
     backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
   },
+  /**
+   * 크기는 AppSplash가 숫자로 계산해 넘긴다(그 주석 참고).
+   *
+   * 절대 위치 대신 일반 플렉스 자식인 이유: 컨테이너의 paddingBottom(네비게이션바 몫)이
+   * 그대로 반영되어 이미지가 바 위에서 끝난다. 컨테이너보다 높으면 flex-end라 위로 넘치고,
+   * 넘친 만큼은 overflow hidden이 잘라낸다 — 잘리는 쪽이 여백 넉넉한 하늘이라 아래 저작권 줄은 남는다.
+   */
   splashImage: {
-    ...StyleSheet.absoluteFill,
     resizeMode: 'cover',
   },
 });

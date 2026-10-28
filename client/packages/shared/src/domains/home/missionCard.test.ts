@@ -62,7 +62,7 @@ describe('toHomeMissionCards', () => {
       route: 'coop',
       title: '함께 키우는 귤나무',
       placeLabel: '카멜리아힐',
-      distanceLabel: '25.1km',
+      distanceLabel: '25km',
       durationMinutes: 335,
     });
   });

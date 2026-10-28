@@ -59,15 +59,14 @@ function GuestbookDetailCardContent({ guestbook }: { guestbook: NormalizedGuestb
 
   const imageUrl = guestbook.contentImageUrls?.[0];
   const extraImageCount = (guestbook.contentImageUrls?.length ?? 0) - 1;
-  // TEMP: 스토리지에 실제 mp3가 없어서 public/audios의 목업 파일로 대체
-  const audioUrl = guestbook.contentAudioUrls?.[0] ? '/audios/mock-audio-01.mp3' : undefined;
+  const audioUrl = guestbook.contentAudioUrls?.[0];
 
   const metaSegments = [audioUrl || imageUrl ? null : `📍 ${guestbook.displayLocationName}`, formatRelativeTime(guestbook.savedAt), guestbook.contentWeather].filter(Boolean);
 
   return (
     <div className="flex flex-col gap-3 p-4">
       {audioUrl ? (
-        <AudioPlayerCard audioUrl={audioUrl} placeName={guestbook.displayLocationName} title={'노래제목넣어'} />
+        <AudioPlayerCard audioUrl={audioUrl} placeName={guestbook.displayLocationName} title={guestbook.audioTitle ?? guestbook.displayLocationName} />
       ) : imageUrl ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -80,10 +79,14 @@ function GuestbookDetailCardContent({ guestbook }: { guestbook: NormalizedGuestb
       ) : null}
 
       <div className="flex items-center gap-3">
-        {/* TODO: 작성자 프로필/닉네임 — GET /api/v1/guestbooks 응답엔 없음(map 모달용 응답(userNickname)에만 존재). 백엔드에 이 엔드포인트에도 추가 요청 필요 */}
-        <span className="bg-warm-neutral-200 h-11 w-11 shrink-0 rounded-full" aria-hidden="true" />
+        {guestbook.characterImgUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={guestbook.characterImgUrl} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="bg-warm-neutral-200 h-11 w-11 shrink-0 rounded-full" aria-hidden="true" />
+        )}
         <div className="flex min-w-0 flex-col">
-          <span className="text-label-md text-warm-neutral-900 font-bold">익명</span>
+          <span className="text-label-md text-warm-neutral-900 font-bold">{guestbook.userNickname ?? '익명'}</span>
           <span className="text-label-sm text-warm-neutral-400 truncate">{metaSegments.join(' · ')}</span>
         </div>
         <button

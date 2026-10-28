@@ -5,7 +5,8 @@ import { keepPreviousData, useQueries } from '@tanstack/react-query';
 import type { GeneratedApi } from '@packages/shared';
 import { boundsContains, centerOf, surroundingTileIds, tileBoundsOf, tileCenterOf, type Bounds } from '@shared/config/geo';
 import { buildMapContentsParams } from '@shared/lib/buildMapContentsParams';
-import { getGetMapContentsApiV1MapContentsGetQueryKey, getMapContentsApiV1MapContentsGet } from '@/services/api/map/map';
+import { getMapContents, getMapContentsQueryKey } from '@shared/api/mapContents';
+import { useCurrentCoords } from '@entities/location';
 import type { RoadGuestbookMarker } from './types';
 
 function toRoadGuestbookMarker(guestbook: GeneratedApi.MapRoadGuestbookResponse): RoadGuestbookMarker {
@@ -17,20 +18,21 @@ function toRoadGuestbookMarker(guestbook: GeneratedApi.MapRoadGuestbookResponse)
   };
 }
 
-// GET /api/v1/map/contents 중 roadGuestbooks만 쓰는 쪽 — locations는 entities/place의 useTiledPlaceLocations가
+// GET /api/v2/map/contents 중 roadGuestbooks만 쓰는 쪽 — locations는 entities/place의 useTiledPlaceLocations가
 // 정확히 같은 고정 타일(bounds/center) 파라미터로 독립 호출한다. queryKey가 같으면 TanStack Query가
 // 캐시를 공유해 실제 네트워크 요청은 한 번만 나간다(장소 마커 쪽 9개 타일 요청에 그대로 얹혀간다) —
 // 예전에는 여기만 라이브 뷰포트로 따로 불러서, 이미 타일로 받아둔 지역을 또 한 번 조회하고 있었다.
 // 방명록 마커는 detail 티어(isClustered=false)에서만 쓰인다.
 export function useRoadGuestbooks({ bounds, enabled }: { bounds: Bounds | null; enabled: boolean }): { guestbooks: RoadGuestbookMarker[]; isLoading: boolean } {
   const tiles = bounds ? surroundingTileIds(centerOf(bounds)) : [];
+  const userCoords = useCurrentCoords();
 
   const results = useQueries({
     queries: tiles.map((tile) => {
-      const params = buildMapContentsParams(tileBoundsOf(tile), tileCenterOf(tile), false);
+      const params = buildMapContentsParams(tileBoundsOf(tile), userCoords ?? tileCenterOf(tile), false);
       return {
-        queryKey: getGetMapContentsApiV1MapContentsGetQueryKey(params),
-        queryFn: ({ signal }: { signal: AbortSignal }) => getMapContentsApiV1MapContentsGet(params, undefined, signal),
+        queryKey: getMapContentsQueryKey(params),
+        queryFn: ({ signal }: { signal: AbortSignal }) => getMapContents(params, signal),
         enabled,
         throwOnError: false,
         placeholderData: keepPreviousData,

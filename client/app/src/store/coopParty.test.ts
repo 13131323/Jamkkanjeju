@@ -353,3 +353,69 @@ describe('enterRoom — 방을 건너 스냅샷이 새지 않는다', () => {
     }
   });
 });
+
+/**
+ * "혼자 하고 있었는데 나갔다 들어오니 세 명이 생겼다"의 원인이 된 규칙.
+ *
+ * 거절 기록이 EMPTY에 있어서 "잠깐 쉴게요"의 `reset()`이 함께 지웠다. 그러면 같은 방으로 다시
+ * 들어올 때 `simulateParticipants`가 "거절된 적 없는 가짜 팀원"을 다시 전원 붙인다 — 방장이
+ * 이미 내린 결정이 방을 떠났다는 이유로 무효가 됐다(기기에서 확인, 심사위원용 모드).
+ *
+ * 방 단위로는 이어지되 방이 바뀌면 백지여야 하므로, 방 번호를 함께 들고 대조한다.
+ */
+describe('가짜 팀원 수락·거절의 수명', () => {
+  beforeEach(() => {
+    useCoopPartyStore.getState().reset();
+    useCoopPartyStore.getState().forgetPausedRoom();
+    useCoopPartyStore.setState({ acceptedSimulatedIds: [], rejectedSimulatedIds: [], simulatedRoomId: null });
+  });
+
+  it('쉬었다 같은 방으로 돌아와도 거절이 유지된다 — 되살아나면 혼자 하던 화면에 팀원이 생긴다', () => {
+    const store = useCoopPartyStore.getState();
+    store.enterRoom({ missionProgressId: 10, myParticipantId: ME, participants: SOLO });
+    store.rejectSimulated(901);
+    store.rejectSimulated(902);
+
+    // "잠깐 쉴게요" → reset → 같은 방으로 이어하기
+    useCoopPartyStore.getState().reset();
+    useCoopPartyStore.getState().enterRoom({ missionProgressId: 10, participants: SOLO });
+
+    expect(useCoopPartyStore.getState().rejectedSimulatedIds).toEqual([901, 902]);
+  });
+
+  it('다른 방으로 들어가면 결정을 버린다 — 새 방의 초대는 다시 받는 것이 맞다', () => {
+    const store = useCoopPartyStore.getState();
+    store.enterRoom({ missionProgressId: 10, myParticipantId: ME, participants: SOLO });
+    store.rejectSimulated(901);
+    store.acceptSimulated(902);
+
+    useCoopPartyStore.getState().enterRoom({ missionProgressId: 11, participants: SOLO });
+
+    expect(useCoopPartyStore.getState().rejectedSimulatedIds).toEqual([]);
+    expect(useCoopPartyStore.getState().acceptedSimulatedIds).toEqual([]);
+  });
+
+  it('거절이 유지되면 그 팀원은 목록에 다시 붙지 않는다', () => {
+    const store = useCoopPartyStore.getState();
+    store.enterRoom({ missionProgressId: 10, myParticipantId: ME, participants: SOLO });
+    const [firstSim] = simulateParticipants(SOLO, [], [], true).filter((p) => p.participantId !== ME);
+    store.rejectSimulated(firstSim.participantId);
+
+    useCoopPartyStore.getState().reset();
+    useCoopPartyStore.getState().enterRoom({ missionProgressId: 10, participants: SOLO });
+
+    const { rejectedSimulatedIds, acceptedSimulatedIds } = useCoopPartyStore.getState();
+    const shown = simulateParticipants(SOLO, acceptedSimulatedIds, rejectedSimulatedIds, true);
+    expect(shown.some((p) => p.participantId === firstSim.participantId)).toBe(false);
+  });
+
+  // 빈 목록이 매번 새 배열이면 이 값을 구독하는 화면이 방에 들어올 때마다 다시 그려진다
+  it('결정이 없을 때는 같은 빈 배열 참조를 돌려준다', () => {
+    const store = useCoopPartyStore.getState();
+    store.enterRoom({ missionProgressId: 10, participants: SOLO });
+    const first = useCoopPartyStore.getState().rejectedSimulatedIds;
+    useCoopPartyStore.getState().enterRoom({ missionProgressId: 11, participants: SOLO });
+
+    expect(useCoopPartyStore.getState().rejectedSimulatedIds).toBe(first);
+  });
+});

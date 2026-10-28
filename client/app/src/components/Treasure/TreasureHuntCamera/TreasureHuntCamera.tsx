@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button/Button';
+import { SkeletonBlock } from '@/components/SkeletonBlock/SkeletonBlock';
 import { TreasureHeader } from '@/components/Treasure/TreasureHeader/TreasureHeader';
 import { TreasureProgressCard } from '@/components/Treasure/TreasureProgressCard/TreasureProgressCard';
 import { Treasure, TREASURE_DEV_ALWAYS_VISIBLE, TREASURE_DISCOVERY_RADIUS_METERS, TREASURE_PLACE_GUIDE_ICON } from '@/constants/treasureHunt';
@@ -12,6 +13,11 @@ import { CAMERA_GUIDE_DEFAULT, resolveCameraGuide } from './cameraGuide';
 import { computeDevTreasurePlacement, computeTreasurePlacement, TreasurePlacement } from './geoPlacement';
 import { separateTreasurePlacements } from './separatePlacements';
 import { CAMERA_HEADER_HEIGHT, CAMERA_PROGRESS_TOP_GAP, treasureHuntCameraStyles as styles } from './styles';
+
+/** 카메라 프리뷰 자리표시 색. 검은 배경 위라 흰색은 너무 밝다 — cool-neutral-500 */
+const PREVIEW_SKELETON_COLOR = '#888888';
+/** 안내 알약(반투명 흰 판) 안의 자리표시 색. cool-neutral-200 */
+const PILL_SKELETON_COLOR = '#dddddd';
 
 interface TreasureHuntCameraProps {
   /**
@@ -180,15 +186,47 @@ export function TreasureHuntCamera({ treasures, foundTreasureIndexes, totalCount
     return <PermissionFallback message={'위치 권한을 허용해야 보물을 찾을 수 있어요.\n설정에서 위치 권한을 켜주세요.'} onBack={onBack} />;
   }
 
-  if (!cameraPermission || !cameraPermission.granted) {
-    // permission이 null이면 아직 확인 중이라 요청 버튼 없이 안내만 보여준다(빈 검은 화면 방지)
+  // permission이 null이면 아직 **확인 중**이다(useCameraPermissions는 마운트 직후 null을 준다).
+  //
+  // 예전에는 아래 거부 화면에 "카메라 권한을 확인하고 있어요."라는 문구만 바꿔 끼웠다. 두 상태는
+  // 성격이 다르다 — 거부는 기다려도 바뀌지 않아 **문구와 조작**이 필요하고, 확인 중은 곧 채워지는
+  // 자리라 **자리표시**가 맞다(together-materials.tsx가 역할 자리에서 가른 것과 같은 구분).
+  // 그래서 이 갈래만 떼어 곧 나타날 AR 화면의 모양(프리뷰 + 진행도 카드 + 안내 알약)을 그린다.
+  if (!cameraPermission) {
     return (
-      <PermissionFallback
-        message={cameraPermission ? '카메라 권한을 허용해야 보물찾기 화면을 사용할 수 있어요.' : '카메라 권한을 확인하고 있어요.'}
-        onRequestPermission={cameraPermission ? requestCameraPermission : undefined}
-        onBack={onBack}
-      />
+      <View style={styles.screen} accessible accessibilityLabel="카메라를 준비하는 중">
+        {/* 프리뷰가 들어올 자리. 실제 화면은 카메라 위에 35% 검정 딤이 깔려 중간 밝기로 보이므로
+            흰색 기본값 대신 회색(cool-neutral-500)을 써서 검은 화면 위에서 그 톤에 가깝게 만든다 */}
+        <View style={styles.cameraArea}>
+          <SkeletonBlock width="100%" height="100%" radius={0} color={PREVIEW_SKELETON_COLOR} />
+        </View>
+
+        {/* 안내 알약 자리. 알약 자체(반투명 흰 판)는 상태와 무관하게 늘 있으므로 그대로 그리고,
+            그 안의 아이콘 34 · 문구 14/22만 자리표시로 둔다 — 높이(12 + 34 + 12)가 실제와 같다 */}
+        <View style={[styles.guidePillWrapper, { bottom: Math.max(insets.bottom, MIN_BOTTOM_INSET) + 17 }]} pointerEvents="none">
+          <View style={styles.guidePill}>
+            <SkeletonBlock width={34} height={34} color={PILL_SKELETON_COLOR} />
+            {/* 디자인 알약 238 - 좌우 패딩 32 - 아이콘 34 - gap 10 = 문구 자리 162 */}
+            <SkeletonBlock width={162} height={22} radius={8} color={PILL_SKELETON_COLOR} />
+          </View>
+        </View>
+
+        {/* 진행도와 뒤로가기는 자리표시가 아니라 **진짜**를 그린다. 둘 다 권한 응답과 무관하게
+            이미 알고 있는 값이라(props), 기다릴 이유가 없다(MissionIntroLayout이 퀘스트 번호를
+            로딩 중에도 그대로 그리는 것과 같다). 특히 뒤로가기는 살아 있어야 이 대기에서 나갈 수 있다 */}
+        <View style={[styles.progressWrapper, { top: insets.top + CAMERA_HEADER_HEIGHT + CAMERA_PROGRESS_TOP_GAP }]}>
+          <TreasureProgressCard foundCount={foundTreasureIndexes.length} totalCount={totalCount} backgroundColor="rgba(0, 0, 0, 0.7)" />
+        </View>
+
+        <View style={styles.headerWrapper}>
+          <TreasureHeader onBack={onBack} />
+        </View>
+      </View>
     );
+  }
+
+  if (!cameraPermission.granted) {
+    return <PermissionFallback message={'카메라 권한을 허용해야 보물찾기 화면을 사용할 수 있어요.'} onRequestPermission={requestCameraPermission} onBack={onBack} />;
   }
 
   return (

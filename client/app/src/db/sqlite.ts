@@ -4,7 +4,7 @@ const db = SQLite.openDatabaseSync('tamnalog.db');
 let initializationPromise: Promise<void> | null = null;
 
 /** 현재 스키마 버전. 표를 바꿀 때마다 올리고 아래 마이그레이션에 단계를 추가한다 */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * 표를 만들고 필요한 마이그레이션을 적용한다.
@@ -29,6 +29,11 @@ async function migrateDatabase(): Promise<void> {
       userJson TEXT,
       apiOrigin TEXT,
       updatedAt INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS AppSetting (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updatedAt INTEGER NOT NULL
     );`,
   );
 
@@ -44,6 +49,9 @@ async function migrateDatabase(): Promise<void> {
       if (!String(error).includes('duplicate column')) throw error;
     });
   }
+
+  // v3 → v4는 AppSetting 표 추가뿐이다. 위 CREATE TABLE IF NOT EXISTS가 매 실행 돌아 옛 DB에도
+  // 그대로 생기므로 ALTER 단계가 필요 없다 — 컬럼을 더하는 변경(v2 → v3)과 달리 표는 그렇다.
 
   if (version !== SCHEMA_VERSION) {
     await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);

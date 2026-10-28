@@ -6,7 +6,11 @@ import type { GeneratedApi } from '@packages/shared';
 import { useMapLocations } from '@entities/place';
 import { getGetMapModalApiV1MapModalsGetQueryKey, getMapModalApiV1MapModalsGet } from '@/services/api/map/map';
 import { JEJU_CENTER, type Bounds, type Coordinates } from '@shared/config/geo';
+import { Skeleton } from '@shared/ui/skeleton';
+import { useSheetDragToClose } from '../model/useSheetDrag';
+import { MissionListItemSkeleton } from './MapSheetSkeleton';
 import { MissionListItem, type MissionListItemData } from './MissionListItem';
+import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 type MissionType = 'treasure' | 'coop';
 
@@ -34,7 +38,7 @@ function extractRewardDetail(data: GeneratedApi.GetMapModalApiV1MapModalsGet200 
 //    추려진 장소마다 map/modals를 다시 호출해 rewardDetail을 채운다 — 그래서 같은 API를 "여러 번" 호출한다.
 export function FilteredMissionModalCard({ missionType, bounds, coords, onClose }: FilteredMissionModalCardProps) {
   const center = coords ?? JEJU_CENTER;
-  const { locations } = useMapLocations({ bounds, center, isClustered: false });
+  const { locations, isLoading } = useMapLocations({ bounds, center, isClustered: false });
   const apiMissionType = missionType === 'treasure' ? 'TREASURE' : 'COOPERATIVE';
 
   const matched = locations.filter((location) => location.mission?.type === apiMissionType);
@@ -73,27 +77,43 @@ export function FilteredMissionModalCard({ missionType, bounds, coords, onClose 
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  const { dragY, isDragging, dragHandlers } = useSheetDragToClose(onClose);
+
   return (
     <>
-      <div className="absolute inset-0 z-10" onClick={onClose} />
       {/* PlaceModalCard와 동일하게 좌우/하단 여백 없이 화면에 꽉 차는 바텀시트 — 최대 높이는 MissionModalCard 한 장 정도(약 280px)로 제한하고, 그 이상은 내부 스크롤로 처리 */}
       <div
-        className="bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[370px] flex-col rounded-t-xl px-4 pt-3 shadow-[4px_4px_14px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out"
-        style={{ transform: isVisible ? 'translateY(0)' : 'translateY(100%)', paddingBottom: `max(20px, var(--safe-area-bottom))` }}
+        className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[370px] flex-col rounded-t-xl px-4 pt-3 shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
+          isDragging ? '' : 'transition-transform duration-300 ease-out'
+        }`}
+        style={{ transform: isVisible ? `translateY(${dragY}px)` : 'translateY(100%)', paddingBottom: SHEET_BOTTOM_PADDING }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 justify-center pb-3">
-          <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
+        {/* 핸들+제목만 드래그로 닫힘 — 아래 목록은 자체 스크롤 영역이라 여기서 pointer 이벤트를 가로채면 스크롤과 충돌한다 */}
+        <div className="shrink-0" style={{ touchAction: 'none' }} {...dragHandlers}>
+          <div className="flex justify-center pb-3">
+            <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
+          </div>
+
+          {/* 로딩 중엔 개수를 확정할 수 없다 — 확정되지 않은 "0개"를 보여주면 실제로 0개인 것과 구별이 안 된다 */}
+          {isLoading ? (
+            <Skeleton className="h-6 w-36" />
+          ) : (
+            <p className="text-heading-h3 text-warm-neutral-900 font-bold">
+              근처 {MISSION_LABEL[missionType]} {items.length}개
+            </p>
+          )}
         </div>
 
-        <p className="text-heading-h3 text-warm-neutral-900 shrink-0 font-bold">
-          근처 {MISSION_LABEL[missionType]} {items.length}개
-        </p>
-
         <div className="mt-2 flex flex-col overflow-y-auto">
-          {items.map((item, index) => (
-            <MissionListItem key={item.locationId} data={item} showTopBorder={index !== 0} onClose={onClose} />
-          ))}
+          {isLoading ? (
+            <>
+              <MissionListItemSkeleton />
+              <MissionListItemSkeleton />
+            </>
+          ) : (
+            items.map((item, index) => <MissionListItem key={item.locationId} data={item} showTopBorder={index !== 0} onClose={onClose} />)
+          )}
         </div>
       </div>
     </>

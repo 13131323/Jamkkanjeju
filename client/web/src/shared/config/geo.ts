@@ -1,10 +1,13 @@
+import { JEJU_CENTER as SHARED_JEJU_CENTER } from '@packages/shared';
+
 export type Coordinates = { lat: number; lng: number };
 
 // kakao.maps.LatLngBounds에 종속되지 않는 순수 도메인 타입 (widgets에서 변환해서 넘긴다)
 export type Bounds = { sw: Coordinates; ne: Coordinates };
 
 // 한라산 좌표 — 지도 초기 center의 공통 폴백 기준점 (06실시간마커최종.md §6 참고)
-export const JEJU_CENTER: Coordinates = { lat: 33.361424638771474, lng: 126.52941927591584 };
+// 값은 packages/shared가 들고 있다 — app의 미션 중단 폴백이 같은 지점을 써야 한다(그쪽 주석 참고)
+export const JEJU_CENTER: Coordinates = SHARED_JEJU_CENTER;
 
 /**
  * 제주 본섬을 감싸는 사각형.

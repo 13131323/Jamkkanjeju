@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCurrentAddress, useCurrentCoords, useDisplayLocation } from '@entities/location';
+import { toAddressUnit, useCurrentAddress, useCurrentCoords } from '@entities/location';
 import { useRecentSearches, useSearchPlaces } from '@features/map-search';
 import type { Coordinates } from '@shared/config/geo';
 import type { SearchResultPlace } from '@features/map-search';
+import { SkeletonImage } from '@shared/ui/SkeletonImage';
+import { SearchResultsSkeleton } from './SearchResultsSkeleton';
 
 const SEARCH_KEYWORD_MAX_LENGTH = 50;
 
@@ -14,10 +16,10 @@ export function MapSearchPage() {
   const [keyword, setKeyword] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
-  const { coords } = useDisplayLocation();
-  // 주소 라벨은 지도 표시용 coords(제주 밖이면 null)가 아니라 실제 현재 좌표 기준으로 뽑는다 — 제주 밖에서도 주소는 보여줘야 한다.
-  const currentCoords = useCurrentCoords();
-  const { data: address } = useCurrentAddress(currentCoords, true);
+  // 지도 표시용(useDisplayLocation)이 아니라 실제 현재 좌표를 쓴다 — 제주 밖에서도 검색·주소는 동작해야 한다
+  // (useHomeData가 같은 이유로 useCurrentCoords를 쓰는 것과 동일한 근거, entities/location/model/useCurrentCoords.ts 주석 참고).
+  const coords = useCurrentCoords();
+  const { data: address } = useCurrentAddress(coords, true);
   const searchResult = useSearchPlaces(keyword, coords);
   const { keywords: recentKeywords, addRecentSearch } = useRecentSearches();
 
@@ -35,19 +37,24 @@ export function MapSearchPage() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden">
+      {/* 이 화면의 상단 좌표는 상태바를 포함한 디자인 캔버스 기준(뒤로가기 58 / 검색바 108 / 목록 173)이라
+          거기에 --safe-area-top을 더하면 상태바 54px이 두 번 먹어 헤더부터 통째로 내려간다.
+          지도 화면(MapView)처럼 상태바 아래를 0으로 보는 값으로 맞춰야 검색바가 제자리에 멈춘다. */}
       <button
         type="button"
         aria-label="뒤로가기"
         onClick={() => router.back()}
         className="bg-warm-neutral-50 absolute left-5 z-10 flex h-8 w-8 items-center justify-center rounded-full"
-        style={{ top: `calc(var(--safe-area-top) + 58px)` }}
+        style={{ top: `calc(var(--safe-area-top) + 12px)` }}
       >
         <ChevronLeftIcon />
       </button>
 
+      {/* 지도 화면 검색 버튼(MapView)과 위치·간격이 모두 같아야 한다 — top은 calc(var(--safe-area-top) + 54px),
+          아이콘과 글자 사이는 gap-2.5. 예전에는 여기만 gap-2라 전환 순간 글자가 2px 흔들렸다. */}
       <div
-        className="border-cool-neutral-200 bg-cool-neutral-white absolute right-4 left-4 z-10 flex h-10 items-center gap-2 rounded-full border px-3.5"
-        style={{ top: `calc(var(--safe-area-top) + 108px)` }}
+        className="border-cool-neutral-200 bg-cool-neutral-white absolute right-4 left-4 z-10 flex h-10 items-center gap-2.5 rounded-full border px-3.5"
+        style={{ top: `calc(var(--safe-area-top) + 54px)` }}
       >
         <SearchIcon />
         <input
@@ -64,10 +71,7 @@ export function MapSearchPage() {
 
       {/* 화면 끝까지 내려오는 스크롤 영역 — 마지막 항목이 안전영역에 가리지 않게 아래를 띄운다.
           앱 WebView에서는 하단 inset을 앱 루트 레이아웃이 처리하므로 0이다 */}
-      <div
-        className="bg-cool-neutral-white absolute inset-x-0 bottom-0 overflow-y-auto px-5"
-        style={{ top: `calc(var(--safe-area-top) + 173px)`, paddingBottom: `var(--safe-area-bottom)` }}
-      >
+      <div className="bg-cool-neutral-white absolute inset-x-0 bottom-0 overflow-y-auto px-5" style={{ top: `calc(var(--safe-area-top) + 119px)`, paddingBottom: `var(--safe-area-bottom)` }}>
         {showRecent ? (
           <RecentSearchSection keywords={recentKeywords} onSelect={handleSelectRecentKeyword} />
         ) : (
@@ -125,7 +129,7 @@ function SearchResultSections({
     return <p className="text-label-md text-warm-neutral-300 pt-10 text-center">위치 정보를 확인할 수 없어요</p>;
   }
   if (query.isLoading) {
-    return <p className="text-label-md text-warm-neutral-300 pt-10 text-center">검색 중...</p>;
+    return <SearchResultsSkeleton />;
   }
   if (query.isError) {
     return <p className="text-label-md text-warm-neutral-300 pt-10 text-center">검색에 실패했어요. 다시 시도해주세요</p>;
@@ -141,7 +145,9 @@ function SearchResultSections({
     <>
       {recommended.length > 0 && (
         <section>
-          <h2 className="text-heading-h4 text-warm-neutral-900 font-bold">{addressLabel ? `${addressLabel} 추천장소` : '추천장소'}</h2>
+          {/* Geocoder가 주는 전체 주소를 그대로 쓰면 "…문연로 6 추천장소"처럼 번지·건물번호까지 붙어
+              제목 길이가 위치마다 들쭉날쭉해진다. 홈 상단 주소와 같은 규칙으로 행정 단위까지만 남긴다(toAddressUnit). */}
+          <h2 className="text-heading-h4 text-warm-neutral-900 font-bold">{addressLabel ? `${toAddressUnit(addressLabel)} 추천장소` : '추천장소'}</h2>
           <div className="flex flex-col">
             {recommended.map((item, index) => (
               <ResultListItem key={item.id} item={item} noDivider={index === recommended.length - 1} onClick={() => onSelectPlace(item)} />
@@ -167,8 +173,7 @@ function ResultListItem({ item, noDivider, onClick }: { item: SearchResultPlace;
   return (
     <button type="button" onClick={onClick} className={`flex h-[76px] w-full items-center gap-3 text-left ${noDivider ? '' : 'border-cool-neutral-100 border-b'}`}>
       {item.representativeImageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={item.representativeImageUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover" />
+        <SkeletonImage src={item.representativeImageUrl} className="h-12 w-12 shrink-0 rounded-md" />
       ) : (
         <div className="bg-warm-neutral-200 h-12 w-12 shrink-0 rounded-md" />
       )}

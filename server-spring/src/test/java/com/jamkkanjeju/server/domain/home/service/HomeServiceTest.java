@@ -226,9 +226,9 @@ class HomeServiceTest {
     }
 
     @Test
-    void 방명록_집계_컴포넌트의_전체_개수를_응답에_담는다() {
+    void 마지막확인_이후_방명록_개수를_응답에_담는다() {
         givenHomeData(user, List.of(), Map.of(), List.of(), List.of());
-        given(guestbookCounter.countAll()).willReturn(42L);
+        given(guestbookCounter.countSince(user.getGuestbookLastCheckedAt())).willReturn(42L);
 
         assertThat(homeService.getHome(15L, REQUEST).guestbookCount()).isEqualTo(42L);
     }
@@ -253,7 +253,7 @@ class HomeServiceTest {
     void 조회_중_예기치_않은_오류는_숨기지_않고_그대로_전달한다() {
         IllegalStateException failure = new IllegalStateException("집계 실패");
         givenHomeData(user, List.of(), Map.of(), List.of(), List.of());
-        given(guestbookCounter.countAll()).willThrow(failure);
+        given(guestbookCounter.countSince(user.getGuestbookLastCheckedAt())).willThrow(failure);
 
         assertThatThrownBy(() -> homeService.getHome(15L, REQUEST)).isSameAs(failure);
     }

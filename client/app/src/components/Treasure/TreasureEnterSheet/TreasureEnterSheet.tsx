@@ -10,8 +10,11 @@ import { ctaBottomPadding } from '@/styles/safeArea';
 /** 시트가 올라오고 내려가는 시간(ms) */
 const SLIDE_MS = 260;
 
-/** 장소 소개를 못 받았을 때 쓰는 기본 문구 */
-const PLACE_SUMMARY_FALLBACK = '보물을 열어 보상을 확인해보세요.';
+/**
+ * 제목 아래 고정 문구. 장소 설명은 이 시트에 넣지 않는다 —
+ * 전문은 지도 하단의 장소 소개 카드(TreasurePlaceSummaryCard)에서 눌러 펼쳐 본다.
+ */
+const SHEET_DESCRIPTION = '보물을 열어 보상을 확인해보세요.';
 
 interface TreasureEnterSheetProps {
   /** 반경 안에 들어와 있으면 true. false가 되면 아래로 내려가며 사라진다 */
@@ -20,17 +23,6 @@ interface TreasureEnterSheetProps {
   treasureOrder: number;
   /** 닫힌 보물 에셋 */
   image: ImageSourcePropType;
-  /**
-   * 장소 한 줄 소개(시작 응답의 location.locationDescription).
-   *
-   * 같은 문구가 step0의 TreasurePlaceSummaryCard로 떠 있지만 이 시트가 통째로 덮는다
-   * (minHeight 332 > 카드가 있는 하단 ~105px). 그래서 반경에 들어서는 순간, 정작 그 장소에
-   * 도착한 시점에 장소 설명이 사라졌다. 카드를 시트 위로 올리면 예전의 깜빡임 버그가 되살아나므로
-   * (그 카드는 지도용 검은 배경이라 흰 시트에도 안 맞는다) 문구만 시트 안으로 들인다.
-   *
-   * 서버가 TourAPI 조회에 실패하면 null이고, 그때는 기본 문구로 돌아간다.
-   */
-  placeSummary?: string | null;
   onOpenCamera: () => void;
   /**
    * 손으로 끌어내려 닫았을 때. 반경 안에 있어도 닫힌 상태를 유지해야 하므로 상위 화면이 기억한다
@@ -52,7 +44,7 @@ interface TreasureEnterSheetProps {
  * 언마운트 여부를 상태로 들면 애니메이션 콜백에서 setState를 해야 하고,
  * 화면 밖으로 밀려난 시트는 어차피 보이지 않는다.
  */
-export function TreasureEnterSheet({ visible, treasureOrder, image, placeSummary = null, onOpenCamera, onDismiss }: TreasureEnterSheetProps) {
+export function TreasureEnterSheet({ visible, treasureOrder, image, onOpenCamera, onDismiss }: TreasureEnterSheetProps) {
   const insets = useSafeAreaInsets();
   // 렌더 중 ref 접근을 피하려고 지연 초기화 useState로 Animated.Value를 만든다(Toast.tsx와 같은 이유)
   const [translateY] = useState(() => new Animated.Value(visible ? 0 : TREASURE_SHEET_HEIGHT));
@@ -120,11 +112,7 @@ export function TreasureEnterSheet({ visible, treasureOrder, image, placeSummary
         <View style={styles.body}>
           <View style={styles.textGroup}>
             <Text style={styles.title}>{`${treasureOrder}번째 장소 반경에 들어왔어요!`}</Text>
-            {/* 소개가 길면 시트가 늘어나 CTA를 하단 밖으로 밀어내므로 두 줄에서 자른다.
-                (전체 문구는 지도로 돌아가면 장소 소개 카드에서 그대로 볼 수 있다) */}
-            <Text style={styles.description} numberOfLines={2} ellipsizeMode="tail">
-              {placeSummary ?? PLACE_SUMMARY_FALLBACK}
-            </Text>
+            <Text style={styles.description}>{SHEET_DESCRIPTION}</Text>
           </View>
 
           <Image source={image} style={styles.image} resizeMode="contain" />

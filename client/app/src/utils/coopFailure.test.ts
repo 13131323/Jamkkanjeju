@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COOP_FAILURE_MESSAGE, resolveCoopFailure, shouldRetryCoopStatus } from './coopFailure';
+import { COOP_FAILURE_MESSAGE, coopInviteFailureMessage, resolveCoopFailure, shouldRetryCoopStatus } from './coopFailure';
 
 /** axios 에러의 최소 형태. 실제 axios를 끌어오지 않고 읽는 겹만 흉내낸다 */
 const apiError = (code: string) => ({ response: { data: { code } } });
@@ -101,5 +101,38 @@ describe('429(요청 과다)', () => {
 
   it('다른 status는 그대로 코드로 판정한다', () => {
     expect(resolveCoopFailure({ response: { status: 409, data: { code: 'COOPERATIVE_MISSION_FULL' } } })).toBe('full');
+  });
+});
+
+/**
+ * 초대 링크로 들어온 사람에게는 "미션 방"이 아니라 "초대받은 방"이다.
+ * 공용 문구는 폴링 실패 등 다른 화면도 함께 쓰므로 거기에 초대 맥락을 섞지 않는다.
+ */
+describe('coopInviteFailureMessage', () => {
+  it('방이 사라졌으면 없어진 이유까지 알려준다', () => {
+    expect(coopInviteFailureMessage('gone')).toBe('팀원이 모두 나가서 초대받은 방이 없어졌어요.');
+  });
+
+  it('끝난 미션도 "초대받은 방"으로 말한다', () => {
+    expect(coopInviteFailureMessage('already-completed')).toBe('미션이 끝나서 초대받은 방이 없어졌어요.');
+  });
+
+  it('만료된 링크는 방이 아니라 링크 문제로 말한다', () => {
+    expect(coopInviteFailureMessage('invalid-invite')).toBe('초대 링크가 만료되어 방에 들어갈 수 없어요.');
+  });
+
+  it('초대 맥락이 따로 없는 실패는 공용 문구를 그대로 쓴다', () => {
+    expect(coopInviteFailureMessage('full')).toBe(COOP_FAILURE_MESSAGE.full);
+    expect(coopInviteFailureMessage('join-closed')).toBe(COOP_FAILURE_MESSAGE['join-closed']);
+  });
+
+  it('모르는 실패일 때만 서버 원문을 덧붙인다 — 공용 규칙과 같다', () => {
+    expect(coopInviteFailureMessage('retryable', 'HTTP 500')).toBe(`${COOP_FAILURE_MESSAGE.retryable} (HTTP 500)`);
+    expect(coopInviteFailureMessage('gone', 'HTTP 404')).toBe('팀원이 모두 나가서 초대받은 방이 없어졌어요.');
+  });
+
+  // 공용 문구를 건드리면 폴링 실패 안내까지 "초대받은"으로 바뀐다
+  it('공용 문구는 바뀌지 않는다', () => {
+    expect(COOP_FAILURE_MESSAGE.gone).toBe('미션 방이 사라졌어요.');
   });
 });

@@ -98,7 +98,7 @@ export default function AudioPlayerCard({ audioUrl, title, placeName }: AudioPla
       </div>
 
       {/* 막대(bar) 진행률 표시 */}
-      <div className="mb-2 flex h-12 cursor-pointer items-end gap-1.5" onClick={handleSeek}>
+      <div className="js-pressable mb-2 flex h-12 cursor-pointer items-end gap-1.5" onClick={handleSeek}>
         {BAR_HEIGHTS.map((height, i) => (
           <div key={i} className={`flex-1 rounded-md transition-colors ${i <= progressBarIndex ? 'bg-[#7ec242]' : 'bg-[#5c5650]'}`} style={{ height: `${height}%` }} />
         ))}

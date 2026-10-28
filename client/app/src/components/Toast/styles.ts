@@ -1,5 +1,6 @@
 import { StyleSheet } from 'react-native';
 import { BUTTON_MD_HEIGHT } from '@/components/Button/styles';
+import { CTA_BOTTOM_GAP } from '@/styles/safeArea';
 
 /**
  * 토스트 스타일.
@@ -24,6 +25,17 @@ export const TOAST_GAP = 16;
  * 숫자를 다시 적지 않고 버튼 스타일에서 가져온다 — 버튼 높이가 바뀌면 함께 따라가야 한다.
  */
 export const TOAST_CTA_CLEARANCE = BUTTON_MD_HEIGHT;
+
+/**
+ * 협동 미션 화면(초대·재료 찾기)의 CTA를 비켜 가기 위한 여유.
+ *
+ * `TOAST_CTA_CLEARANCE`(버튼 높이만)를 그대로 쓰면 이 화면들에서 버튼과 4px 겹친다 —
+ * CoopStepLayout·CoopStepSkeleton의 CTA는 버튼 높이(52) **위에** `ctaBottomPadding`이
+ * 추가로 `CTA_BOTTOM_GAP`(20)만큼 여백을 얹기 때문이다(safeArea.ts). 기본값을 바꾸면 그 값을
+ * 쓰는 다른 화면(보물찾기 등)까지 밀리므로, 여기서 버튼 높이 + CTA_BOTTOM_GAP을 따로 더해
+ * 협동 미션 호출부가 옵션으로 넘긴다.
+ */
+export const TOAST_COOP_CTA_CLEARANCE = BUTTON_MD_HEIGHT + CTA_BOTTOM_GAP;
 
 /**
  * WebView 화면(도감 카드 상세)의 CTA를 비켜 가기 위한 여유.

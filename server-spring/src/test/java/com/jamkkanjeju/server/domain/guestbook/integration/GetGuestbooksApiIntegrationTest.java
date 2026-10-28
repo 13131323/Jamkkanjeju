@@ -4,6 +4,7 @@ import static com.jamkkanjeju.server.domain.guestbook.support.GuestbookFixtures.
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -171,7 +172,7 @@ class GetGuestbooksApiIntegrationTest extends GuestbookIntegrationTestSupport {
         assertThat(ids(body, "visitedLocations")).doesNotHaveDuplicates();
     }
 
-    @Test void 좋아요는_현재사용자별이며_전체개수에_본인도_포함하고_반복조회는_저장하지않는다() throws Exception {
+    @Test void 좋아요는_사용자별이며_반복조회는_확인시각만_갱신한다() throws Exception {
         LocationGuestbook g = general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW, null);
         RoadGuestbook r = road(other, GuestbookStatus.ACTIVE, NOW);
         road(current, GuestbookStatus.ACTIVE, NOW.minusHours(1));
@@ -181,12 +182,33 @@ class GetGuestbooksApiIntegrationTest extends GuestbookIntegrationTestSupport {
                 .andExpect(jsonPath("$.generalGuestbooks[0].isLiked").value(true))
                 .andExpect(jsonPath("$.roadGuestbooks[0].likeCount").value(1)).andExpect(jsonPath("$.roadGuestbooks[0].isLiked").value(false))
                 .andExpect(jsonPath("$.roadGuestbooks[1].likeCount").value(0)).andExpect(jsonPath("$.roadGuestbooks[1].isLiked").value(false)));
+        reload();
+        assertThat(em.find(User.class, current.getId()).getGuestbookLastCheckedAt()).isEqualTo(NOW);
+        Object otherCheckedAt = before.get("user").stream()
+                .filter(row -> ((Number) row.get("id")).longValue() == other.getId())
+                .findFirst().orElseThrow().get("guestbook_last_checked_at");
+        assertThat(jdbc.queryForMap("select * from user where id=?", other.getId()).get("guestbook_last_checked_at"))
+                .isEqualTo(otherCheckedAt);
+        when(clock.instant()).thenReturn(CLOCK.instant().plusSeconds(60));
         assertThat(json(request())).isEqualTo(first);
+        reload();
+        assertThat(em.find(User.class, current.getId()).getGuestbookLastCheckedAt()).isEqualTo(NOW.plusMinutes(1));
         mvc.perform(get(URL).header("Authorization", bearer(other))).andExpect(status().isOk())
                 .andExpect(jsonPath("$.generalGuestbooks[0].isLiked").value(true)).andExpect(jsonPath("$.generalGuestbooks[0].likeCount").value(2))
                 .andExpect(jsonPath("$.roadGuestbooks[0].isLiked").value(true)).andExpect(jsonPath("$.roadGuestbooks[0].likeCount").value(1))
                 .andExpect(jsonPath("$.visitedLocations", hasSize(0)));
-        assertThat(state()).isEqualTo(before); verifyNoInteractions(storage);
+        Map<String, List<Map<String, Object>>> after = state();
+        // 정상 조회한 두 사용자의 확인 시각과 Auditing 수정 시각만 변경될 수 있다.
+        for (Map<String, Object> row : before.get("user")) {
+            long id = ((Number) row.get("id")).longValue();
+            if (id == current.getId() || id == other.getId()) {
+                Map<String, Object> actual = after.get("user").stream()
+                        .filter(value -> ((Number) value.get("id")).longValue() == id).findFirst().orElseThrow();
+                row.put("guestbook_last_checked_at", actual.get("guestbook_last_checked_at"));
+                row.put("updated_at", actual.get("updated_at"));
+            }
+        }
+        assertThat(after).isEqualTo(before); verifyNoInteractions(storage);
     }
 
     @ParameterizedTest @EnumSource(MissionTypeCode.class)
@@ -237,6 +259,8 @@ class GetGuestbooksApiIntegrationTest extends GuestbookIntegrationTestSupport {
                 .andExpect(jsonPath("$.generalGuestbooksPage.page").value(0)).andExpect(jsonPath("$.generalGuestbooksPage.size").value(10))
                 .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(false)).andExpect(jsonPath("$.roadGuestbooksPage.size").value(10))
                 .andExpect(jsonPath("$.roadGuestbooksPage.hasNext").value(false));
+        reload();
+        assertThat(em.find(User.class, current.getId()).getGuestbookLastCheckedAt()).isEqualTo(NOW);
         road(other, GuestbookStatus.ACTIVE, NOW); reload();
         request().andExpect(status().isOk()).andExpect(jsonPath("$.generalGuestbooks", hasSize(0)))
                 .andExpect(jsonPath("$.roadGuestbooks", hasSize(1)));

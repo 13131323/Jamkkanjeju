@@ -1,19 +1,20 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { GuestbookWriteButton } from '@entities/guestbook';
-import { useDisplayLocation } from '@entities/location';
 import { GuestbookFeedView } from '@widgets/guestbook-feed';
 import { NavMenuButton, NavMenuModal } from '@widgets/nav-menu';
 
 export function TravelNotePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { coords } = useDisplayLocation();
+  // 지도 상세의 "더보기"로 들어오면 그 장소 칩을 미리 골라준다
+  const seedLocationTitle = useSearchParams().get('location');
 
   return (
     <div className="bg-cool-neutral-900 relative h-dvh w-full overflow-hidden">
-      <div className="h-full w-full overflow-y-auto">
-        <GuestbookFeedView />
+      <div className="h-full w-full overflow-x-hidden overflow-y-auto">
+        <GuestbookFeedView seedLocationTitle={seedLocationTitle} />
       </div>
 
       {/* safe-area(상태바) 구간을 항상 배경색으로 덮는다 — 탭이 top-0가 아니라 safe-area 아래에서 고정되면서
@@ -40,7 +41,7 @@ export function TravelNotePage() {
         style={{ bottom: `calc(24px + var(--safe-area-bottom))` }}
       />
 
-      <GuestbookWriteButton lat={coords?.lat} lng={coords?.lng} className="absolute right-4 bottom-6 z-10" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }} />
+      <GuestbookWriteButton className="absolute right-4 bottom-6 z-10" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }} />
 
       {isMenuOpen && <NavMenuModal onClose={() => setIsMenuOpen(false)} />}
     </div>

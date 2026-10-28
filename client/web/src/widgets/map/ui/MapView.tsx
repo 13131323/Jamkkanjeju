@@ -18,9 +18,10 @@ import { useGuestbookMarkers } from '../model/useGuestbookMarkers';
 import { useKakaoMap } from '../model/useKakaoMap';
 import { useMapBounds } from '../model/useMapBounds';
 import { useMapFollow } from '../model/useMapFollow';
+import { useDismissOnMapGesture } from '../model/useDismissOnMapGesture';
 import { useMapModal } from '../model/useMapModal';
 import { TREASURE_MODE_INITIAL_LEVEL, useMapZoomTier } from '../model/useMapZoomTier';
-import { usePlaceMarkers } from '../model/usePlaceMarkers';
+import { usePlaceMarkers, type PlaceCouponClickPayload } from '../model/usePlaceMarkers';
 import { useTreasureLocationBridge } from '../model/useTreasureLocationBridge';
 import { useTreasureLocationMarker } from '../model/useTreasureLocationMarker';
 import { useTreasureMarkers } from '../model/useTreasureMarkers';
@@ -85,6 +86,19 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
    * CouponModalCard 안에 둘 수도 없다 — 두 소비자의 공통 부모인 여기가 유일한 자리다.
    */
   const [isCouponSheetCollapsed, setIsCouponSheetCollapsed] = useState(false);
+  // 시트가 떠 있어도 지도는 그대로 끌 수 있다. 바깥 탭을 받던 투명 레이어가 지도를 덮고 있던 것을
+  // 걷어내고, 닫기를 지도 제스처로 옮겼다(useDismissOnMapGesture).
+  // 쿠폰 시트만 닫기가 아니라 접기다 — 마커를 다시 누르면 올라온다(CouponModalCard 주석).
+  const isCouponSheetOpen = modal?.type === 'coupon' && !isCouponSheetCollapsed;
+  const dismissSheet = useCallback(() => {
+    if (isCouponSheetOpen) {
+      setIsCouponSheetCollapsed(true);
+      return;
+    }
+    closeModal();
+  }, [isCouponSheetOpen, closeModal]);
+  useDismissOnMapGesture(map, modal !== null, dismissSheet);
+
   // 쿠폰 사용처를 마커로 찍고 지도를 그 자리로 옮긴다. 시트만 열고 지도는 사용자 위치에 남아 있으면
   // "어디로 가라는 건지"가 화면에 없다.
   const couponCoords = useCouponLocationCoords(couponParams?.locationId ?? null, couponParams?.locationAddress ?? null);
@@ -108,6 +122,16 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
     [couponParams, openCouponModal, stopFollowing],
   );
   useCouponLocationMarker(map, couponCoords, couponParams?.locationImageUrl ?? null, couponMarkerHandlers);
+
+  // 지도에 찍힌 쿠폰 사용처 마커(usePlaceMarkers) 탭 — app 완료 화면 진입(위 couponMarkerHandlers)과
+  // 같은 시트를 연다. 값은 그 장소 데이터에서 직접 만들어 넘긴다(별도 조회 없음).
+  const handlePlaceCouponClick = useCallback(
+    (payload: PlaceCouponClickPayload) => {
+      openCouponModal(payload);
+      setIsCouponSheetCollapsed(false);
+    },
+    [openCouponModal],
+  );
 
   // app의 완료 화면 "근처에서 할 수 있는 보물 찾기 > 더보기"가 `/map?missions=treasure`로 들어온다.
   // 필터 칩 클릭 경로(handleFilterChange)와 **같은 상태**를 쓴다 — 칩도 함께 선택되고, 시트도 같은
@@ -151,7 +175,12 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
   // 보물 아이콘과 개수 배지가 추가됐다(TreasureHunt_step1 "Group 113").
   // zoomTier를 넘겨 축소에서는 장소 대표 마커 1개, 확대(detail)에서는 보물별 개별 마커로 갈린다.
   useTreasureMarkers(map, treasureMarkers, zoomTier, handleClusterClick);
-  usePlaceMarkers(markerMap, bounds, filter, zoomTier, zoomLevel, { onMissionClick: openMissionModal, onPlaceClick: openPlaceModal, onClusterClick: handleClusterClick });
+  usePlaceMarkers(markerMap, bounds, filter, zoomTier, zoomLevel, {
+    onMissionClick: openMissionModal,
+    onPlaceClick: openPlaceModal,
+    onCouponClick: handlePlaceCouponClick,
+    onClusterClick: handleClusterClick,
+  });
   useGuestbookMarkers(markerMap, bounds, zoomLevel, openRoadGuestbookModal);
 
   if (error) {
@@ -212,7 +241,8 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
             <span>장소, 미션, 콘텐츠 검색</span>
           </button>
 
-          <div className="absolute right-4 left-4 z-10" style={{ top: `calc(var(--safe-area-top) + 106px)` }}>
+          {/* 칩 줄은 스크롤할 때 화면 가장자리까지 흐르도록 전체 너비로 두고, 기존 좌우 여백(16px)은 PlaceFilterChips 안쪽 패딩으로 옮겼다. */}
+          <div className="absolute right-0 left-0 z-10" style={{ top: `calc(var(--safe-area-top) + 106px)` }}>
             <PlaceFilterChips value={filter} onChange={handleFilterChange} bounds={bounds} isClustered={isClustered} />
           </div>
 
@@ -243,12 +273,12 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
               브라우저·iOS 단독 실행에서 홈 인디케이터가 있을 때만 값이 들어온다 */}
           {/* <Image src={navImage} alt="" aria-hidden="true" width={100} height={116} className="absolute left-4 z-10 object-contain" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }} /> */}
 
-          <GuestbookWriteButton lat={coords?.lat} lng={coords?.lng} className="absolute right-4 z-10" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }} />
+          <GuestbookWriteButton className="absolute right-4 z-10" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }} />
         </>
       )}
 
-      {modal?.type === 'mission' && <MissionModalCard locationId={modal.locationId} coords={coords} onClose={closeModal} />}
-      {modal?.type === 'place' && <PlaceModalCard locationId={modal.locationId} coords={coords} onClose={closeModal} />}
+      {modal?.type === 'mission' && <MissionModalCard locationId={modal.locationId} markerImageUrl={modal.representativeImageUrl} coords={coords} onClose={closeModal} />}
+      {modal?.type === 'place' && <PlaceModalCard locationId={modal.locationId} markerImageUrl={modal.representativeImageUrl} coords={coords} onClose={closeModal} />}
       {modal?.type === 'filteredMission' && <FilteredMissionModalCard missionType={modal.missionType} bounds={bounds} coords={coords} onClose={closeModal} />}
       {modal?.type === 'roadGuestbook' && <RoadGuestbookDetailModal guestbookId={modal.guestbookId} coords={coords} onClose={closeModal} />}
       {modal?.type === 'coupon' && (
@@ -293,4 +323,3 @@ function CrosshairIcon() {
     </svg>
   );
 }
-

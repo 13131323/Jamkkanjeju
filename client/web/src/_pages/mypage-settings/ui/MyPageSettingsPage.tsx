@@ -1,12 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { WithdrawConfirmModal } from '@features/account-withdraw';
+import { InquiryModal } from '@features/inquiry';
 
 type SettingsItem = {
   id: string;
   label: string;
   value?: string;
-  emoji?: string;
   showChevron?: boolean;
   danger?: boolean;
 };
@@ -20,23 +22,6 @@ type SettingsSection = {
 const mock = {
   title: '설정',
   sections: [
-    {
-      id: 'profile',
-      title: '여행 프로필',
-      items: [
-        { id: 'nickname', label: '닉네임', value: '몽글몽글파도', showChevron: true },
-        { id: 'style', label: '여행 스타일 변경', value: '기록 탐험가', emoji: '📸', showChevron: true },
-        { id: 'transport', label: '교통수단 변경', value: '렌트카', showChevron: true },
-      ],
-    },
-    {
-      id: 'notification',
-      title: '알림',
-      items: [
-        { id: 'push', label: '푸시 알림', value: 'ON', showChevron: true },
-        { id: 'nearby-mission', label: '근처 미션 알림', value: 'ON', showChevron: true },
-      ],
-    },
     {
       id: 'etc',
       title: '기타',
@@ -69,9 +54,6 @@ function SectionTitle({ title, isFirst }: { title: string; isFirst: boolean }) {
 }
 
 const ITEM_ROUTES: Partial<Record<SettingsItem['id'], string>> = {
-  nickname: '/mypage/edit',
-  style: '/mypage/edit',
-  transport: '/mypage/edit',
   terms: '/policies/terms-of-service',
   privacy: '/policies/privacy',
 };
@@ -79,16 +61,10 @@ const ITEM_ROUTES: Partial<Record<SettingsItem['id'], string>> = {
 function SettingsRow({ item, isLast, onClick }: { item: SettingsItem; isLast: boolean; onClick?: () => void }) {
   return (
     <button type="button" onClick={onClick} className={`flex w-full items-center justify-between px-5 py-4 text-left ${isLast ? '' : 'border-cool-neutral-100 border-b'}`}>
-      {/* TODO: 나머지 항목 화면 연동 */}
       <span className={`text-body-lg font-normal ${item.danger ? 'text-[#ff3030]' : 'text-warm-neutral-900'}`}>{item.label}</span>
       {(item.value || item.showChevron) && (
         <span className="flex items-center gap-1.5">
-          {item.value && (
-            <span className="text-body-lg text-warm-neutral-400 flex items-center gap-1">
-              {item.emoji && <span aria-hidden="true">{item.emoji}</span>}
-              {item.value}
-            </span>
-          )}
+          {item.value && <span className="text-body-lg text-warm-neutral-400">{item.value}</span>}
           {item.showChevron && <ChevronRightIcon />}
         </span>
       )}
@@ -111,8 +87,18 @@ function SettingsSectionView({ section, isFirst, onItemClick }: { section: Setti
 
 export function MyPageSettingsPage() {
   const router = useRouter();
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isInquiryOpen, setIsInquiryOpen] = useState(false);
 
   function handleItemClick(item: SettingsItem) {
+    if (item.id === 'withdraw') {
+      setIsWithdrawOpen(true);
+      return;
+    }
+    if (item.id === 'contact') {
+      setIsInquiryOpen(true);
+      return;
+    }
     const route = ITEM_ROUTES[item.id];
     if (route) router.push(route);
   }
@@ -125,6 +111,9 @@ export function MyPageSettingsPage() {
           <SettingsSectionView key={section.id} section={section} isFirst={index === 0} onItemClick={handleItemClick} />
         ))}
       </div>
+
+      {isWithdrawOpen && <WithdrawConfirmModal onClose={() => setIsWithdrawOpen(false)} />}
+      {isInquiryOpen && <InquiryModal onClose={() => setIsInquiryOpen(false)} />}
     </div>
   );
 }

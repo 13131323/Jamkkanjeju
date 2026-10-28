@@ -17,7 +17,7 @@ const USER_LOCATION_MARKER_Z_INDEX = 20;
 // 탭(클릭)하면 "내 위치" 라벨이 현재 주소로 토글된다 — Android WebView 전용 앱이라 hover는 고려하지 않음.
 function createUserLocationElement(onToggle: () => void): { el: HTMLElement; labelEl: HTMLSpanElement } {
   const el = document.createElement('div');
-  el.className = 'flex cursor-pointer flex-col items-center';
+  el.className = 'js-pressable flex cursor-pointer flex-col items-center';
   el.addEventListener('click', onToggle);
 
   const badge = document.createElement('div');

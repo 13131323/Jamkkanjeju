@@ -1,3 +1,4 @@
+import { wasApiErrorNotified } from '@packages/shared';
 import * as Sentry from '@sentry/react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Linking from 'expo-linking';
@@ -9,6 +10,7 @@ import type { ImageSourcePropType, LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { captureRef, releaseCapture } from 'react-native-view-shot';
 import { Button } from '@/components/Button/Button';
+import { SkeletonBlock } from '@/components/SkeletonBlock/SkeletonBlock';
 import { useToast } from '@/components/Toast/Toast';
 import { ctaBottomPadding, MIN_BOTTOM_INSET } from '@/styles/safeArea';
 import { joinWithParticle } from '@/utils/koreanParticle';
@@ -46,6 +48,15 @@ export type { PhotoCaptureCharacter };
 
 /** 강조색 기본값. 보물찾기가 쓰던 값이라, 넘기지 않으면 그 화면이 바뀌지 않는다 */
 const DEFAULT_ACCENT: PhotoCaptureAccent = 'treasure';
+
+/**
+ * 카메라를 기다리는 동안 그리는 자리표시 색.
+ *
+ * 프리뷰 자리는 화면 흰 배경(styles.screen) 위라 흰 자리표시가 보이지 않아 옅은 회색을 쓰고,
+ * 하단 패널은 그보다 한 단계 진한 회색(#f6f5f4 — RoleVerify·together-materials와 같은 값)이다.
+ */
+const PREVIEW_SKELETON_COLOR = '#efefef';
+const PANEL_SKELETON_COLOR = '#f6f5f4';
 
 /**
  * 셔터가 만들어 두고 "완료"를 기다리는 사진.
@@ -371,7 +382,7 @@ export function CharacterPhotoCapture({
         return await captureRef(captureViewRef, { format: 'jpg', quality: COMPOSITE_JPEG_QUALITY, ...uploadSize });
       } catch (error) {
         // 사진 자체는 이미 떴다 — 이 실패는 "업로드가 안 됐다"일 뿐이므로 촬영 실패로 알리지 않는다
-        showToast('사진을 서버에 올리지 못했어요');
+        if (!wasApiErrorNotified(error)) showToast('사진을 서버에 올리지 못했어요');
         reportFailure('upload capture failed', error);
         return null;
       }
@@ -393,10 +404,8 @@ export function CharacterPhotoCapture({
       try {
         await onUpload?.(uploadUri, takenAt);
       } catch (error) {
-        // 성공은 204(본문 없음)다. 그 외에는 전부 실패로 본다 — 서버가 문서화한 오류 응답이 없고
-        // 실제로도 형식 위반·용량 초과·비이미지가 모두 같은 400 INVALID_REQUEST로 오기 때문에
-        // 코드로 원인을 갈라 다른 안내를 하는 게 불가능하다.
-        showToast('사진을 서버에 올리지 못했어요');
+        // 서버 오류 메시지는 공통 토스트로 표시하고 응답 없는 실패만 기존 안내를 사용한다.
+        if (!wasApiErrorNotified(error)) showToast('사진을 서버에 올리지 못했어요');
         reportFailure('upload failed', error);
       } finally {
         // 업로드 전용으로 한 번 더 뜬 축소본만 지운다 — 갤러리에도 미리보기에도 안 쓰이므로
@@ -556,12 +565,35 @@ export function CharacterPhotoCapture({
   }, [pendingCapture, isConfirming, saveToGallery, uploadPicture, onCaptured]);
 
   if (!cameraPermission) {
-    // useCameraPermissions는 마운트 직후 상태 조회가 끝나기 전엔 null을 준다. 짧은 로딩 상태.
+    /**
+     * useCameraPermissions는 마운트 직후 상태 조회가 끝나기 전엔 null을 준다. 짧은 로딩 상태.
+     *
+     * 예전에는 "카메라를 준비하고 있어요" 한 줄이었다. 문구는 **기다려도 바뀌지 않는 상태**에
+     * 쓰는 것이고(아래 권한 거부 갈래), 이 자리는 곧 채워지는 자리라 자리표시로 바꿨다 —
+     * 앱의 로딩 표현을 스켈레톤으로 통일한다는 지시.
+     *
+     * 모양은 바로 다음에 올 촬영 화면 그대로다: 화면을 꽉 채우는 프리뷰 + 하단 흰 패널(제목 한 줄
+     * 26 + gap 16 + 셔터 76). 패널의 여백·간격은 styles.bottomPanel을 그대로 쓰므로 카메라가
+     * 뜨는 순간 셔터 자리가 움직이지 않는다.
+     */
     return (
       <View style={styles.screen}>
+        {/* 프리뷰가 들어올 자리. 카메라가 화면 전체를 덮으므로 자리표시도 같은 absolute 상자를 쓴다 */}
+        <View style={[styles.cameraFill, styles.cameraFillPlain]}>
+          <SkeletonBlock width="100%" height="100%" radius={0} color={PREVIEW_SKELETON_COLOR} />
+        </View>
+
         {renderHeader?.({ onBack })}
-        <View style={styles.centerMessage}>
-          <Text style={styles.centerMessageText}>카메라를 준비하고 있어요</Text>
+
+        <View style={styles.bottomStack}>
+          <View style={[styles.bottomPanel, { paddingBottom: previewBottomGap }]} accessible accessibilityLabel="카메라를 준비하는 중">
+            <View style={styles.bottomLabels}>
+              {/* bottomTitle은 18/26 — 같은 26을 잡아야 셔터가 위아래로 밀리지 않는다 */}
+              <SkeletonBlock width={200} height={26} radius={8} color={PANEL_SKELETON_COLOR} />
+            </View>
+            {/* ShutterOuter 76x76 */}
+            <SkeletonBlock width={76} height={76} color={PANEL_SKELETON_COLOR} />
+          </View>
         </View>
       </View>
     );

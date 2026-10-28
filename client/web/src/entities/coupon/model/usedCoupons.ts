@@ -30,6 +30,17 @@ const listeners = new Set<() => void>();
  */
 const sessionUsed = new Set<string>();
 
+/**
+ * markCouponUsed 호출 횟수. 지도 마커는 "이 장소의 쿠폰들"처럼 특정 key 하나가 아니라 여러 key를
+ * 한꺼번에 봐야 해서 isCouponUsed처럼 key별 스냅샷을 쓸 수 없다 — 그래서 이 값을
+ * useSyncExternalStore 스냅샷으로 구독해 아무 쿠폰이나 사용 완료되면 마커를 다시 그리게 한다.
+ */
+let usedVersion = 0;
+
+export function usedCouponsVersion(): number {
+  return usedVersion;
+}
+
 export function subscribeUsedCoupons(listener: () => void): () => void {
   listeners.add(listener);
   return () => {
@@ -66,6 +77,7 @@ export function markCouponUsed(couponLocation: string, couponPrice: number): voi
 
   // 저장보다 먼저 세션에 남긴다 — setItem이 throw해도 이 화면은 사용 완료로 바뀌어야 한다
   sessionUsed.add(key);
+  usedVersion += 1;
 
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...readAll(), key]));

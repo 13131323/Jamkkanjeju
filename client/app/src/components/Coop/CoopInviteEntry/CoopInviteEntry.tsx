@@ -1,14 +1,11 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { FullBleed } from '@/components/FullBleed/FullBleed';
+import { CoopStepSkeleton } from '@/components/Coop/CoopStepSkeleton/CoopStepSkeleton';
 import { useToast } from '@/components/Toast/Toast';
 import { useJoinCoopMission } from '@/hooks/useCoopMission';
 import { getCachedSession } from '@/services/sessionCache';
-import { COOP_BACKGROUND_COLORS, COOP_CIRCLE_COLORS, coopStepStyles } from '@/styles/coopStep';
 import { readInviteToken, resolveCoopInviteEntry } from '@/utils/coopInvite';
-import { coopFailureMessage } from '@/utils/coopFailure';
+import { coopInviteFailureMessage } from '@/utils/coopFailure';
 import { coopTrace } from '@/utils/coopTrace';
 import { navigate } from '@/utils/navigate';
 
@@ -93,7 +90,7 @@ export function CoopInviteEntry() {
         // 정원 초과·시작한 미션·만료된 링크는 모두 정상 흐름의 실패다(useCoopMission.ts).
         // 문구는 coopFailure.ts가 정하고 여기서는 띄우기만 한다.
         coopTrace('초대링크:참여 실패', { failure: result.failure });
-        show(coopFailureMessage(result.failure, result.detail));
+        if (!result.apiErrorNotified) show(coopInviteFailureMessage(result.failure, result.detail));
         navigate.replaceProgrammatic('/home');
         return;
       }
@@ -106,15 +103,8 @@ export function CoopInviteEntry() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 요청이 끝나면 곧바로 다른 화면으로 넘어간다. 그동안은 협동 미션 배경 위 스피너만 둔다 —
-  // 단계 배지나 문구를 넣으면 이 대기가 어느 단계로 읽힌다(together.tsx의 같은 갈래와 맞췄다).
-  return (
-    <FullBleed>
-      <View style={[coopStepStyles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-        <LinearGradient colors={COOP_BACKGROUND_COLORS} style={coopStepStyles.background} />
-        <LinearGradient colors={COOP_CIRCLE_COLORS} style={coopStepStyles.circle} />
-        <ActivityIndicator />
-      </View>
-    </FullBleed>
-  );
+  // 요청이 끝나면 곧바로 다른 화면으로 넘어간다. 그동안은 협동 미션 배경 위에 세 단계가 공유하는
+  // 골격만 자리표시로 그린다 — 단계 배지나 문구를 넣으면 이 대기가 어느 단계로 읽힌다.
+  // 모양·이유는 CoopStepSkeleton에 있고, together.tsx의 "방 여는 중" 갈래가 같은 것을 쓴다.
+  return <CoopStepSkeleton />;
 }

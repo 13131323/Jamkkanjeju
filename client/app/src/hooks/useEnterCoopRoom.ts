@@ -1,10 +1,12 @@
+import { wasApiErrorNotified } from '@packages/shared';
 import { useCallback } from 'react';
-import { Alert } from 'react-native';
 import { useToast } from '@/components/Toast/Toast';
+import { TOAST_COOP_CTA_CLEARANCE } from '@/components/Toast/styles';
 import { useStartCoopMission } from '@/hooks/useCoopMission';
 import { useCoopPartyStore } from '@/store/coopParty';
 import { describeApiError } from '@/utils/apiError';
-import { COOP_FAILURE_MESSAGE, resolveCoopFailure } from '@/utils/coopFailure';
+import { COOP_FAILURE_MESSAGE, coopFailureMessage, resolveCoopFailure } from '@/utils/coopFailure';
+import { coopTrace } from '@/utils/coopTrace';
 import { coopEntryOutcome, coopHrefForScreen, coopIntroRoute, coopScreenForStep } from '@/utils/coopStep';
 import { navigate } from '@/utils/navigate';
 
@@ -74,7 +76,9 @@ export function useEnterCoopRoom(): (cooperativeMissionId: number, mode: 'push' 
         if (coopEntryOutcome(started.missionProgressStatus) === 'already-completed') {
           reset();
           forgetPausedRoom();
-          show(COOP_FAILURE_MESSAGE['already-completed']);
+          // 이 토스트는 곧 넘어갈 인트로 화면 위에서 읽힌다 — 인트로 CTA도 협동과 같은
+          // ctaBottomPadding + md 버튼이라 같은 clearance를 쓴다(Toast/styles.ts).
+          show(COOP_FAILURE_MESSAGE['already-completed'], { bottomClearance: TOAST_COOP_CTA_CLEARANCE });
           // 인트로가 필요한 미션 id는 인자로 이미 갖고 있다(응답에는 `missionId`가 없다).
           // 인트로에서 눌러 들어온 경우에는 제자리로 돌아오는 셈이고, 홈의 "이어서 진행"으로
           // 들어온 경우에는 이 화면 대신 인트로가 남는다.
@@ -94,10 +98,21 @@ export function useEnterCoopRoom(): (cooperativeMissionId: number, mode: 'push' 
         else navigate.pushProgrammatic(route);
         return 'entered';
       } catch (error) {
-        // 서버가 무엇을 거절했는지 화면에 남긴다. 협동 미션의 에러 코드는 OpenAPI에 열거돼 있지 않고
-        // (`ErrorResponse`가 `{ code: string }`이다) `code`가 아예 없는 응답도 있어서,
-        // 코드가 없으면 status와 응답 바디라도 보여 줘야 원인을 좁힐 수 있다.
-        Alert.alert('협동 미션을 시작하지 못했어요', `${COOP_FAILURE_MESSAGE[resolveCoopFailure(error)]}\n\n${describeApiError(error)}`);
+        /**
+         * 예전에는 `Alert.alert`으로 띄우면서 본문에 `describeApiError(error)`를 붙였다
+         * (`HTTP 404 · COOPERATIVE_MISSION_PROGRESS_NOT_FOUND` 같은 문자열). 협동 미션의 에러
+         * 코드가 OpenAPI에 열거돼 있지 않아 화면에 안 보이면 추적할 방법이 없다는 이유였는데,
+         * **그건 개발용 정보라 사용자가 읽을 것이 아니다.** 추적은 아래 `coopTrace`가 맡는다.
+         *
+         * 모달이 아니라 토스트인 이유: 이 갈래는 곧바로 화면을 떠난다(호출부가 홈이나 인트로로
+         * 보낸다). 확인을 눌러야 사라지는 모달은 이미 없어진 화면 위에 남는 꼴이고,
+         * 다른 실패 안내는 전부 토스트라 여기만 모양이 다를 이유가 없다.
+         */
+        const failure = resolveCoopFailure(error);
+        coopTrace('방열기:실패', { failure, detail: describeApiError(error) });
+        // 호출부가 인트로에 머물거나(intro.tsx) 홈으로 보낸다(together.tsx). CTA가 있는 쪽이
+        // 인트로라 그 기준으로 맞춘다 — 홈에는 가릴 네이티브 CTA가 없어 더 떠 있어도 겹치지 않는다.
+        if (!wasApiErrorNotified(error)) show(coopFailureMessage(failure), { bottomClearance: TOAST_COOP_CTA_CLEARANCE });
         return 'failed';
       }
     },

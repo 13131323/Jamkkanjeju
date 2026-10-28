@@ -1,10 +1,11 @@
+import { toHttpsImageUrl } from '@shared/lib/imageUrl';
 import { unwrapHeading } from './headingRotation';
 
 // MapMainScreen.tsx의 PlaceMarker 스타일 그대로 — 미션 없는 로컬장소 마커에 사용 (usePlaceMarkers.ts 참고).
 // 방명록 클러스터링은 더 이상 없어져서(방명록은 항상 개별 마커) 여기엔 안 쓰인다.
 export function createPlaceMarkerElement(name: string, count: number, imageSrc?: string): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'flex w-[75px] cursor-pointer flex-col items-center gap-1.5';
+  wrapper.className = 'js-pressable flex w-[75px] cursor-pointer flex-col items-center gap-1.5';
 
   const iconWrap = document.createElement('div');
   iconWrap.className = 'relative h-[52px] w-[49px] drop-shadow-[0_4px_14px_rgba(0,0,0,0.5)]';
@@ -19,7 +20,7 @@ export function createPlaceMarkerElement(name: string, count: number, imageSrc?:
     img.addEventListener('error', () => {
       img.style.display = 'none';
     });
-    img.src = imageSrc;
+    img.src = toHttpsImageUrl(imageSrc);
     photoBox.appendChild(img);
   }
   iconWrap.appendChild(photoBox);
@@ -49,7 +50,7 @@ export function createContentPinElement(imageSrc?: string, size = 36, circularIm
   const padding = Math.round(size / 9);
 
   const wrapper = document.createElement('div');
-  wrapper.className = 'cursor-pointer overflow-hidden rounded-full bg-warm-neutral-200';
+  wrapper.className = 'js-pressable cursor-pointer overflow-hidden rounded-full bg-warm-neutral-200';
   wrapper.style.width = `${size}px`;
   wrapper.style.height = `${size}px`;
   wrapper.style.padding = `${padding}px`;
@@ -73,7 +74,7 @@ export function createContentPinElement(imageSrc?: string, size = 36, circularIm
     img.addEventListener('load', () => {
       img.style.display = '';
     });
-    img.src = imageSrc;
+    img.src = toHttpsImageUrl(imageSrc);
     inner.appendChild(img);
   }
 
@@ -84,24 +85,27 @@ export function createContentPinElement(imageSrc?: string, size = 36, circularIm
 // 대분류 원마커 색상 종류 — wide 티어(8~9)는 항상 primary, wideSplit 티어(6~7)는 보물찾기=tertiary/협동미션=sunny-yellow (19지도phase3 이후 요청사항)
 export type ClusterColorScheme = 'primary' | 'tertiary' | 'sunny-yellow';
 
+// 사용자 지정 리터럴 hex(디자인 토큰과 무관하게 고정) — 검정=primary/초록=tertiary/노랑=sunny-yellow
 const CLUSTER_OUTER_CLASS: Record<ClusterColorScheme, string> = {
-  primary: 'bg-warm-neutral-600/70',
-  tertiary: 'bg-tertiary-200/70',
-  'sunny-yellow': 'bg-sunny-yellow-200/70',
+  primary: 'bg-[#7C6E5E]/70',
+  tertiary: 'bg-[#CBE7B1]/70',
+  'sunny-yellow': 'bg-[#FFF2CF]/70',
 };
 
+// closest-side 필수 — 기본값(farthest-corner)은 잘려 안 보이는 정사각형 모서리까지 반경을 잡아서,
+// 실제 보이는 원 테두리에는 바깥색이 70.7%까지만 진행된 색으로 나온다(피그마와 달라지는 원인이었음).
 const CLUSTER_INNER_GRADIENT: Record<ClusterColorScheme, string> = {
-  primary: 'radial-gradient(circle, var(--color-warm-neutral-900), var(--color-warm-neutral-700))',
-  tertiary: 'radial-gradient(circle, var(--color-tertiary-600), var(--color-tertiary-300))',
-  'sunny-yellow': 'radial-gradient(circle, var(--color-sunny-yellow-600), var(--color-sunny-yellow-300))',
+  primary: 'radial-gradient(circle closest-side, #2A2621, #63584B)',
+  tertiary: 'radial-gradient(circle closest-side, #77BE36, #B0DA8B)',
+  'sunny-yellow': 'radial-gradient(circle closest-side, #FFD666, #FFE8A3)',
 };
 
 // MapMainScreen.tsx의 ClusterMarker 레이아웃 기반 — 대분류 원마커. 외부 원은 반투명 단색, 내부 원은 중심→바깥 그라데이션.
 export function createClusterElement(count: number, label: string | undefined, size: number, colorScheme: ClusterColorScheme): HTMLElement {
-  const innerSize = size - 23;
+  const innerSize = size - 36;
 
   const wrapper = document.createElement('div');
-  wrapper.className = `flex cursor-pointer items-center justify-center rounded-full ${CLUSTER_OUTER_CLASS[colorScheme]}`;
+  wrapper.className = `js-pressable flex cursor-pointer items-center justify-center rounded-full ${CLUSTER_OUTER_CLASS[colorScheme]}`;
   wrapper.style.width = `${size}px`;
   wrapper.style.height = `${size}px`;
 
@@ -317,7 +321,7 @@ export function createTreasureMarkerElement(options: {
   const { badgeLabel, closedImageSrc, openImageSrc, found } = options;
 
   const el = document.createElement('div');
-  el.className = 'relative cursor-pointer drop-shadow-[0_4px_10px_rgba(0,0,0,0.14)]';
+  el.className = 'js-pressable relative cursor-pointer drop-shadow-[0_4px_10px_rgba(0,0,0,0.14)]';
   el.style.width = `${TREASURE_MARKER_SIZE}px`;
   el.style.height = `${TREASURE_MARKER_SIZE}px`;
 

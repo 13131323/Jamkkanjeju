@@ -26,6 +26,9 @@ function ChevronLeftIcon() {
  */
 const DECO_GAP = ' '.repeat(6);
 
+/** decoPlacement.left가 기준으로 삼는 디자인 폭. 360(디자인 화면) − 48(타이틀 블록 좌우 패딩) */
+const DECO_DESIGN_CONTENT_WIDTH = 360 - 48;
+
 /**
  * 남은 보상이 하나도 없을 때(= 이 미션의 보상을 이미 다 받았을 때) 보상 줄에 들어가는 문구.
  *
@@ -137,6 +140,10 @@ interface MissionIntroLayoutProps {
    *
    * 제목·부제·보상·단계 자리를 스켈레톤으로 채운다. 색과 장식은 디자인 값이라
    * 로딩 중에도 그대로 그린다 — 미션 종류는 라우트 파라미터로 이미 알고 있다.
+   *
+   * **CTA도 함께 비활성이 된다.** 아직 보여줄 것이 없는 화면의 버튼은 눌러도 갈 곳이 없는데,
+   * 평소와 똑같이 그려 두면 "눌리는데 아무 일도 안 일어난다"로 읽힌다(보물찾기 인트로가 완료
+   * 조회를 기다릴 때 실제로 그랬다 — app/mission/intro.tsx의 스켈레톤 분기).
    */
   loading?: boolean;
 }
@@ -220,7 +227,10 @@ export function MissionIntroLayout({
                   styles.deco,
                   decoSize,
                   {
-                    left: decoPlacement.left,
+                    // 행 폭은 기기 너비를 따라가고 타이틀은 그 안에서 가운데 정렬이라, 왼쪽 끝 기준
+                    // 좌표는 넓은 기기에서 글자 사이 공백을 벗어난다. 가운데 기준으로 환산해 얹는다.
+                    left: '50%',
+                    marginLeft: decoPlacement.left - DECO_DESIGN_CONTENT_WIDTH / 2,
                     top: decoPlacement.top,
                     transform: [{ rotate: `${decoPlacement.rotation}deg` }],
                   },
@@ -309,7 +319,7 @@ export function MissionIntroLayout({
       {/* 디자인 CTA 영역 699~800: 위 16 + 버튼 52 + 아래 33(홈 인디케이터 영역).
           absolute로 띄우면 흰 시트 끝과 버튼 사이에 빈 배경이 남아서 흐름에 그대로 둔다 */}
       <View style={[styles.ctaWrapper, { paddingBottom: ctaBottomPadding(insets.bottom) }]}>
-        <Button color={ctaColor} bold text={ctaText} onPress={onCtaPress} />
+        <Button color={ctaColor} bold disabled={loading} text={ctaText} onPress={onCtaPress} />
       </View>
     </FullBleed>
   );

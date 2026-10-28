@@ -11,6 +11,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  // WebView가 네이티브 앱 화면처럼 보여야 하므로 브라우저 기본 핀치줌(페이지 확대/축소)을 막는다.
+  // 카카오맵 등 화면 내부의 자체 줌 기능은 SDK가 직접 처리해 이 설정과 무관하다.
+  maximumScale: 1,
+  userScalable: false,
   // 안전영역 뒤까지 콘텐츠를 그리고 env(safe-area-inset-*)를 살린다
   viewportFit: 'cover',
 };

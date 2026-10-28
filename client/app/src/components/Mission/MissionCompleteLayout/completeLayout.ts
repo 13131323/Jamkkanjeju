@@ -9,14 +9,17 @@
  * ResultCard의 보상 행이 0~3개로 달라지고(서버가 이번에 지급한 항목만 내려준다) 그 폭이 175다.
  * 그래서 "남는 높이를 조절 가능한 두 값에 나눠 준다"는 방식으로 계산한다.
  *
- * 조절 대상과 우선순위:
- *   1. 축하 이미지(120~164) — 화면의 주인공이라 먼저 채운다.
- *   2. "다음 여행지를 추천드려요" 위 간격(12~40, 디자인 28) — 남은 만큼 받는다.
- * 반대로 높이가 부족하면 순서가 뒤집힌다. 간격은 최소치까지 먼저 줄고, 그래도 부족할 때
- * 이미지가 줄어든다 — 빈 공간이 캐릭터보다 먼저 양보해야 한다.
+ * 조절 대상과 정하는 순서:
+ *   1. "다음 여행지를 추천드려요" 위 간격(12~44) — **기기 높이만** 보고 먼저 정한다.
+ *   2. 축하 이미지(120~178) — 남는 높이를 받는다. 보상 행 수가 만드는 차이를 여기서 흡수한다.
+ *   3. 자리가 빠듯하면 1번이 **필요한 만큼만** 하한(12)까지 되돌아가 2번에 넘긴다(사용자 지시:
+ *      "여백 최소 12px, 나머지는 기기에 맞춰서, 스크롤 안 되게").
  *
- * 두 값을 한 함수에서 함께 정하는 이유: 따로 계산하면 보상 행이 적을 때 둘이 동시에 커져
- * 오히려 넘친다. 하나의 예산(budget)을 나눠 쓰게 해야 합계가 보장된다.
+ * 간격이 행 수를 보지 않는 이유: 같은 기기인데 중단으로 온 화면(0행)은 문구 위가 트여 있고
+ * 정상 완료(3행)는 붙어 보였다(사용자 지시). 행 수는 화면 높이와 무관한 값이라 여백이 거기에
+ * 흔들릴 이유가 없다. 다만 그 규칙을 끝까지 밀면 이미지가 하한에 걸린 뒤에도 여백이 넓은 값을
+ * 쥐고 있어 그만큼이 스크롤이 됐다 — 그래서 3번을 둔다. 예산이 132(120+12) 이상이면 스크롤이
+ * 생기지 않고, 그보다 좁은 기기만 ScrollView가 받는다.
  *
  * 그래도 큰 기기에서 남는 공간은 있다. 이 화면은 위에서부터 쌓이고 CTA가 하단에 고정된
  * 구조라, 다 나눠 주고 남은 몫은 scrollContent의 flexGrow가 CTA 위쪽에 모아 둔다.
@@ -64,21 +67,23 @@ const CELEBRATION_MIN_SIZE = 120;
  */
 export const COOP_CELEBRATION_SIZE: CelebrationSize = { width: 187, height: 192 };
 
-/** "다음 여행지를 추천드려요" 위 간격. 디자인은 28이고, 남는 높이에 따라 이 범위에서 움직인다 */
+/**
+ * "다음 여행지를 추천드려요" 위 간격. 남는 높이에 따라 이 범위에서 움직인다.
+ *
+ * 하한은 12다(사용자 지시). 짧은 기기에서 **스크롤을 만들지 않는 것**이 문구 위 여백보다
+ * 우선이라, 자리가 빠듯해지면 이 값까지 내려가며 그만큼을 축하 이미지에 넘긴다
+ * (아래 resolveCompleteLayout의 두 번째 clamp).
+ */
 const SUGGESTION_GAP_MIN = 12;
-const SUGGESTION_GAP_MAX = 40;
+const SUGGESTION_GAP_MAX = 44;
 
 /**
- * 디자인 값이자 **여유가 없을 때 먼저 확보하는** 간격.
+ * 디자인 값. 지금은 **높이를 아직 못 잰 구간의 폴백**으로만 쓴다.
  *
- * 예전에는 이미지가 예산을 다 가져가고 남은 것만 간격이 받았다. 그래서 예산이 빠듯한 기기일수록
- * 캐릭터는 어중간하게 작아지는데 문구는 보상 카드에 딱 붙어, 화면이 위로 쏠려 보였다(사용자 지시:
- * "캐릭터 사이즈가 작으면 다음~~ 문구 위 여백을 더 줘").
- *
- * 그래서 예산이 표준(164+28)에 못 미치면 **순서를 뒤집어** 이 간격을 먼저 떼고 남은 것을
- * 이미지가 가져간다. 합계는 그대로라 스크롤이 새로 생기지는 않는다 — 같은 예산을 다르게 나눌 뿐이다.
+ * 디자인 28에서 32로 한 단계(4) 올렸다 — 문구 위가 좁다는 지적에 따른 것이고, 상한도 40→44로
+ * 같이 올려 여유가 있는 기기에서도 그만큼 트이게 했다.
  */
-const SUGGESTION_GAP_DESIGN = 28;
+const SUGGESTION_GAP_DESIGN = 32;
 
 /**
  * 조절 대상을 뺀 나머지 콘텐츠 높이.
@@ -92,11 +97,11 @@ const MESSAGE_HEIGHT = 72;
 /** resultCard: marginTop 27 + paddingVertical 8 상하 */
 const RESULT_CARD_CHROME = 43;
 /** resultRow 한 줄 */
-const RESULT_ROW_HEIGHT = 44;
+const RESULT_ROW_HEIGHT = 52;
 /** suggestion 텍스트 자체(lineHeight 24). 위 간격은 조절 대상이라 여기 포함하지 않는다 */
 const SUGGESTION_TEXT_HEIGHT = 24;
-/** placeCard: marginTop 12 + paddingTop 14 + thumb 73 + paddingBottom 17 */
-const PLACE_CARD_HEIGHT = 116;
+/** placeCard: marginTop 8 + paddingTop 14 + thumb 73 + paddingBottom 17 */
+const PLACE_CARD_HEIGHT = 112;
 /** celebrationRow marginTop — 헤더와 겹치는 양이라 콘텐츠 높이에서 빠진다 */
 const CELEBRATION_OVERLAP = 42;
 /**
@@ -112,7 +117,7 @@ const CTA_HEIGHT = 64;
  * 부제나 장소 문구가 두 줄로 감기면(문구 길이는 서버가 정한다) 계산보다 높아진다.
  * 살짝 보수적으로 잡아 이미지를 조금 작게 고르는 편이, 넘쳐서 스크롤이 생기는 것보다 낫다.
  */
-const SAFETY_MARGIN = 24;
+const SAFETY_MARGIN = 10;
 
 export interface CompleteLayoutInput {
   /** 화면 높이에서 상단·하단 인셋을 뺀 실사용 높이. 인셋은 기기마다 다르다(안드로이드 네비게이션바 0~48) */
@@ -158,20 +163,37 @@ function clamp(value: number, min: number, max: number): number {
  */
 export function resolveCompleteLayout({ usableHeight, resultRowCount }: CompleteLayoutInput): CompleteLayoutMetrics {
   if (!Number.isFinite(usableHeight) || usableHeight <= 0) {
-    return { celebrationScale: 1, suggestionGap: 28 };
+    return { celebrationScale: 1, suggestionGap: SUGGESTION_GAP_DESIGN };
   }
+
+  /**
+   * 간격은 **기기 높이만 보고** 정한다(사용자 지시).
+   *
+   * 예전에는 예산을 이미지와 간격이 나눠 써서, 같은 기기인데도 보상 행이 많으면 간격이 좁아졌다 —
+   * 중단으로 온 완료 화면(0행)은 문구 위가 트여 있는데 정상 완료(3행)는 붙어 보였다.
+   * 행 수는 화면 높이와 무관한 값이라 여백이 거기에 흔들릴 이유가 없다.
+   *
+   * 기준은 "행이 없을 때의 고정 콘텐츠와 이미지 상한을 세우고 남는 높이"다. 큰 기기면 상한(44)에
+   * 닿고, 낮아질수록 좁아져 하한(12)에서 멈춘다.
+   */
+  const heightOnlyBudget = usableHeight - fixedContentHeight(0);
+  const heightOnlyGap = clamp(heightOnlyBudget - CELEBRATION_MAX_SIZE, SUGGESTION_GAP_MIN, SUGGESTION_GAP_MAX);
 
   const budget = usableHeight - fixedContentHeight(Math.max(0, resultRowCount));
 
   /**
-   * 예산이 표준(이미지 164 + 간격 28)을 감당할 수 있으면 이미지가 먼저 가져간다 — 화면의 주인공이
-   * 커지는 쪽이 낫다. 감당하지 못하면 **간격을 먼저 떼고** 남은 것을 이미지가 받는다
-   * (SUGGESTION_GAP_DESIGN 주석). 어느 쪽이든 떼어 두는 몫이 있어야 다른 하나가 예산을 다 먹지 않는다.
+   * **자리가 빠듯하면 여백이 먼저 양보한다.**
+   *
+   * 예전에는 간격을 기기 높이만 보고 정한 뒤 이미지에서만 clamp했다. 그래서 짧은 기기 + 보상
+   * 3행이면 이미지가 하한(120)에 걸려 있는 동안에도 간격은 넓은 값을 그대로 쥐고 있었고,
+   * 넘친 만큼이 스크롤이 됐다. 이미지가 하한에 닿을 만큼 좁아지는 구간에서는 간격을 하한(12)까지
+   * 되돌려 그 공간을 이미지에 넘긴다 — 여유가 있는 기기에서는 이 clamp가 아무것도 바꾸지 않는다.
+   *
+   * 결과: `budget >= CELEBRATION_MIN_SIZE + SUGGESTION_GAP_MIN`(=132)이면 스크롤이 생기지 않는다.
+   * 그보다 좁으면 ScrollView가 받는다 — 알아볼 수 없는 축하 이미지보다 스크롤이 낫다는 판단은 그대로다.
    */
-  const reservedForGap = budget >= CELEBRATION_BASE_SIZE + SUGGESTION_GAP_DESIGN ? SUGGESTION_GAP_MIN : SUGGESTION_GAP_DESIGN;
-
-  const celebrationSize = clamp(budget - reservedForGap, CELEBRATION_MIN_SIZE, CELEBRATION_MAX_SIZE);
-  const suggestionGap = clamp(budget - celebrationSize, SUGGESTION_GAP_MIN, SUGGESTION_GAP_MAX);
+  const suggestionGap = clamp(budget - CELEBRATION_MIN_SIZE, SUGGESTION_GAP_MIN, heightOnlyGap);
+  const celebrationSize = clamp(budget - suggestionGap, CELEBRATION_MIN_SIZE, CELEBRATION_MAX_SIZE);
 
   return { celebrationScale: celebrationSize / CELEBRATION_BASE_SIZE, suggestionGap };
 }

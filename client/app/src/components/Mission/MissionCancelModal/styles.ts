@@ -17,18 +17,6 @@ export const missionCancelModalStyles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 24,
   },
-  // 디자인에는 없다. TreasureRewardModal의 닫기 버튼과 같은 이유로 추가한다 —
-  // 두 선택지 모두 미션을 떠나므로 "그냥 계속하기" 경로가 필요하다.
-  closeButton: {
-    position: 'absolute',
-    right: 8,
-    top: 8,
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   // Icon_Alert_Circle 48x48 radius 24, fill #f1f9e8(tertiary-50), 아이콘 #77be36(tertiary-600)
   alertCircle: {
     width: 48,

@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs';
 import { PostMessageError } from '@shared/lib/errors';
 import { sendToApp, listenFromApp } from '@shared/lib/bridge/utils';
 import { useLocationStore } from './store';
+import { shouldDiscardCoordsForPermission } from './permissionCoords';
 
 // Home 진입 시 앱에 위치 권한을 요청하고, 앱이 돌려주는 권한 결과·실시간 좌표를 스토어에 반영한다
 // (06실시간마커최종.md §9 실제 브릿지 연결). sendToApp/listenFromApp 모두 WebView 밖(일반 브라우저)에서는
@@ -20,6 +21,9 @@ export function useLocationBridge() {
       switch (message.type) {
         case 'LOCATION_PERMISSION_RESULT':
           setPermissionStatus(message.payload.status);
+          // 허용했다가 설정에서 회수하면 blocked가 다시 온다. 들고 있던 좌표를 남겨 두면
+          // 상단 주소가 실패로 떨어지지 않고 옛 주소를 "현재 위치"처럼 계속 그린다(permissionCoords.ts).
+          if (shouldDiscardCoordsForPermission(message.payload.status)) setCoords(null);
           break;
         case 'LOCATION_UPDATE':
           // 심사위원용 모드에서도 **그대로 담는다.** 화면에 뭘 그릴지는 resolveDisplayLocation /

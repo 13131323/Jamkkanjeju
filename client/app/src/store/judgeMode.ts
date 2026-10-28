@@ -4,10 +4,16 @@ import { create } from 'zustand';
 /**
  * 심사위원용 모드 — 제주 밖에서도 앱 전체를 제주에 있는 것처럼 보이게 하는 스위치.
  *
- * **web이 주인이다.** 켜고 끄는 UI(홈 단축 버튼 행의 "모드변경" + 코드 입력)와 저장은 web에
- * 있고, 앱은 JUDGE_MODE_UPDATE로 받은 값을 메모리에만 든다 — 양쪽이 각자 저장하면 상태가
- * 갈라진다. 홈이 열릴 때마다 web이 현재 값을 보내고, 미션 화면은 전부 홈을 거치므로 이것으로
- * 충분하다.
+ * **켜고 끄는 주인은 web, 보관하는 주인은 앱이다.** UI(홈 단축 버튼 행의 "모드변경" + 코드 입력)는
+ * web에 있고, 앱은 JUDGE_MODE_UPDATE로 받은 값을 이 스토어에 올리면서 sqlite에도 남긴다
+ * (services/judgeModePersistence.ts). 값을 바꾸는 곳이 한 군데뿐이라 "양쪽이 각자 저장하면
+ * 갈라진다"는 문제는 생기지 않는다 — 앱은 받아 적기만 한다.
+ *
+ * **보관을 앱이 맡은 이유**: 예전에는 앱이 메모리에만 들어서, 앱을 완전히 종료했다 켜면 web이
+ * WebView 안에서 살아나 알려 줄 때까지 항상 기본 모드였다. 그 구간의 네이티브 호출은 앱 토큰으로
+ * 나가고 좌표도 실측값이 흘렀다. 이제는 부트스트랩이 sqlite에서 되살리므로 프로세스 시작부터
+ * 올바른 모드이고, 그 값을 WebView에 심어 web의 출발값으로도 넘긴다
+ * (components/HomeWebView/webViewBootstrapScript.ts).
  *
  * 이 플래그가 정하는 것은 세 가지다: 협동 미션 시뮬레이션(config/coopSimulation.ts),
  * 좌표 고정(아래 applyJudgeModePosition), 그리고 **API 호출의 주인**

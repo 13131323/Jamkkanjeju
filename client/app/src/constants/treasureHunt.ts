@@ -98,9 +98,9 @@ export const TREASURE_MARKER_ICON = require('@assets/images/treasure-map-marker.
  * 보상 종류(캐릭터/포인트/쿠폰)로 갈리지 않는다 — 디자인이 상자 하나로 통일했고, 무엇을 받았는지는
  * 그림이 아니라 설명 문구가 말한다. 다 찾은 순간에만 축하하는 캐릭터로 바뀐다.
  *
- * 파일은 표시 dp(104 / 102)의 3배다(.claude/penpot-workflow.md §3-3).
+ * ALL_FOUND는 표시 dp(104/102)의 3배 png다(.claude/penpot-workflow.md §3-3). FOUND는 애니메이션 gif로 교체했다.
  */
-export const TREASURE_MODAL_FOUND_ICON = require('@assets/images/treasure-modal-found.png');
+export const TREASURE_MODAL_FOUND_ICON = require('@assets/images/treasure.gif');
 export const TREASURE_MODAL_ALL_FOUND_ICON = require('@assets/images/treasure-modal-all-found.png');
 
 /**

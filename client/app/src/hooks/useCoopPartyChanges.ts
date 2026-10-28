@@ -26,6 +26,18 @@ import { becameHost, removedParticipants, shouldSkipPartyChangeCheck, wasRemoved
 export interface CoopPartyChangeHandlers {
   /** 이번 폴링이 준 참여자 목록 */
   participants: Participant[];
+  /**
+   * 위 목록이 **서버 응답에서 왔는지**(useCoopMission의 같은 이름). false면 이번 회차는
+   * 아무것도 판정하지 않는다 — 스냅샷도 남기지 않는다.
+   *
+   * 이 훅이 하는 말은 전부 "직전 명단과 지금 명단을 비교한 결과"인데, 폴백은 명단이 아니라
+   * 명단이 오기 전까지 화면을 채우는 값이다. 그것을 비교에 넣으면 **아무 일도 일어나지 않은
+   * 순간에 방에서 빠졌다는 결론**이 나온다(useCoopMission의 hasServerParticipants 주석).
+   *
+   * 스냅샷을 남기지 않는 것이 핵심이다. 여기서 폴백으로 스냅샷을 갈아 끼우면 진짜 응답이
+   * 도착했을 때 비교 대상이 이미 망가져 있어, 판정을 건너뛴 의미가 사라진다.
+   */
+  hasServerParticipants: boolean;
   /** 직전 폴링 스냅샷. null이면 비교할 것이 없는 첫 응답이다 */
   previousParticipants: Participant[] | null;
   myParticipantId: number | null;
@@ -44,7 +56,16 @@ export interface CoopPartyChangeHandlers {
   onDeparted: (participant: Participant) => void;
 }
 
-export function useCoopPartyChanges({ participants, previousParticipants, myParticipantId, rememberParticipants, onRemoved, onBecameHost, onDeparted }: CoopPartyChangeHandlers): void {
+export function useCoopPartyChanges({
+  participants,
+  hasServerParticipants,
+  previousParticipants,
+  myParticipantId,
+  rememberParticipants,
+  onRemoved,
+  onBecameHost,
+  onDeparted,
+}: CoopPartyChangeHandlers): void {
   /**
    * 심사위원용 모드가 **실행 중에 켜지거나 꺼지면** 이번 회차의 변화 판정을 건너뛴다.
    *
@@ -62,6 +83,9 @@ export function useCoopPartyChanges({ participants, previousParticipants, myPart
   const previousSimulationRef = useRef(simulationEnabled);
 
   useEffect(() => {
+    // 서버가 이 화면에 아직 명단을 준 적이 없다. 비교할 것이 없으므로 스냅샷째로 그냥 둔다.
+    if (!hasServerParticipants) return;
+
     if (shouldSkipPartyChangeCheck(previousSimulationRef.current, simulationEnabled)) {
       previousSimulationRef.current = simulationEnabled;
       // 새 기준으로 스냅샷만 다시 잡는다. 다음 회차부터는 같은 기준끼리 비교된다.
@@ -82,5 +106,5 @@ export function useCoopPartyChanges({ participants, previousParticipants, myPart
     removedParticipants(previousParticipants, participants).forEach(onDeparted);
 
     rememberParticipants(participants);
-  }, [previousParticipants, participants, myParticipantId, simulationEnabled, rememberParticipants, onRemoved, onBecameHost, onDeparted]);
+  }, [previousParticipants, participants, hasServerParticipants, myParticipantId, simulationEnabled, rememberParticipants, onRemoved, onBecameHost, onDeparted]);
 }

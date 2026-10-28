@@ -12,6 +12,7 @@ import type { StoredSession } from '@/db/models/Session';
 import { clearSession, readSession, saveToken } from '@/db/session';
 import { issueAnonymousUserApiV1AuthAnonymousPost } from '@/services/api/auth/auth';
 import { resolveAuthorizationHeader } from './authHeader';
+import { restoreJudgeMode } from './judgeModePersistence';
 import { authorizationHeaderOf, getCachedSession, setCachedSession } from './sessionCache';
 
 export type BootstrapStatus = 'ready' | 'offline' | 'server-error';
@@ -138,6 +139,12 @@ export async function hydrateSessionCache(): Promise<boolean> {
   // 흔하고(포그라운드 → 백그라운드 전환), 그때는 부트스트랩이 이미 채워 뒀다.
   if (getCachedSession()) return true;
 
+  // 헤드리스 회차도 포그라운드와 **같은 계정**으로 보내야 한다. 모드가 메모리 전용이던 시절에는
+  // 여기서 할 수 있는 일이 없었지만(아래 hasUsableAuthorization 주석 참고), 이제 sqlite에 남아
+  // 있으므로 되살린다 — 모드가 켜진 채 백그라운드 전송만 앱 토큰으로 나가면 홈이 보여 준 진행도와
+  // 서버에 쌓이는 기록의 주인이 갈린다.
+  await restoreJudgeMode();
+
   try {
     const session = hydratableSession(await readSession(), apiOriginOf(process.env.EXPO_PUBLIC_API_URL));
     if (!session) return false;
@@ -159,8 +166,10 @@ export async function hydrateSessionCache(): Promise<boolean> {
  * 못 보내는데 보내는 회차가 생긴다.
  *
  * 심사위원용 모드가 켜져 있으면 앱 토큰이 없어도 붙일 헤더가 있다(심사위원 토큰).
- * 다만 그 모드는 메모리 전용이라 **헤드리스 기동에서는 언제나 false**이고, 그때는 결국
- * 앱 토큰이 있어야 한다 — 즉 헤드리스에서 이 함수는 `hydrateSessionCache`의 결과와 같다.
+ * 예전에는 그 모드가 메모리 전용이라 헤드리스 기동에서 언제나 false였고, 그래서 이 함수는
+ * 헤드리스에서 `hydrateSessionCache`의 결과와 같았다. 지금은 모드가 sqlite에 남고
+ * `hydrateSessionCache`가 그것까지 되살리므로(services/judgeModePersistence.ts), 앱 토큰이
+ * 없어도 모드가 켜져 있으면 보낼 수 있다 — 두 값이 갈릴 수 있으니 인자를 그대로 받는다.
  */
 export function hasUsableAuthorization(judgeModeEnabled: boolean): boolean {
   return resolveAuthorizationHeader(judgeModeEnabled, authorizationHeaderOf(getCachedSession())) !== null;
@@ -168,6 +177,12 @@ export function hasUsableAuthorization(judgeModeEnabled: boolean): boolean {
 
 export async function bootstrapSession(): Promise<BootstrapResult> {
   const currentOrigin = apiOriginOf(process.env.EXPO_PUBLIC_API_URL);
+
+  // 심사위원용 모드를 **토큰보다 먼저** 되살린다. 이 값이 아래 발급·재사용 경로에서 나가는
+  // 요청의 주인을 정하고(services/authHeader.ts), WebView에 심을 값도 여기서 정해진다
+  // (components/HomeWebView/webViewBootstrapScript.ts). 순서가 뒤집히면 부트스트랩 회차만
+  // 기본 모드로 나가 콜드 스타트에 한 번 어긋난다.
+  await restoreJudgeMode();
 
   try {
     const stored = await readSession();

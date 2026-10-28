@@ -65,6 +65,11 @@ export interface PausedCoopRoom {
  * 정해진 값이라 동어반복이었다("방장을 나로 정해 두고 내가 방장인지 묻는다"). 그래서 3번 조건이
  * 사실상 언제나 참이었고, 혼자 하는 미션에서도 재개할 때마다 승계 안내가 떴다.
  */
+/**
+ * 빈 결정 목록. 매번 새 `[]`를 넣으면 이 값을 구독하는 화면이 방에 들어올 때마다 다시 그려진다.
+ */
+const NO_SIMULATED_IDS: number[] = [];
+
 export function resumedAsNewHost(paused: PausedCoopRoom | null, missionProgressId: number, participants: Participant[] | undefined): boolean {
   if (paused === null) return false;
   if (paused.missionProgressId !== missionProgressId) return false;
@@ -187,6 +192,15 @@ interface CoopPartyStore {
   acceptedSimulatedIds: number[];
   /** 시뮬레이션 팀원 중 방장이 거절한 id. 목록에서 지우는 데만 쓴다 */
   rejectedSimulatedIds: number[];
+  /**
+   * 위 두 목록이 **어느 방의 결정인지**.
+   *
+   * 수락·거절은 방 안에서만 뜻이 있는 판단이라 방이 바뀌면 백지로 돌아가야 하고, 같은 방이면
+   * 이어져야 한다. `missionProgressId`로 대신 볼 수 없다 — `reset()`이 그것을 null로 지우므로
+   * "쉬기 → 다시 들어오기"에서 같은 방인지 알 수 없게 된다(pausedRoom이 방 번호를 자기 안에
+   * 들고 있는 것과 같은 이유).
+   */
+  simulatedRoomId: number | null;
 
   /**
    * "잠깐 쉴게요"로 나가던 순간의 메모. **`reset()`이 지우지 않는 유일한 값이다** —
@@ -253,8 +267,6 @@ const EMPTY = {
   previousParticipants: null,
   roleCards: [] as RoleCard[],
   participants: [] as Participant[],
-  acceptedSimulatedIds: [] as number[],
-  rejectedSimulatedIds: [] as number[],
   // 안내는 방에 들어올 때마다 다시 계산된다(enterRoom). 방을 떠나면 띄울 자리도 없으므로 내린다.
   hostChangedWhilePaused: false,
   // 같은 이유로 여기 둔다 — 방을 떠나면 이 진입의 안내 이력도 함께 끝난다.
@@ -266,6 +278,18 @@ export const useCoopPartyStore = create<CoopPartyStore>((set, get) => ({
   // **EMPTY에 넣지 않는다.** `reset()`이 `...EMPTY`를 그대로 덮어쓰므로 여기 들어가면
   // "쉬기 → reset → 다시 시작"의 중간에서 메모가 지워져 방장 교체를 영영 알 수 없다.
   pausedRoom: null,
+  /**
+   * 가짜 팀원에 대한 방장의 결정도 **EMPTY에 넣지 않는다.** 같은 이유다.
+   *
+   * 예전에는 EMPTY에 있어서 "잠깐 쉴게요"의 `reset()`이 거절 기록을 지웠고, 같은 방으로 다시
+   * 들어오면 거절했던 세 명이 **전원 되살아났다** — 혼자 진행하던 화면에 갑자기 팀원이 생긴다
+   * (기기에서 확인). 거절은 방을 떠난다고 무효가 되는 판단이 아니다.
+   *
+   * 대신 방이 바뀌면 백지가 되어야 하므로 방 번호를 함께 들고 `enterRoom`에서 대조한다.
+   */
+  acceptedSimulatedIds: NO_SIMULATED_IDS,
+  rejectedSimulatedIds: NO_SIMULATED_IDS,
+  simulatedRoomId: null,
 
   enterRoom: ({ missionProgressId, teamToken, myParticipantId, roleCards, participants }) => {
     const previous = get();
@@ -277,6 +301,7 @@ export const useCoopPartyStore = create<CoopPartyStore>((set, get) => ({
      * 같은 방으로 다시 들어오는 경우(이어하기)에만 직전 값을 유지한다.
      */
     const sameRoom = previous.missionProgressId === missionProgressId;
+    const sameSimulatedRoom = previous.simulatedRoomId === missionProgressId;
     const nextMyParticipantId = myParticipantId ?? (sameRoom ? previous.myParticipantId : null);
 
     set({
@@ -319,6 +344,16 @@ export const useCoopPartyStore = create<CoopPartyStore>((set, get) => ({
       hostChangedWhilePaused: resumedAsNewHost(previous.pausedRoom, missionProgressId, participants),
       // 메모는 한 번 쓰고 버린다. 남겨 두면 같은 방을 다시 열 때마다 같은 안내가 다시 뜬다.
       pausedRoom: null,
+      /**
+       * 가짜 팀원 수락·거절은 **방 단위로 이어받는다.** 신원(myParticipantId)을 방 단위로만
+       * 이어받는 것과 같은 규칙이고, 기준을 `previous.missionProgressId`가 아니라 따로 든
+       * `simulatedRoomId`로 잡는 이유는 그 필드가 `reset()`에 지워지기 때문이다(선언부 주석).
+       *
+       * 다른 방이면 백지다 — 새 방의 초대는 다시 받는 것이 맞다.
+       */
+      simulatedRoomId: missionProgressId,
+      acceptedSimulatedIds: sameSimulatedRoom ? previous.acceptedSimulatedIds : NO_SIMULATED_IDS,
+      rejectedSimulatedIds: sameSimulatedRoom ? previous.rejectedSimulatedIds : NO_SIMULATED_IDS,
     });
   },
 

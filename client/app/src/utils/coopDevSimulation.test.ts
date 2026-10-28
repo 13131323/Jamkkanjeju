@@ -1,6 +1,6 @@
 import { COOP_STEP, type CoopMissionProgressResponse, type RoleCard, type RoleProgress } from '@packages/shared';
 import { describe, expect, it } from 'vitest';
-import { DEV_SIM_PARTICIPANT_IDS, isSimulatedParticipant, realParticipants, simulateCoopStatus, simulateParticipants } from './coopDevSimulation';
+import { DEV_SIM_PARTICIPANT_IDS, isSimulatedParticipant, realParticipants, simPhotoForRole, simulateCoopStatus, simulateParticipants } from './coopDevSimulation';
 import { canCompleteCoopMission, myRoleProgress, otherRoleProgresses } from './coopRole';
 import { soleParticipantId } from './party';
 
@@ -66,6 +66,28 @@ describe('isSimulatedParticipant', () => {
     expect(isSimulatedParticipant(1)).toBe(false);
     expect(isSimulatedParticipant(999)).toBe(false);
     expect(isSimulatedParticipant(0)).toBe(false);
+  });
+});
+
+describe('simPhotoForRole', () => {
+  const PHOTOS = { 물지기: 'water.jpg', 바람지기: 'wind.jpg', 땅지기: 'ground.jpg' };
+
+  it('역할명으로 사진을 고른다 — 칩이 역할에서 나오므로 사진도 역할을 따라야 한다', () => {
+    expect(simPhotoForRole('물지기', PHOTOS)).toBe('water.jpg');
+    expect(simPhotoForRole('땅지기', PHOTOS)).toBe('ground.jpg');
+  });
+
+  it('같은 역할은 항상 같은 사진을 낸다 — 렌더·폴링마다 사진이 바뀌면 안 된다', () => {
+    const first = simPhotoForRole('바람지기', PHOTOS);
+    for (let i = 0; i < 5; i++) expect(simPhotoForRole('바람지기', PHOTOS)).toBe(first);
+  });
+
+  it('모르는 역할명이면 첫 장으로 떨어진다 — 빈 값이면 화면이 미인증으로 읽는다', () => {
+    expect(simPhotoForRole('없는지기', PHOTOS)).toBe('water.jpg');
+  });
+
+  it('사진을 하나도 안 주면 옛 폴백 주소를 쓴다', () => {
+    expect(simPhotoForRole('물지기', {})).toBe('https://dev.invalid/tamnalog/coop-sim-item.png');
   });
 });
 
@@ -153,6 +175,40 @@ describe('simulateCoopStatus - 2·3단계(ROLE_ASSIGNMENT·MISSION)', () => {
 
     expect(added.every((p) => p.roleProgressId < 0)).toBe(true);
     expect(new Set(added.map((p) => p.roleProgressId)).size).toBe(added.length);
+  });
+
+  // 가짜 팀원은 방장이 쓰지 않은 카드(11·12·13)를 앞에서부터 받는다
+  const ROLE_PHOTOS = { 역할11: 'a.png', 역할12: 'b.png', 역할13: 'c.png' };
+
+  it('itemPhotoByRole을 주면 그 사람의 역할에 맞는 사진이 붙는다 — 옆의 장소 칩과 같은 카드에서 나와야 한다', () => {
+    const added = simProgresses(simulateCoopStatus(roleStatus(COOP_STEP.MISSION), { acceptedSimIds: [], itemPhotoByRole: ROLE_PHOTOS, enabled: true }));
+
+    for (const p of added) {
+      expect(p.itemImgUrl).toBe(ROLE_PHOTOS[p.roleName as keyof typeof ROLE_PHOTOS]);
+    }
+  });
+
+  it('명단이 바뀌어도(거절로 한 명이 빠져도) 남은 사람은 자기 역할에 맞는 사진을 갖는다', () => {
+    const afterBRejected = simProgresses(simulateCoopStatus(roleStatus(COOP_STEP.MISSION), { acceptedSimIds: [], rejectedSimIds: [SIM_B], itemPhotoByRole: ROLE_PHOTOS, enabled: true }));
+
+    expect(afterBRejected.map((p) => p.participantId)).toEqual([SIM_A, SIM_C]);
+    for (const p of afterBRejected) {
+      expect(p.itemImgUrl).toBe(ROLE_PHOTOS[p.roleName as keyof typeof ROLE_PHOTOS]);
+    }
+  });
+
+  it('사진이 없는 역할이 섞여도 빈 값이 되지 않는다 — 첫 장으로 떨어진다', () => {
+    const partial = { 역할11: 'a.png' };
+    const added = simProgresses(simulateCoopStatus(roleStatus(COOP_STEP.MISSION), { acceptedSimIds: [], itemPhotoByRole: partial, enabled: true }));
+
+    expect(added).toHaveLength(3);
+    expect(added.every((p) => p.itemImgUrl === 'a.png')).toBe(true);
+  });
+
+  it('itemPhotoByRole을 주지 않으면 옛 폴백 주소를 쓴다 — 호출부가 아직 없어도 빈 문자열은 아니다', () => {
+    const added = simProgresses(simulateCoopStatus(roleStatus(COOP_STEP.MISSION), { acceptedSimIds: [], enabled: true }));
+
+    for (const p of added) expect(p.itemImgUrl).toBe('https://dev.invalid/tamnalog/coop-sim-item.png');
   });
 
   it('거절한 가짜 팀원에게는 역할이 붙지 않는다 — 방에서 뺀 사람이 인증을 끝낸 것으로 보이면 안 된다', () => {

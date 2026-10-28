@@ -26,3 +26,14 @@ export function setJudgeAuthEnabled(enabled: boolean): void {
 export function judgeAuthHeader(): string | null {
   return judgeModeEnabled ? judgeAuthorizationHeader() : null;
 }
+
+/**
+ * 지금 어느 계정으로 부르고 있는지. 쿼리 캐시를 계정 단위로 나누는 데 쓴다
+ * (api/query/accountScopedHash.ts).
+ *
+ * 토큰을 고르는 값과 캐시를 가르는 값이 **반드시 같아야** 한다 — 갈리면 A 계정 토큰으로 받은
+ * 응답이 B 계정 칸에 들어간다. 그래서 새 플래그를 만들지 않고 이 값을 그대로 읽는다.
+ */
+export function isJudgeAuthEnabled(): boolean {
+  return judgeModeEnabled;
+}

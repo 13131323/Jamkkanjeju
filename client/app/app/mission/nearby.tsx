@@ -11,6 +11,8 @@ import { buildWebViewBootstrapScript } from '@/components/HomeWebView/webViewBoo
 import { reissueWebViewAuth } from '@/components/HomeWebView/reissueWebViewAuth';
 import { buildSafeAreaScript } from '@/components/HomeWebView/safeAreaScript';
 import { resolveWebViewUrl } from '@/config/webUrl';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
+import { useWebViewRecovery } from '@/hooks/useWebViewRecovery';
 import { WEBVIEW_BOTTOM_INSET } from '@/styles/safeArea';
 import { buildNearbyMissionMapPath, type NearbyMissionListType } from '@/utils/missionListWebUrl';
 import { navigate } from '@/utils/navigate';
@@ -35,6 +37,10 @@ export default function NearbyMissionsScreen() {
   const insets = useSafeAreaInsets();
   const webViewRef = useRef<WebView>(null);
   const [hasLoadError, setHasLoadError] = useState(false);
+  // 안드로이드가 메모리 압박으로 렌더러를 죽이면 이 자리가 빈 흰 화면으로 남는다. 복구는 재생성뿐이다
+  const recovery = useWebViewRecovery({ feature: 'mission-nearby' });
+  // 키보드가 덮는 높이. edge-to-edge라 창이 IME로 줄지 않아 네이티브가 직접 줄여야 한다(useKeyboardInset)
+  const keyboardInset = useKeyboardInset();
 
   // 지도·미션 조회는 토큰이 없으면 401이다. 토큰은 앱 sqlite에만 있어서 문서 실행 전에 심어야 한다.
   const authScript = buildWebViewBootstrapScript();
@@ -81,22 +87,37 @@ export default function NearbyMissionsScreen() {
   const path = buildNearbyMissionMapPath({ missionType, coords });
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+    // 키보드가 덮는 만큼 이 화면을 줄인다. 줄지 않으면 WebView 안의 web은 키보드가 떴다는 사실
+    // 자체를 몰라 입력칸이 그대로 덮인다 — 홈과 같은 처리다(useKeyboardInset)
+    <View style={{ flex: 1, backgroundColor: '#ffffff', paddingBottom: keyboardInset }}>
       <View style={{ paddingTop: insets.top }}>
         <NavigationHeader title={HEADER_TITLE[missionType]} onBack={() => navigate.back()} />
       </View>
 
-      {hasLoadError ? (
-        <NetworkErrorScreen onRetry={() => setHasLoadError(false)} />
+      {/* 렌더러 사망은 네트워크가 아니라 기기 메모리 문제다. 'offline'의 "인터넷 연결 상태를 확인하세요"는
+          멀쩡한 와이파이를 의심하게 만들므로, 사용자가 고칠 것이 없고 "잠시 후 다시 시도"가 맞는 'server'를 쓴다 */}
+      {hasLoadError || recovery.hasGivenUp ? (
+        <NetworkErrorScreen
+          variant={recovery.hasGivenUp ? 'server' : 'offline'}
+          onRetry={() => {
+            setHasLoadError(false);
+            recovery.retry();
+          }}
+        />
       ) : (
         <WebView
+          key={recovery.webViewKey}
           ref={webViewRef}
           source={{ uri: resolveWebViewUrl(process.env.EXPO_PUBLIC_WEB_URL, __DEV__, path, process.env.EXPO_PUBLIC_DEV_WEB_URL) }}
           style={{ flex: 1 }}
+          // Android 시스템 글자 크기 설정을 WebView가 그대로 따라가면 디자인 폭(px 고정)이 깨진다
+          textZoom={100}
           injectedJavaScriptBeforeContentLoaded={`${authScript}\n${safeAreaScript}`}
           onLoadEnd={injectScripts}
           onMessage={onMessage}
           onError={() => setHasLoadError(true)}
+          // 렌더러가 죽으면 key를 바꿔 새로 만든다(useWebViewRecovery). 성공 로드 시 카운터 리셋(onLoad)도 이 묶음에 들어 있다
+          {...recovery.recoveryProps}
         />
       )}
     </View>

@@ -24,6 +24,15 @@ export function formatDistanceLabel(distanceMeter: number | null | undefined): s
   return `${(distanceMeter / 1000).toFixed(1)}km`;
 }
 
+// 홈 추천 카드는 소수점 없는 정수 km로 보여준다(사용자 요청) — formatDistanceLabel은
+// treasureMission/completion.ts의 "근처 미션" 카드가 그대로 소수 한 자리로 쓰고 있어 건드리지 않는다.
+function formatHomeDistanceLabel(distanceMeter: number | null | undefined): string | null {
+  if (distanceMeter === null || distanceMeter === undefined) return null;
+
+  if (distanceMeter < 1000) return `${Math.round(distanceMeter)}m`;
+  return `${Math.round(distanceMeter / 1000)}km`;
+}
+
 export interface HomeMissionCard {
   /** React key. missionId는 유형별 테이블의 id라 유형이 다르면 값이 겹친다 */
   key: string;
@@ -53,7 +62,7 @@ export function toHomeMissionCards(missionRecommend: RecommendedMissionLike[]): 
     route: MISSION_ROUTE_BY_TYPE[mission.missionType],
     title: mission.missionTitle,
     placeLabel: mission.locationTitle ?? null,
-    distanceLabel: formatDistanceLabel(mission.distanceMeter),
+    distanceLabel: formatHomeDistanceLabel(mission.distanceMeter),
     durationMinutes: mission.durationMinutes ?? null,
   }));
 }

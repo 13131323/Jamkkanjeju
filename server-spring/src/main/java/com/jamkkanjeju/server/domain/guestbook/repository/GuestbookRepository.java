@@ -2,6 +2,7 @@ package com.jamkkanjeju.server.domain.guestbook.repository;
 
 import com.jamkkanjeju.server.domain.guestbook.entity.Guestbook;
 import jakarta.persistence.LockModeType;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -9,11 +10,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /**
- * {@code count()}
- * 결과: 서비스 전체의 공통 방명록({@code guestbook}) 행 개수. 일반·길바닥 방명록을 모두 포함하고,
- * 세부 테이블({@code location_guestbook}, {@code road_guestbook})과 중복 집계하지 않는다. 방명록이 없으면 0이다.
- * 사용: 홈 조회({@code GET /api/v2/users/me/home}) 응답의 {@code guestbookCount}.
- *
  * {@code save()}, {@code flush()}
  * 결과: 작성자·방문 날짜·콘텐츠·저장 시각·상태를 가진 공통 방명록을 저장하고,
  * flush 시 DB에 반영한다. 새 기록의 ID는 자동 생성되며 연관 엔티티를 함께 조회하지 않는다.
@@ -21,6 +17,15 @@ import org.springframework.data.repository.query.Param;
  * 업로드 URL·제목을 반영한 실제 저장값으로 작성 응답을 구성한다. 커밋과 실패 처리는 서비스가 관리한다.
  */
 public interface GuestbookRepository extends JpaRepository<Guestbook, Long> {
+
+    /**
+     * 결과: 생성 시각이 {@code after}보다 늦고 {@code until} 이하인 공통 방명록 개수다.
+     * 일반·길바닥을 중복 없이 포함하며 작성자·상태를 제한하지 않는다. 연관 엔티티를 로딩하지 않고 없으면 0이다.
+     * 사용: 홈 조회({@code GET /api/v2/users/me/home})의 {@code guestbookCount}를 구성한다.
+     * 집계 컴포넌트가 현재 사용자의 마지막 방명록 확인 시각과 서버 현재 시각을 전달한다.
+     */
+    long countByCreatedAtGreaterThanAndCreatedAtLessThanEqual(LocalDateTime after, LocalDateTime until);
+
 
     /**
      * 결과: ID가 일치하는 공통 방명록 한 건을 비관적 쓰기 잠금으로 조회한다.

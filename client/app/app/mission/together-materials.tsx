@@ -13,6 +13,7 @@ import { SkeletonBlock } from '@/components/SkeletonBlock/SkeletonBlock';
 import { MissionCancelModal } from '@/components/Mission/MissionCancelModal/MissionCancelModal';
 import { NavigationHeader } from '@/components/NavigationHeader/NavigationHeader';
 import { useToast } from '@/components/Toast/Toast';
+import { TOAST_COOP_CTA_CLEARANCE } from '@/components/Toast/styles';
 import { COOP_HOST_CHANGED_MESSAGE, COOP_STEP_COPY, coopLeftMessage } from '@/constants/coopMission';
 import { rolePhotoGuide, roleVerifyHint } from '@/constants/coopRoleCopy';
 import { useCoopMissionRoom } from '@/hooks/useCoopMission';
@@ -78,18 +79,23 @@ function MyRoleSkeleton() {
  * `useCoopMissionRoom`이 단계와 무관하게 한 곳에서 돌린다.
  */
 export default function TogetherMaterialsScreen() {
-  const { show } = useToast();
+  const { show: showToast } = useToast();
+  // 이 화면의 CTA도 CoopStepLayout의 표준 자리다 — together.tsx와 같은 이유로 같은 clearance를 쓴다.
+  const show = useCallback((message: string) => showToast(message, { bottomClearance: TOAST_COOP_CTA_CLEARANCE }), [showToast]);
   const insets = useSafeAreaInsets();
 
   const {
     status,
     participants,
+    hasServerParticipants,
     previousParticipants,
     roleCards,
     roleProgresses,
     currentStep,
     myParticipantId,
     statusFailure,
+    statusErrorNotified,
+    forgetRoomCache,
     rememberParticipants,
     verifyMyRole,
     advanceToComplete,
@@ -165,8 +171,15 @@ export default function TogetherMaterialsScreen() {
     // 완료 화면에는 조회 API가 없어 폴링 응답의 보상과 다음 장소를 넘겨 준다.
     // 다음 장소는 상태 조회가 좌표를 받게 되면서 거리(distanceMeter)까지 담겨 오므로
     // 완료 화면의 거리 배지가 채워진다(예전 계약에는 거리가 없어 넘기지 못했다).
-    // 협동 API는 진행 중인 장소 id는 주지 않아 방명록은 좌표만 가진 형태로 열린다.
-    saveCompleteResult('coop', { reward: status?.reward ?? null, nextLocation: status?.nextLocation ?? null, completedLocationId: null });
+    // completedLocation은 4단계 응답에만 실려 온다(계약상 optional) — 없으면 null로 떨어져
+    // 방명록이 보물찾기와 달리 좌표만 가진 형태로 열린다.
+    const completedLocation = status?.completedLocation ?? null;
+    saveCompleteResult('coop', {
+      reward: status?.reward ?? null,
+      nextLocation: status?.nextLocation ?? null,
+      completedLocationId: completedLocation?.locationId ?? null,
+      completedLocationName: completedLocation?.locationTitle ?? null,
+    });
     navigate.replaceProgrammatic({ pathname: '/mission/complete', params: { mission: 'coop' } });
     // **끝난 방은 여기서 버린다.** 완료 화면은 이 스토어를 읽지 않아서(app/mission/complete.tsx)
     // 남겨 두면 앱을 켜 둔 내내 끝난 방이 스토어에 남고, 그 뒤의 협동 미션 진입이 그 방을 폴링해
@@ -206,7 +219,7 @@ export default function TogetherMaterialsScreen() {
     const result = await verifyMyRole(mine.roleProgressId, toReactNativeFilePart(uri) as unknown as Blob);
 
     if (!result.ok) {
-      show(coopFailureMessage(result.failure, result.detail));
+      if (!result.apiErrorNotified) show(coopFailureMessage(result.failure, result.detail));
       return;
     }
 
@@ -230,9 +243,11 @@ export default function TogetherMaterialsScreen() {
    * 이 화면에는 라우트 파라미터가 없어 상태 조회 응답의 `missionId`가 유일한 출처다.
    */
   const goToIntro = useCallback(() => {
+    // 스토어를 비우기 **전에** 부른다 — 어느 방의 캐시를 지울지는 missionProgressId가 정한다
+    forgetRoomCache();
     reset();
     navigate.replace(coopIntroRoute(status?.missionId));
-  }, [reset, status?.missionId]);
+  }, [forgetRoomCache, reset, status?.missionId]);
 
   /** 돌아올 방이 **없이** 떠난다 — "포기 할래요", 방이 사라짐. 쉬기 메모를 함께 버린다 */
   const leaveToIntro = useCallback(() => {
@@ -280,6 +295,7 @@ export default function TogetherMaterialsScreen() {
    */
   useCoopPartyChanges({
     participants,
+    hasServerParticipants,
     previousParticipants,
     myParticipantId,
     rememberParticipants,
@@ -298,15 +314,15 @@ export default function TogetherMaterialsScreen() {
   // 3단계에서 누가 나가도 미션은 계속되므로(서버가 재배정하지 않는다) 그건 여기 해당하지 않는다.
   useEffect(() => {
     if (statusFailure !== 'gone' && statusFailure !== 'already-completed') return;
-    show(COOP_FAILURE_MESSAGE[statusFailure]);
+    if (!statusErrorNotified) show(COOP_FAILURE_MESSAGE[statusFailure]);
     leaveToIntro();
-  }, [statusFailure, show, leaveToIntro]);
+  }, [statusFailure, statusErrorNotified, show, leaveToIntro]);
 
   /** "다음" — 완료 단계로 올린다. 이동은 currentStep 변화를 보고 위의 effect가 한다 */
   const finishMission = useCallback(() => {
     void (async () => {
       const result = await advanceToComplete();
-      if (!result.ok) show(coopFailureMessage(result.failure, result.detail));
+      if (!result.ok && !result.apiErrorNotified) show(coopFailureMessage(result.failure, result.detail));
     })();
   }, [advanceToComplete, show]);
 

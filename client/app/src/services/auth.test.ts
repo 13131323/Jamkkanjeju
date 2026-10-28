@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   clearSession: vi.fn(),
   issueAnonymous: vi.fn(),
   captureException: vi.fn(),
+  restoreJudgeMode: vi.fn(),
 }));
 
 vi.mock('@/db/session', () => ({
@@ -13,6 +14,11 @@ vi.mock('@/db/session', () => ({
   saveToken: mocks.saveToken,
   clearSession: mocks.clearSession,
 }));
+
+// 부트스트랩이 심사위원용 모드도 되살린다(services/judgeModePersistence.ts). 실물은 sqlite를
+// 거쳐 expo-sqlite → react-native/index.js(Flow)까지 끌고 와 vitest가 파싱에 실패한다.
+// 모드 되살리기 자체는 judgeModePersistence.test.ts에서 따로 본다.
+vi.mock('./judgeModePersistence', () => ({ restoreJudgeMode: mocks.restoreJudgeMode }));
 
 // 실물을 불러오면 react-native/index.js(Flow)까지 끌려와 vitest가 파싱에 실패한다.
 // 저장 실패를 기록하는지는 확인해야 하므로 함수만 갈아 끼운다.

@@ -28,14 +28,14 @@ import judgeModeIcon from '@shared/lib/images/home-judge-mode-icon.png';
  * 예전에는 이 자리 대신 하단 마스코트 버튼을 3초 꾹 눌러 모드를 토글했다. 코드 입력 없이
  * 켜지는 제스처라 실수로 밟을 수 있었고, 무엇보다 심사위원 토큰을 받을 통로가 없었다.
  */
-export function JudgeModeShortcut({ onClick }: { onClick: () => void }) {
+export function JudgeModeShortcut({ onClick, isNight = false }: { onClick: () => void; isNight?: boolean }) {
   return (
     // aria-label은 화면 라벨과 글자까지 같아야 한다 — "모드 변경"처럼 띄어쓰면 음성 제어로
     // 화면에 보이는 대로 말했을 때 이 버튼이 잡히지 않는다(WCAG 2.5.3 Label in Name)
     <button type="button" onClick={onClick} aria-label="모드변경" className="flex flex-col items-center" style={{ width: 47 }}>
       <Image src={judgeModeIcon} alt="" aria-hidden="true" className="h-10 w-10 object-contain" />
       {/* rowGap 4 → mt-1. 12px 기준 "모드변경"은 47px에 1px 모자라 줄바꿈될 수 있어 nowrap으로 한 줄 고정 */}
-      <span className="text-label-sm text-cool-neutral-950 mt-1 font-medium whitespace-nowrap">모드변경</span>
+      <span className={`text-label-sm mt-1 font-medium whitespace-nowrap ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-950'}`}>모드변경</span>
     </button>
   );
 }

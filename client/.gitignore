@@ -28,6 +28,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Local docs (trouble logs, progress)
+docs/
+
 # Claude Code local settings
 .claude/settings.local.json
 
@@ -43,5 +46,6 @@ AGENTS.md
 guide.md
 penpot-workflow.md
 
+.gitignore
 .prettierignore
 .claude/

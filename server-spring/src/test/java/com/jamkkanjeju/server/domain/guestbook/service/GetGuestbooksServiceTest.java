@@ -14,6 +14,10 @@ import com.jamkkanjeju.server.domain.guestbook.repository.GuestbookLikeRepositor
 import com.jamkkanjeju.server.domain.map.entity.VisitedLocation;
 import com.jamkkanjeju.server.domain.map.repository.VisitedLocationRepository;
 import com.jamkkanjeju.server.domain.map.support.MapModalFixtures;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -34,6 +38,7 @@ class GetGuestbooksServiceTest {
     @Mock GuestbookLikeRepository likes;
     @Mock GuestbookRepository books;
     @Mock BlobStorageClient storage;
+    @Spy Clock clock = Clock.fixed(Instant.parse("2026-10-28T03:00:00Z"), ZoneId.of("Asia/Seoul"));
     @InjectMocks GuestbookService service;
 
     private void user() { when(users.findById(15L)).thenReturn(Optional.of(User.builder().build())); }
@@ -66,6 +71,7 @@ class GetGuestbooksServiceTest {
         assertThat(response.roadGuestbooks().getFirst().isLiked()).isTrue();
         assertThat(response.generalGuestbooksPage()).isEqualTo(new GetGuestbooksResponse.GuestbooksPage(2, 1, true));
         assertThat(response.roadGuestbooksPage()).isEqualTo(new GetGuestbooksResponse.GuestbooksPage(3, 2, false));
+        assertThat(users.findById(15L).orElseThrow().getGuestbookLastCheckedAt()).isEqualTo(LocalDateTime.of(2026, 10, 28, 12, 0));
         verify(likes).countByGuestbookIds(List.of(101L, 102L)); verifyNoInteractions(books, storage);
     }
 

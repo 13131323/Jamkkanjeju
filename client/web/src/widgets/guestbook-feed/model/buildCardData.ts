@@ -36,7 +36,7 @@ function toAudioCard(record: NormalizedGuestbook): GuestbookCardData | null {
     type: 'audio',
     id: record.key,
     audioUrl,
-    title: `🎵 ${record.displayLocationName}`,
+    title: `🎵 ${record.audioTitle ?? record.displayLocationName}`,
     subtitle: record.displayLocationName,
     bars: pickAudioBars(record.key),
     backgroundColor: getCardBackgroundColor(record),

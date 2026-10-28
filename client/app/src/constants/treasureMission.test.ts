@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+// 인트로의 완료 판정. 진행 화면이 나갈 곳을 고를 때 **같은 함수**를 읽어야 두 화면이 어긋나지 않는다
+import { isRewardExhausted } from '@packages/shared';
 import {
   isTreasureRunComplete,
   mergeGrantedRewards,
@@ -10,6 +12,7 @@ import {
   resolveTreasureRewardLabel,
   resolveTreasureStartOutcome,
   toFoundTreasureIndexes,
+  toPlaceDescription,
   toPlaceSummary,
   toTreasureSpots,
   withFoundTreasureIndex,
@@ -254,20 +257,64 @@ describe('resolveTreasureRewardLabel', () => {
 
 describe('resolveTreasureStartOutcome', () => {
   it('진행 중인 진행도를 돌려받으면 그대로 사냥 화면을 그린다', () => {
-    expect(resolveTreasureStartOutcome('IN_PROGRESS', false)).toBe('play');
+    expect(resolveTreasureStartOutcome('IN_PROGRESS', false, false)).toBe('play');
+    expect(resolveTreasureStartOutcome('IN_PROGRESS', false, true)).toBe('play');
   });
 
   it('이미 끝난 진행도를 돌려받으면 사냥 화면을 그리지 않는다 — 3/3 지도에 갇히거나 404까지 걸어가게 된다', () => {
-    expect(resolveTreasureStartOutcome('COMPLETED', false)).toBe('already-complete');
+    expect(resolveTreasureStartOutcome('COMPLETED', false, true)).toBe('already-complete');
+    expect(resolveTreasureStartOutcome('COMPLETED', false, false)).not.toBe('play');
   });
 
   it('사진만 찍으러 들어온 경로(?start=photo)는 COMPLETED가 정상이다 — 되돌려 보내면 촬영을 할 수 없다', () => {
-    expect(resolveTreasureStartOutcome('COMPLETED', true)).toBe('play');
-    expect(resolveTreasureStartOutcome('IN_PROGRESS', true)).toBe('play');
+    expect(resolveTreasureStartOutcome('COMPLETED', true, true)).toBe('play');
+    expect(resolveTreasureStartOutcome('COMPLETED', true, false)).toBe('play');
+    expect(resolveTreasureStartOutcome('IN_PROGRESS', true, false)).toBe('play');
   });
 
   it('모르는 상태값은 진행 중으로 본다 — 서버가 상태를 늘려도 이어하던 미션이 막히지 않는다', () => {
-    expect(resolveTreasureStartOutcome('', false)).toBe('play');
-    expect(resolveTreasureStartOutcome('PAUSED', false)).toBe('play');
+    expect(resolveTreasureStartOutcome('', false, false)).toBe('play');
+    expect(resolveTreasureStartOutcome('PAUSED', false, false)).toBe('play');
+  });
+
+  /**
+   * 되먹임 회귀 방지.
+   *
+   * 인트로는 진행도 상태를 알 수 없어 "남은 보상이 모두 소진됐는지"로 완료를 판정한다. 그 판정이
+   * 거짓인데 진행 화면이 인트로로 되돌리면, 인트로는 "미션 시작하기"를 다시 보여주고 그 버튼이
+   * 같은 응답을 불러 또 되돌아온다 — 무한 반복이라 사용자 눈에는 버튼이 죽은 것으로 보인다.
+   * 그래서 인트로가 완료로 보지 않는 동안에는 **인트로로 되돌리지 않는다**.
+   */
+  it('인트로가 아직 완료로 보지 않으면(남은 보상이 있으면) 인트로로 되돌리지 않는다 — 시작하기 무한 되먹임', () => {
+    expect(resolveTreasureStartOutcome('COMPLETED', false, false)).toBe('finished');
+  });
+
+  it('중단으로 끝난 진행도가 그 경우다 — 서버는 COMPLETED인데 못 받은 보상이 남아 인트로는 미완료로 본다', () => {
+    // 보물을 하나도 못 찾고 "포기 할래요"를 누른 회차: 세 보상이 그대로 남아 isRewardExhausted가 거짓이다
+    const introComplete = isRewardExhausted({ arCharacter, point: 150, coupon });
+    expect(introComplete).toBe(false);
+    expect(resolveTreasureStartOutcome('COMPLETED', false, introComplete)).toBe('finished');
+  });
+
+  it('셋 다 찾아 보상을 모두 받은 회차는 인트로가 완료 화면을 그릴 수 있으므로 인트로로 되돌린다', () => {
+    const introComplete = isRewardExhausted({ arCharacter: null, point: null, coupon: null });
+    expect(introComplete).toBe(true);
+    expect(resolveTreasureStartOutcome('COMPLETED', false, introComplete)).toBe('already-complete');
+  });
+});
+
+describe('toPlaceDescription', () => {
+  it('줄바꿈·연속 공백만 누르고 자르지는 않는다 — 카드가 눌러서 전문을 편다', () => {
+    const long = `${'제주 설명 '.repeat(40)}`;
+    const result = toPlaceDescription(`  앞\n\n중간   뒤  `);
+
+    expect(result).toBe('앞 중간 뒤');
+    expect(toPlaceDescription(long)?.length).toBe(long.trim().length);
+  });
+
+  it('설명이 없거나 공백뿐이면 null이다', () => {
+    expect(toPlaceDescription(null)).toBeNull();
+    expect(toPlaceDescription(undefined)).toBeNull();
+    expect(toPlaceDescription('   ')).toBeNull();
   });
 });

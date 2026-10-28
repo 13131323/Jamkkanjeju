@@ -9,64 +9,43 @@ pnpm 모노레포 (web + app)
 | `web/` | 웹 프론트엔드 | Next.js, React 19, TailwindCSS 4 |
 | `app/` | 모바일 앱 | React Native, Expo 56 |
 
-## 사전 요구사항
+## 로컬 Docker 실행
 
-- Node.js 20+
-- pnpm 10+
-- Android 실기기 개발: Android SDK Platform-Tools, USB 디버깅을 허용한 기기
+Docker Desktop을 실행하고 백엔드를 `http://localhost:8080`에 먼저 띄웁니다.
+백엔드는 `DEV_AUTH_ENABLED=true`와 1번 사용자 데이터가 준비되어 있어야 합니다.
 
-```bash
-npm install -g pnpm
+```powershell
+cd D:\tour\jamkkanjeju\client
+docker compose up -d --build
 ```
 
-## 설치
+브라우저에서 <http://localhost:3000>에 접속합니다. 이 Compose는 Next.js 웹 서버만 실행하며,
+백엔드·MySQL은 백엔드의 Compose로 별도로 실행합니다. React Native 앱은 이 이미지에 포함되지 않습니다.
 
-```bash
-pnpm install
+| 설정 | 값 |
+| --- | --- |
+| 웹 포트 | `3000` |
+| 백엔드 주소 | `http://host.docker.internal:8080` |
+| 브라우저 API 프록시 | `/backend-api` |
+| 카카오 지도 키 | `compose.yaml`의 `NEXT_PUBLIC_KAKAO_MAP_KEY` |
+| 심사위원 모드 코드 | `12345A` (소문자 입력도 가능) |
+
+일반·심사위원 모드 모두 인증 헤더 없이 요청합니다. 심사위원 모드를 켜면 기존 제주시청 고정 좌표를 사용합니다.
+홈 조회만 `/api/v2/users/me/home`을 호출하고, 나머지 API는 기존 경로를 유지합니다.
+브라우저의 `/backend-api` 요청은 Next.js가 백엔드로 전달하므로 컨테이너 내부 주소를 브라우저가 직접 호출하지 않습니다.
+
+```powershell
+# 로그 확인
+docker compose logs -f web
+
+# 코드나 빌드 환경변수 변경 후 재빌드
+docker compose up -d --build
+
+# 클라이언트 중지
+docker compose down
 ```
 
-## 실행
-
-```bash
-# 웹 개발 서버
-pnpm dev:web
-
-# Android 실기기: Next.js + Expo 개발 빌드 동시 실행
-pnpm dev:app
-
-# 여러 실기기가 연결된 경우
-pnpm dev:app -- --device <adb-serial>
-```
-
-`dev:app`은 실기기에 `8081`(Metro)과 `3000`(Next.js)을 USB로 전달합니다.
-따라서 PC와 휴대폰이 같은 Wi-Fi에 연결되어 있지 않아도 됩니다. 최초 실행은 Android
-개발 빌드를 컴파일하므로 시간이 걸릴 수 있습니다. 팀원별 PC IP나 `.env` 설정은 필요하지 않습니다.
-
-## 빌드
-
-```bash
-# 웹 프로덕션 빌드
-pnpm build:web
-
-# 앱 Android 빌드 (EAS)
-pnpm build:app
-```
-
-Google Play용 production 빌드는 EAS production 환경에 공개 HTTPS 도메인을
-`EXPO_PUBLIC_WEB_URL`로 등록해야 합니다. 값이 없거나 localhost·IP 주소이면 빌드가
-중단되며, 개발용 `127.0.0.1`은 production에 포함되지 않습니다.
-
-## 기타
-
-```bash
-# 전체 린트
-pnpm lint
-
-# 전체 타입 검사
-pnpm typecheck
-```
-
-각 패키지의 상세 실행 방법은 [web/README.md](./web/README.md), [app/README.md](./app/README.md)를 참고하세요.
+`NEXT_PUBLIC_*` 값은 빌드 시 반영되므로 `compose.yaml`에서 값을 바꾸면 다시 빌드해야 합니다.
 
 ## 웹 배포 서버
 

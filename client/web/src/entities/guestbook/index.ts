@@ -6,5 +6,6 @@ export type { GuestbookWriteMissionType, GuestbookWriteParams } from './model/gu
 export { buildGuestbookWriteHref, parseGuestbookWriteParams } from './model/guestbookWriteHref';
 export { useGuestbooks } from './model/useGuestbooks';
 export { useCreateGuestbook } from './model/createGuestbook';
+export { canWriteGuestbookAt } from './model/checkGuestbookWriteAvailability';
 export { useToggleGuestbookLike } from './model/toggleGuestbookLike';
 export { GuestbookWriteButton } from './ui/GuestbookWriteButton';

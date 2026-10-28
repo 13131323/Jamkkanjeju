@@ -7,6 +7,7 @@
 import type { MapLocationResponseTreasureMission } from './mapLocationResponseTreasureMission';
 import type { MapLocationResponseCooperativeMission } from './mapLocationResponseCooperativeMission';
 import type { MapLocationResponseRepresentativeImageUrl } from './mapLocationResponseRepresentativeImageUrl';
+import type { MapLocationResponseReceivedCoupons } from './mapLocationResponseReceivedCoupons';
 
 /**
  * 지도에 표시할 장소 상세 정보.
@@ -26,4 +27,5 @@ export interface MapLocationResponse {
   cooperativeMission?: MapLocationResponseCooperativeMission;
   guestbooksCount?: number;
   representativeImageUrl?: MapLocationResponseRepresentativeImageUrl;
+  receivedCoupons?: MapLocationResponseReceivedCoupons;
 }

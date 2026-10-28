@@ -8,10 +8,16 @@ import { create } from 'zustand';
  * 이미 살아 있는 WebView가 **직전에 보던 web 페이지를 그대로 들고 있기** 때문이다.
  * 미션 완료의 "홈으로 이동하기"를 눌렀는데 도감 카드가 떠 있던 게 이 때문이다(사용자 확인).
  *
- * 라우트 파라미터로 넘기지 않는 이유: replace로 이미 떠 있는 /home에 되돌아갈 때 파라미터가
- * 그 인스턴스까지 닿는지가 라우터 구현에 달려 있다. 스토어는 화면이 재사용되든 아니든 똑같이 읽힌다.
+ * 라우트 파라미터로 넘기지 않는 이유: 이미 떠 있는 /home으로 되돌아갈 때 파라미터가 그
+ * 인스턴스까지 닿는지가 라우터 구현에 달려 있다. 스토어는 화면이 재사용되든 아니든 똑같이 읽힌다.
  *
- * 값 자체에는 의미가 없다 — **바뀌었다는 사실**만 쓴다(HomeWebView가 이 값을 WebView의 key로 쓴다).
+ * 값 자체에는 의미가 없다 — **바뀌었다는 사실**만 쓴다. 그 사실을 받은 HomeWebView가 reload와
+ * remount 중 하나를 골라 실행한다(components/HomeWebView/homeResetStrategy.ts).
+ * 어느 쪽이든 web의 JS 컨텍스트가 새로 만들어져 쿼리 캐시가 비므로 신선도 보장은 같다.
+ *
+ * **홈으로 보내는 쪽은 `navigate.dismissTo('/home')`을 쓴다.** `replace`는 스택에 이미 있는
+ * 홈을 재사용하지 않고 홈을 하나 더 만들어서, 보이지 않는 홈의 WebView까지 이 신호를 받아
+ * 함께 다시 로드된다(utils/navigate.ts의 dismissTo 주석).
  */
 interface HomeResetStore {
   token: number;

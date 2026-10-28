@@ -57,7 +57,7 @@ describe('toMissionRewards', () => {
     );
 
     expect(rewards).toEqual([
-      { image: { uri: 'https://example.com/a.png' }, fallbackImage: IMAGES.arCharacter, label: '돌담이' },
+      { image: { uri: 'https://example.com/a.png', cache: 'force-cache' }, fallbackImage: IMAGES.arCharacter, label: '돌담이' },
       { image: IMAGES.point, label: '+100P' },
       { image: IMAGES.coupon, label: '1,000원 쿠폰' },
     ]);
@@ -74,7 +74,7 @@ describe('toMissionRewards', () => {
     );
 
     // 서버 URL은 그대로 남아야 한다 — CDN이 살아나면 실제 캐릭터가 나와야 하므로 폴백으로 덮지 않는다
-    expect(rewards[0].image).toEqual({ uri: 'https://cdn.jamkkan-jeju.dev/ar/jacheongbi-explorer.png' });
+    expect(rewards[0].image).toEqual({ uri: 'https://cdn.jamkkan-jeju.dev/ar/jacheongbi-explorer.png', cache: 'force-cache' });
     expect(rewards[0].fallbackImage).toBe(IMAGES.arCharacter);
     // 포인트·쿠폰은 이미 번들 에셋이라 폴백이 필요 없다
     expect(rewards[1].fallbackImage).toBeUndefined();

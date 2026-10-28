@@ -3,10 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useLocationModal } from '@entities/place';
 import { JEJU_CENTER, type Coordinates } from '@shared/config/geo';
+import { useSheetDragToClose } from '../model/useSheetDrag';
+import { MissionListItemSkeleton } from './MapSheetSkeleton';
 import { MissionListItem } from './MissionListItem';
+import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 type MissionModalCardProps = {
   locationId: number;
+  /** 클릭한 마커의 장소 이미지. map/modals 응답엔 장소 이미지가 없어 이 값으로 채운다 */
+  markerImageUrl: string | null;
   coords: Coordinates | null;
   onClose: () => void;
 };
@@ -14,8 +19,10 @@ type MissionModalCardProps = {
 // map_contents-modal — 보물찾기/협동미션 마커 클릭 시 뜨는 카드.
 // FilteredMissionModalCard(여러 미션 목록 바텀시트)와 같은 형식을 쓰되, 미션 1개만 보여준다(20지도phase3-map-modal.md).
 // targetType=LOCATION 응답을 쓴다.
-export function MissionModalCard({ locationId, coords, onClose }: MissionModalCardProps) {
+export function MissionModalCard({ locationId, markerImageUrl, coords, onClose }: MissionModalCardProps) {
   const { data, isLoading } = useLocationModal(locationId, coords ?? JEJU_CENTER);
+  const { dragY, isDragging, dragHandlers } = useSheetDragToClose(onClose);
+  const mission = data?.mission;
 
   // 마운트 직후 프레임에 translateY를 0으로 바꿔 아래에서 위로 슬라이드-업하며 등장시킨다(NavMenuModal과 동일한 패턴).
   const [isVisible, setIsVisible] = useState(false);
@@ -24,22 +31,26 @@ export function MissionModalCard({ locationId, coords, onClose }: MissionModalCa
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  if (isLoading) return null;
-  if (!data || !data.mission) return null;
-  const { mission } = data;
+  // PlaceModalCard와 같은 이유로 로딩 중에도 시트를 즉시 올리고 스켈레톤을 보여준다(반응성).
+  // 데이터가 없는 건 로딩이 끝났는데도 없는 경우(조회 실패)뿐이다.
+  if (!isLoading && !mission) return null;
 
   return (
-    <>
-      <div className="absolute inset-0 z-10" onClick={onClose} />
-      <div
-        className="bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-xl px-4 pt-3 shadow-[4px_4px_14px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-out"
-        style={{ transform: isVisible ? 'translateY(0)' : 'translateY(100%)', paddingBottom: `max(20px, var(--safe-area-bottom))` }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 justify-center pb-3">
-          <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
-        </div>
+    <div
+      className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-xl px-4 pt-3 shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
+        isDragging ? '' : 'transition-transform duration-300 ease-out'
+      }`}
+      style={{ transform: isVisible ? `translateY(${dragY}px)` : 'translateY(100%)', paddingBottom: SHEET_BOTTOM_PADDING }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* 핸들만 드래그로 닫힘 — MissionListItem은 자체 클릭 영역이라 여기서 pointer 이벤트를 가로채지 않는다 */}
+      <div className="flex shrink-0 justify-center pb-3" style={{ touchAction: 'none' }} {...dragHandlers}>
+        <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
+      </div>
 
+      {!data || !mission ? (
+        <MissionListItemSkeleton />
+      ) : (
         <MissionListItem
           data={{
             locationId: data.id,
@@ -47,11 +58,13 @@ export function MissionModalCard({ locationId, coords, onClose }: MissionModalCa
             distanceMeter: data.distanceMeter,
             durationMinutes: data.durationMinutes,
             mission: { id: mission.missionId, missionType: mission.missionType, missionTitle: mission.missionTitle, isCompleted: mission.isCompleted, rewardDetail: mission.rewardDetail },
+            isVisited: data.isVisited,
+            representativeImageUrl: markerImageUrl,
           }}
           showTopBorder={false}
           onClose={onClose}
         />
-      </div>
-    </>
+      )}
+    </div>
   );
 }

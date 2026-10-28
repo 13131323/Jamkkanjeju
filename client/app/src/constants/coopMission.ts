@@ -1,4 +1,4 @@
-import { ImageSourcePropType } from 'react-native';
+import { Image, ImageSourcePropType } from 'react-native';
 
 /**
  * 협동 미션 단계 화면의 정적 값.
@@ -71,6 +71,59 @@ export const ROLE_IMAGES: Record<string, ImageSourcePropType> = {
 /** 역할 이미지. 알 수 없는 역할이면 물지기 이미지로 폴백한다(빈 원보다 낫다) */
 export function roleImage(roleName: string): ImageSourcePropType {
   return ROLE_IMAGES[roleName] ?? ROLE_IMAGES['물지기'];
+}
+
+/**
+ * 심사위원용 모드의 **역할별** 가짜 인증 사진(`coopDevSimulation.ts`의 `itemPhotoByRole`).
+ *
+ * **서버 값이 있으면 쓰이지 않는다** — 심사위원 모드가 붙이는 가짜 팀원의 진행도에만 들어간다.
+ *
+ * 참여자 id가 아니라 **역할명**이 키다. 바로 옆의 "이런 장소를 찾아보세요" 칩이 역할 카드의
+ * `locationToFind`에서 나오므로(RoleDetail.tsx), 사진도 역할을 따라가야 둘이 어긋나지 않는다.
+ *
+ * 사진은 셋뿐이라 여섯 역할을 성격으로 묶는다 — 물가(물지기·이웃지기: 계곡물, 다리·가로등이
+ * 있어 마을 근처로 읽힌다) / 숲(바람지기·빛지기: 나무 사이로 하늘이 트인 숲) /
+ * 흙(땅지기·수확지기: 밭 흙).
+ *
+ * `Image.resolveAssetSource`로 로컬 에셋을 URI 문자열로 바꾼다 — `RoleVerify`의 `photoUri`가
+ * 서버가 주는 URL(string) 계약이라, 여기서 만드는 값도 같은 모양이어야 그대로 꽂힌다.
+ */
+const DEV_SIM_PHOTO_WATER = Image.resolveAssetSource(require('@assets/images/coop-water.jpg')).uri;
+const DEV_SIM_PHOTO_WIND = Image.resolveAssetSource(require('@assets/images/coop_wind.jpg')).uri;
+const DEV_SIM_PHOTO_GROUND = Image.resolveAssetSource(require('@assets/images/coop_ground.jpg')).uri;
+
+export const DEV_SIM_ROLE_PHOTOS: Record<string, string> = {
+  물지기: DEV_SIM_PHOTO_WATER,
+  이웃지기: DEV_SIM_PHOTO_WATER,
+  바람지기: DEV_SIM_PHOTO_WIND,
+  빛지기: DEV_SIM_PHOTO_WIND,
+  땅지기: DEV_SIM_PHOTO_GROUND,
+  수확지기: DEV_SIM_PHOTO_GROUND,
+};
+
+/** 이미 프리페치했는지. 방을 드나들 때마다 같은 사진을 다시 받지 않게 한다 */
+let hasPrefetchedDevSimPhotos = false;
+
+/**
+ * 심사위원용 사진을 미리 받아 캐시에 올려 둔다.
+ *
+ * step3에 닿는 순간 세 장을 한꺼번에 그리는데, 그때 처음 읽으면 사진 자리가 스켈레톤으로
+ * 잠깐 남는다 — 심사 중에는 그 공백이 "사진이 없다"로 읽힌다. 방에 들어온 시점(1단계)에
+ * 미리 받아 두면 3단계에서는 캐시에서 바로 뜬다.
+ *
+ * 개발 빌드에서 이 URI는 Metro가 서빙하는 http 주소라 실제 네트워크 왕복이 있고, 배포
+ * 빌드에서는 번들 안 파일이라 prefetch가 사실상 즉시 끝난다 — 어느 쪽이든 손해가 없다.
+ * 실패해도 삼킨다. 프리페치는 최적화라 실패했다고 화면을 막을 이유가 없고,
+ * 그때는 `RoleVerify`가 평소처럼 직접 불러온다.
+ */
+export function prefetchDevSimRolePhotos(): void {
+  if (hasPrefetchedDevSimPhotos) return;
+  hasPrefetchedDevSimPhotos = true;
+
+  // 역할 여섯이 사진 셋을 나눠 쓰므로 중복을 걷어내고 세 번만 받는다
+  for (const uri of new Set(Object.values(DEV_SIM_ROLE_PHOTOS))) {
+    Image.prefetch(uri).catch(() => {});
+  }
 }
 
 /**

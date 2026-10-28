@@ -13,48 +13,56 @@ function metricsAt(usableHeight: number, resultRowCount = 3) {
 
 describe('resolveCompleteLayout', () => {
   it('큰 기기에서는 이미지를 상한 178까지, 간격을 40까지만 키운다', () => {
-    expect(metricsAt(1000)).toEqual({ celebration: 178, suggestionGap: 40 });
-    expect(metricsAt(1400)).toEqual({ celebration: 178, suggestionGap: 40 });
+    expect(metricsAt(1000)).toEqual({ celebration: 178, suggestionGap: 44 });
+    expect(metricsAt(1400)).toEqual({ celebration: 178, suggestionGap: 44 });
   });
 
-  it('여유가 있으면 간격이 먼저 깎이고, 표준을 밑돌면 간격 28을 먼저 확보한다', () => {
-    // 여유가 충분: 이미지 상한 + 간격도 여유
-    expect(metricsAt(720)).toEqual({ celebration: 178, suggestionGap: 40 });
-    // 줄어들기 시작 — 이미지가 표준(164)을 넘겨 받을 수 있는 동안은 간격이 먼저 깎인다
-    expect(metricsAt(690)).toEqual({ celebration: 178, suggestionGap: 23 });
-    // 예산이 표준(164+28)을 밑도는 순간 순서가 뒤집힌다. 캐릭터가 작아지는 화면일수록
-    // 문구 위가 트여야 한다는 지시라, 간격 28을 먼저 떼고 남은 것을 이미지가 받는다
-    expect(metricsAt(670)).toEqual({ celebration: 153, suggestionGap: 28 });
-    expect(metricsAt(660)).toEqual({ celebration: 143, suggestionGap: 28 });
-    // 이미지가 하한(120)에 닿으면 그때부터 간격이 최소치까지 깎인다
-    expect(metricsAt(620)).toEqual({ celebration: 120, suggestionGap: 12 });
-    // 하한 아래로는 둘 다 더 줄지 않는다 — 나머지는 ScrollView가 처리한다
-    expect(metricsAt(400)).toEqual({ celebration: 120, suggestionGap: 12 });
+  it('자리가 남는 동안 간격은 기기 높이에만 반응한다 — 낮아질수록 좁아진다', () => {
+    // 행 0개라 이미지가 하한에 닿지 않는 구간이다. 간격 = clamp(높이 - 고정 콘텐츠(296) - 상한(178), 12, 44)
+    expect(metricsAt(720, 0).suggestionGap).toBe(44);
+    expect(metricsAt(522, 0).suggestionGap).toBe(44);
+    expect(metricsAt(506, 0).suggestionGap).toBe(32);
+    expect(metricsAt(490, 0).suggestionGap).toBe(16);
+    // 더 낮아져도 하한(12) 아래로는 내려가지 않는다 — 나머지는 ScrollView가 처리한다
+    expect(metricsAt(400, 0).suggestionGap).toBe(12);
   });
 
-  it('보상 행이 줄면 그만큼 이미지와 간격이 커진다 — 행 수에 따라 여백이 달라지던 문제', () => {
-    // 한 행이 44라 행이 줄어든 만큼 예산이 늘고, 이미지 → 간격 순으로 채워진다.
-    // 600은 네 경우가 상하한에 뭉치지 않고 단계적으로 보이는 높이다.
-    const usableHeight = 600;
+  /**
+   * 사용자 지시: 중단으로 온 완료 화면(보상 0행)과 정상 완료(보상 3행)의 문구 위 여백이 달랐다.
+   * 예산이 넉넉한 구간에서는 행 수가 간격을 흔들지 않아야 한다.
+   */
+  it('자리가 남는 기기라면 보상 행 수가 달라도 간격이 같다', () => {
+    for (const usableHeight of [720, 800, 900]) {
+      const gaps = [0, 1, 2, 3].map((rows) => metricsAt(usableHeight, rows).suggestionGap);
 
-    expect(metricsAt(usableHeight, 3)).toEqual({ celebration: 120, suggestionGap: 12 });
-    // 아직 표준(164+28)에 못 미치는 예산이라 간격 28을 먼저 확보한다
-    expect(metricsAt(usableHeight, 2)).toEqual({ celebration: 127, suggestionGap: 28 });
-    // 이미지가 상한에 닿은 뒤부터 남는 몫이 간격으로 간다
-    expect(metricsAt(usableHeight, 1)).toEqual({ celebration: 178, suggestionGap: 21 });
-    // 행이 0이면 카드 chrome(43)까지 사라져 간격도 상한에 닿는다
-    expect(metricsAt(usableHeight, 0)).toEqual({ celebration: 178, suggestionGap: 40 });
+      expect(new Set(gaps).size).toBe(1);
+    }
   });
 
-  it('둘의 합이 남는 높이를 넘지 않는다 — 동시에 커져서 오히려 넘치면 안 된다', () => {
-    for (let height = 560; height <= 1000; height += 10) {
+  /**
+   * 사용자 지시: 문구 위 여백은 최소 12px이고, 그보다 빠듯해지면 **여백이 먼저 양보해** 스크롤을 막는다.
+   * 이미지가 하한(120)에 닿아 있는 동안 간격이 넓은 값을 쥐고 있으면 그만큼이 그대로 스크롤이 된다.
+   */
+  it('이미지가 하한에 닿을 만큼 빠듯하면 간격이 필요한 만큼만 양보한다(하한 12)', () => {
+    // 3행: 예산 145 = 이미지 하한 120 + 간격 25 — 44에서 25까지만 내주고 멈춘다(딱 맞아 스크롤 없음)
+    expect(metricsAt(640, 3)).toEqual({ celebration: 120, suggestionGap: 25 });
+    // 2행부터는 자리가 남아 간격이 상한 그대로다
+    expect(metricsAt(640, 2)).toEqual({ celebration: 153, suggestionGap: 44 });
+    expect(metricsAt(640, 0)).toEqual({ celebration: 178, suggestionGap: 44 });
+  });
+
+  it('하한까지 다 내줘도 모자란 기기는 ScrollView가 받는다', () => {
+    // 예산 125인데 이미지 하한 120 + 간격 하한 12 = 132이라 7px이 넘친다
+    expect(metricsAt(620, 3)).toEqual({ celebration: 120, suggestionGap: 12 });
+  });
+
+  it('예산이 이미지 하한 + 간격 하한(132) 이상이면 스크롤이 생기지 않는다', () => {
+    for (let height = 400; height <= 1000; height += 10) {
       for (const rows of [0, 1, 2, 3]) {
         const { celebration, suggestionGap } = metricsAt(height, rows);
         const budget = height - fixedContentHeight(rows);
-        // 하한(120 + 12)에 걸린 작은 기기만 예산을 넘길 수 있다 — 그건 ScrollView가 받는다
-        const isClampedToMinimum = celebration === 120 && suggestionGap === 12;
 
-        if (!isClampedToMinimum) {
+        if (budget >= 132) {
           expect(celebration + suggestionGap).toBeLessThanOrEqual(budget);
         }
       }
@@ -75,9 +83,9 @@ describe('resolveCompleteLayout', () => {
     expect(sizes).toEqual([...sizes].sort((a, b) => b - a));
   });
 
-  it('측정 전이거나 이상값이면 기존 값(배율 1, 디자인 간격 28)을 쓴다 — 이미지가 사라지면 안 된다', () => {
+  it('측정 전이거나 이상값이면 기존 값(배율 1, 디자인 간격 32)을 쓴다 — 이미지가 사라지면 안 된다', () => {
     for (const usableHeight of [0, -100, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(resolveCompleteLayout({ usableHeight, resultRowCount: 3 })).toEqual({ celebrationScale: 1, suggestionGap: 28 });
+      expect(resolveCompleteLayout({ usableHeight, resultRowCount: 3 })).toEqual({ celebrationScale: 1, suggestionGap: 32 });
     }
   });
 
@@ -89,7 +97,7 @@ describe('resolveCompleteLayout', () => {
         expect(celebration).toBeGreaterThanOrEqual(120);
         expect(celebration).toBeLessThanOrEqual(178);
         expect(suggestionGap).toBeGreaterThanOrEqual(12);
-        expect(suggestionGap).toBeLessThanOrEqual(40);
+        expect(suggestionGap).toBeLessThanOrEqual(44);
       }
     }
   });

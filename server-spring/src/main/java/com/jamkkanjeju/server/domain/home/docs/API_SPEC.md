@@ -80,7 +80,7 @@ Status Code : `200 OK`
 | `progressMission[].durationMinutes` | number, null | 요청 위치에서 미션 장소까지의 예상 소요 시간(분). 장소가 없으면 `null` |
 | `progressMission[].totalStep` | integer | 미션의 전체 단계 수 |
 | `progressMission[].currentStep` | integer | 사용자가 현재 진행 중인 단계 |
-| `guestbookCount` | integer | 서비스에 쌓인 방명록 개수. 현재 사용자가 작성한 개수가 아니며, 삭제된 방명록은 제외 |
+| `guestbookCount` | integer | 마지막 방명록 확인 이후부터 현재까지 새로 생성된 방명록 개수. 전체 사용자의 일반·길바닥 방명록을 포함하며 삭제된 방명록은 제외 |
 | `characterImgUrl` | string, null | 온보딩 결과로 제공된 프로필 이미지 URL. 온보딩 결과가 없으면 `null` |
 
 아래 JSON의 장소와 거리·시간은 응답 형식을 설명하기 위한 예시다.

@@ -1,8 +1,9 @@
 import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { COOP_STEP, type CoopMissionProgressResponse, type JoinCoopMissionResponse, type RoleCard, type RoleProgress } from '@packages/shared';
+import { wasApiErrorNotified, COOP_STEP, type CoopMissionProgressResponse, type JoinCoopMissionResponse, type RoleCard, type RoleProgress } from '@packages/shared';
 import { useCoopSimulationEnabled } from '@/config/coopSimulation';
+import { DEV_SIM_ROLE_PHOTOS, prefetchDevSimRolePhotos } from '@/constants/coopMission';
 import {
   getGetCooperativeMissionStatusApiV1CooperativeMissionsMissionProgressIdProgressGetQueryKey as coopStatusQueryKey,
   useAcceptJoinRequestApiV1CooperativeMissionsMissionProgressIdParticipantsParticipantIdAcceptPatch as useAcceptJoinRequestMutation,
@@ -65,7 +66,7 @@ function useAppForeground(): boolean {
  * (방이 사라짐, 정원 초과, 이미 지난 단계). 예외로 다루면 호출부마다 try/catch가 붙고
  * 한 곳이라도 빠지면 처리되지 않은 rejection이 되어 앱이 그대로 깨진다.
  */
-export type CoopActionResult = { ok: true } | { ok: false; failure: CoopFailure; detail?: string };
+export type CoopActionResult = { ok: true } | { ok: false; failure: CoopFailure; detail?: string; apiErrorNotified?: boolean };
 
 /**
  * 사진 인증 결과.
@@ -73,7 +74,7 @@ export type CoopActionResult = { ok: true } | { ok: false; failure: CoopFailure;
  * `ok`(요청이 처리됐는가)와 `verified`(사진이 역할에 맞았는가)는 다른 축이다 —
  * 인증 실패는 오류가 아니라 판정 결과라 서버가 `200`으로 준다.
  */
-export type CoopVerifyResult = { ok: true; verified: boolean } | { ok: false; failure: CoopFailure; detail?: string };
+export type CoopVerifyResult = { ok: true; verified: boolean } | { ok: false; failure: CoopFailure; detail?: string; apiErrorNotified?: boolean };
 
 /** 폴링이 아직 한 번도 성공하지 않았을 때 화면이 쓰는 빈 값. 매번 새 배열을 만들지 않는다 */
 const NO_ROLE_PROGRESSES: RoleProgress[] = [];
@@ -150,6 +151,12 @@ export function useCoopMissionRoom() {
   const simulationEnabled = useCoopSimulationEnabled();
   const rawStatus = statusQuery.data ?? null;
 
+  // 가짜 팀원 사진은 step3에서 한꺼번에 뜨므로 방에 들어온 시점에 미리 받아 둔다(coopMission.ts).
+  // 켜져 있을 때만 부른다 — 꺼진 빌드에서는 이 사진들을 쓸 일이 없다.
+  useEffect(() => {
+    if (simulationEnabled) prefetchDevSimRolePhotos();
+  }, [simulationEnabled]);
+
   /**
    * 화면이 읽는 방 상태.
    *
@@ -159,7 +166,15 @@ export function useCoopMissionRoom() {
   const status = useMemo(() => {
     if (rawStatus === null) return null;
 
-    const simulated = simulateCoopStatus(rawStatus, { acceptedSimIds: acceptedSimulatedIds, rejectedSimIds: rejectedSimulatedIds, fallbackRoleCards: storedRoleCards, enabled: simulationEnabled });
+    const simulated = simulateCoopStatus(rawStatus, {
+      acceptedSimIds: acceptedSimulatedIds,
+      rejectedSimIds: rejectedSimulatedIds,
+      fallbackRoleCards: storedRoleCards,
+      // 역할명으로 고정 배정한다(coopDevSimulation.ts) — 옆의 "이런 장소를 찾아보세요" 칩이
+      // 같은 역할 카드에서 나오므로 사진도 역할을 따라가야 둘이 어긋나지 않는다.
+      itemPhotoByRole: DEV_SIM_ROLE_PHOTOS,
+      enabled: simulationEnabled,
+    });
     if (rejectedSimulatedIds.length === 0) return simulated;
 
     // 거절한 가짜 팀원은 목록에서 지운다. 서버에 보낼 수 없는 거절이라 여기서만 반영된다.
@@ -180,6 +195,21 @@ export function useCoopMissionRoom() {
     () => simulateParticipants(status?.participants ?? storedParticipants, acceptedSimulatedIds, rejectedSimulatedIds, simulationEnabled),
     [status?.participants, storedParticipants, acceptedSimulatedIds, rejectedSimulatedIds, simulationEnabled],
   );
+  /**
+   * 위 목록이 **서버 응답에서 왔는지**. 부트스트랩 폴백이면 false다.
+   *
+   * 화면에 그리는 데에는 둘의 구분이 필요 없지만(빈 자리보다는 옛 목록이 낫다), **"내가 방에서
+   * 빠졌다"를 판정할 때는 다르다.** 그 판정의 근거는 서버가 준 명단 하나뿐이고, 폴백은 근거가
+   * 아니라 자리를 메우는 값이다(useCoopPartyChanges).
+   *
+   * 이 구분이 없어서 step1 "다음" 직후 멤버만 튕겨 나갔다. 재료 찾기 화면은 새 라우트로 새로
+   * 마운트되는데 좌표를 다시 읽는 동안 쿼리가 꺼져 있어 `status`가 null이고, 그 구간의 폴백이
+   * 초대 링크로 들어온 게스트에게는 **빈 배열**이다(`enterRoom`에 참여자를 넘길 수 있는 쪽은
+   * 방 생성 응답을 받은 방장뿐이라, 게스트의 `store.participants`는 계속 `[]`다).
+   * 반면 스냅샷은 초대 화면 폴링이 꽉 찬 명단으로 채워 둔 뒤라, 첫 프레임이 그대로
+   * "명단에 있던 내가 사라졌다"로 읽혔다. 방장만 멀쩡했던 이유도 이것이다.
+   */
+  const hasServerParticipants = status?.participants != null;
   const roleProgresses = status?.roleProgresses ?? NO_ROLE_PROGRESSES;
   const currentStep = status?.currentStep ?? null;
   // 1단계 폴링 응답에는 역할 카드가 없다. 방 생성 응답에서 받아 둔 값이 그 구멍을 메운다.
@@ -264,7 +294,7 @@ export function useCoopMissionRoom() {
         // 결과를 값으로 돌려준다. 예전에는 그냥 await만 해서, 서버가 거절하면
         // 처리되지 않은 rejection이 되어 화면이 통째로 깨졌다.
         coopTrace('수락:실패', { participantId, detail: describeApiError(error) });
-        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
     [acceptMutation, acceptSimulated, missionProgressId, refreshStatus],
@@ -285,7 +315,7 @@ export function useCoopMissionRoom() {
         return { ok: true };
       } catch (error) {
         coopTrace('거절:실패', { participantId, detail: describeApiError(error) });
-        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
     [rejectMutation, rejectSimulated, missionProgressId, refreshStatus],
@@ -388,7 +418,7 @@ export function useCoopMissionRoom() {
       return { ok: true };
     } catch (error) {
       coopTrace('assign:실패', { detail: describeApiError(error) });
-      return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+      return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
     }
   }, [missionProgressId, participants, roleCards, roleProgresses, currentStep, saveRoleAssignmentMutation, saveProgressMutation, refreshStatus]);
 
@@ -401,7 +431,7 @@ export function useCoopMissionRoom() {
       await refreshStatus();
       return { ok: true };
     } catch (error) {
-      return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+      return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
     }
   }, [missionProgressId, saveProgressMutation, refreshStatus]);
 
@@ -424,11 +454,34 @@ export function useCoopMissionRoom() {
         await refreshStatus();
         return { ok: true, verified: isVerified };
       } catch (error) {
-        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
     [missionProgressId, verifyRoleMutation, refreshStatus],
   );
+
+  /**
+   * 이 방에 대해 받아 둔 응답·에러를 캐시에서 **지운다.** 방을 떠나는 경로가 부른다.
+   *
+   * `invalidate`가 아니라 `remove`인 이유: 무효화는 "낡았으니 다시 물어라"이고, 여기서 필요한 것은
+   * **"이 방에 대한 답을 더는 갖고 있지 않다"**이다. 떠난 방을 다시 물을 일은 없다.
+   *
+   * 지우지 않으면 **에러 상태가 다음 진입까지 살아남는다.** 방을 떠날 때 마지막 폴링이 404로
+   * 끝나면 그 실패가 queryKey 단위로 캐시에 남는데(기본 gcTime 5분, `gone`은 재시도도 하지 않아
+   * 곧바로 확정된다), 같은 방에 다시 들어와 화면이 새로 마운트되면 TanStack Query는 **재조회가
+   * 끝나기 전에 그 옛 에러를 그대로 isError로 보고한다.** 그러면 화면의 `statusFailure === 'gone'`
+   * 분기가 첫 프레임에 발동해, 멀쩡히 들어온 사람을 "방이 사라졌어요"로 내보낸다.
+   *
+   * 거절당한 뒤 앱을 끄지 않고 초대 링크로 다시 들어오는 경로가 정확히 이 모양이다 — 앱을
+   * 재시작하면 캐시가 통째로 사라져 증상이 없어지는 것도 같은 이유다.
+   *
+   * 좌표 없는 접두사로 지운다. 키에는 좌표가 함께 들어가 있어(생성 코드의 queryKey) 마운트마다
+   * 다른 키가 쌓일 수 있는데, 그중 하나만 남아도 같은 일이 되풀이된다(refreshStatus와 같은 방식).
+   */
+  const forgetRoomCache = useCallback(() => {
+    if (missionProgressId === null) return;
+    queryClient.removeQueries({ queryKey: coopStatusQueryKey(missionProgressId) });
+  }, [queryClient, missionProgressId]);
 
   /** 방 나가기. 보상을 받지 못한 채 방에서 빠진다 */
   const leaveRoom = useCallback(async () => {
@@ -439,6 +492,7 @@ export function useCoopMissionRoom() {
   return {
     status,
     participants,
+    hasServerParticipants,
     roleCards,
     roleProgresses,
     currentStep,
@@ -453,6 +507,8 @@ export function useCoopMissionRoom() {
      * 방장이 마지막으로 나가면 서버가 진행도를 통째로 소프트 딜리트하므로 남아 있으면 빈 화면이 된다.
      */
     statusFailure: statusQuery.isError ? resolveCoopFailure(statusQuery.error) : null,
+    statusErrorNotified: wasApiErrorNotified(statusQuery.error),
+    forgetRoomCache,
     rememberParticipants,
     refreshStatus,
     acceptParticipant,
@@ -532,7 +588,7 @@ export function useStartCoopMission() {
 }
 
 /** 참여 요청 결과. 실패도 예외가 아니라 값으로 돌려준다 — 호출부가 문구를 정해야 한다 */
-export type JoinCoopMissionResult = { ok: true; participantStatus: JoinCoopMissionResponse['participantStatus'] } | { ok: false; failure: CoopFailure; detail?: string };
+export type JoinCoopMissionResult = { ok: true; participantStatus: JoinCoopMissionResponse['participantStatus'] } | { ok: false; failure: CoopFailure; detail?: string; apiErrorNotified?: boolean };
 
 /**
  * 초대 링크로 들어온 팀원의 참여 요청.
@@ -565,7 +621,7 @@ export function useJoinCoopMission() {
         return { ok: true, participantStatus: joined.participantStatus };
       } catch (error) {
         // 정원 초과(`full`)는 미션 홈에서 토스트로 알린다(사용자 지시).
-        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error) };
+        return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
     [mutation, enterRoom],

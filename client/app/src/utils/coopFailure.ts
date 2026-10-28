@@ -104,3 +104,26 @@ export function coopFailureMessage(failure: CoopFailure, detail?: string): strin
   const base = COOP_FAILURE_MESSAGE[failure];
   return failure === 'retryable' && detail ? `${base} (${detail})` : base;
 }
+
+/**
+ * 초대 링크로 들어온 사람에게 보여줄 문구.
+ *
+ * 그 사람에게 이 방은 "미션 방"이 아니라 **"초대받은 방"**이고, 왜 못 들어가는지가 함께 필요하다
+ * (사용자 지시). 링크를 받아 두고 한참 뒤에 눌렀는데 아무 설명 없이 홈으로 떨어지면 앱이
+ * 고장난 것으로 읽힌다.
+ *
+ * **공용 표(`COOP_FAILURE_MESSAGE`)를 고치지 않고 덮어쓰기만 하는 이유**: 그 표는 폴링 실패 등
+ * 다른 화면도 함께 쓴다. 거기까지 "초대받은 방"으로 바뀌면 초대와 무관하게 들어온 사람에게
+ * 틀린 안내가 된다.
+ *
+ * 초대 맥락이 따로 없는 실패(정원 초과 등)는 공용 문구가 이미 상황을 설명하므로 그대로 쓴다.
+ */
+const COOP_INVITE_FAILURE_MESSAGE: Partial<Record<CoopFailure, string>> = {
+  gone: '팀원이 모두 나가서 초대받은 방이 없어졌어요.',
+  'already-completed': '미션이 끝나서 초대받은 방이 없어졌어요.',
+  'invalid-invite': '초대 링크가 만료되어 방에 들어갈 수 없어요.',
+};
+
+export function coopInviteFailureMessage(failure: CoopFailure, detail?: string): string {
+  return COOP_INVITE_FAILURE_MESSAGE[failure] ?? coopFailureMessage(failure, detail);
+}

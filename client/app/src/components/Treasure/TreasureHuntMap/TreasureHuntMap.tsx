@@ -7,6 +7,7 @@ import { NetworkErrorScreen } from '@/components/NetworkErrorScreen/NetworkError
 import { reissueWebViewAuth } from '@/components/HomeWebView/reissueWebViewAuth';
 import { buildWebViewBootstrapScript } from '@/components/HomeWebView/webViewBootstrapScript';
 import { INVALID_HEADING } from '@/hooks/useTreasureLocation';
+import { useWebViewRecovery } from '@/hooks/useWebViewRecovery';
 import type { Coords } from '@/utils/geo';
 import { shouldSendForHeading, shouldSendForPosition } from './throttle';
 
@@ -58,8 +59,22 @@ type TreasureLocationPayload = {
 export function TreasureHuntMap({ path = DEFAULT_TREASURE_MAP_PATH, coords, heading, markers, center = null, onTreasurePress }: TreasureHuntMapProps) {
   const webViewRef = useRef<WebView>(null);
   const [hasLoadError, setHasLoadError] = useState(false);
-  /** web이 PING을 보내 traceId가 잡히기 전에는 어떤 메시지도 전달되지 않는다 */
-  const [isBridgeReady, setIsBridgeReady] = useState(false);
+  // 안드로이드가 메모리 압박으로 렌더러를 죽이면 지도 자리가 빈 흰 화면으로 남는다. 복구는 재생성뿐이다
+  const recovery = useWebViewRecovery({ feature: 'treasure-map' });
+
+  /**
+   * 브릿지 핸드셰이크(PING)를 마친 **WebView 세대**. 아직 아무도 PING을 보내지 않았으면 null.
+   *
+   * 예전에는 boolean(`isBridgeReady`)이었다. 렌더러가 죽어 WebView를 다시 만들면(webViewKey 교체)
+   * 새 문서는 아직 PING을 보내지 않았는데 그 플래그는 true로 남아 있고, 새 PING이 와도 값이 그대로라
+   * **아래 전송 effect들이 다시 돌지 않았다** — 위치·보물 마커가 새 지도에 한 번도 전달되지 않는다
+   * (마커는 "찾음"이 바뀔 때만 갱신돼 특히 오래 비어 있게 된다).
+   *
+   * 세대 번호를 담아 두면 key가 바뀌는 순간 아래 비교가 저절로 false가 되므로, effect에서
+   * setState로 되돌릴 필요가 없다(그건 cascading render라 lint도 막는다).
+   */
+  const [bridgeReadyGeneration, setBridgeReadyGeneration] = useState<number | null>(null);
+  const isBridgeReady = bridgeReadyGeneration === recovery.webViewKey;
 
   const lastSentAtRef = useRef<number | null>(null);
   const lastSentHeadingRef = useRef<number | null>(null);
@@ -132,29 +147,48 @@ export function TreasureHuntMap({ path = DEFAULT_TREASURE_MAP_PATH, coords, head
 
         initTraceId(msg.traceId);
         sendToWeb(webViewRef, { type: 'PONG', payload: { timestamp: Date.now() } });
+        // 이 문서는 좌표를 한 번도 받은 적이 없다. throttle 기록을 지워야 아래 effect의 isFirstSend
+        // 갈래를 다시 타고, 핸드셰이크 직후 첫 좌표가 간격을 기다리지 않고 곧바로 나간다.
+        lastSentAtRef.current = null;
+        lastSentHeadingRef.current = null;
         // storedTraceId가 이제 막 세팅됐으므로, 보관 중인 최신 위치·마커를 흘려보낸다
-        setIsBridgeReady(true);
+        setBridgeReadyGeneration(recovery.webViewKey);
       })(event);
     },
-    [onTreasurePress],
+    [onTreasurePress, recovery.webViewKey],
   );
 
-  if (hasLoadError) {
-    return <NetworkErrorScreen onRetry={() => setHasLoadError(false)} />;
+  // 렌더러 사망은 네트워크가 아니라 기기 메모리 문제다. 'offline'의 "인터넷 연결 상태를 확인하세요"는
+  // 멀쩡한 와이파이를 의심하게 만들므로, 사용자가 고칠 것이 없고 "잠시 후 다시 시도"가 맞는 'server'를 쓴다.
+  if (hasLoadError || recovery.hasGivenUp) {
+    return (
+      <NetworkErrorScreen
+        variant={recovery.hasGivenUp ? 'server' : 'offline'}
+        onRetry={() => {
+          setHasLoadError(false);
+          recovery.retry();
+        }}
+      />
+    );
   }
 
   return (
     <WebView
+      key={recovery.webViewKey}
       ref={webViewRef}
       source={{
         uri: resolveWebViewUrl(process.env.EXPO_PUBLIC_WEB_URL, __DEV__, path, process.env.EXPO_PUBLIC_DEV_WEB_URL),
       }}
       style={{ flex: 1 }}
+      // Android 시스템 글자 크기 설정을 WebView가 그대로 따라가면 디자인 폭(px 고정)이 깨진다
+      textZoom={100}
       onError={() => setHasLoadError(true)}
       onMessage={handleMessage}
       // 토큰·앱 정보를 문서 실행 전에 심는다. 이 화면은 보물 마커만 브릿지로 받으므로
       // 토큰이 빠져 있어도 눈에 잘 띄지 않았지만, 배경 지도 콘텐츠는 계속 401이었다.
       injectedJavaScriptBeforeContentLoaded={buildWebViewBootstrapScript()}
+      // 렌더러가 죽으면 key를 바꿔 새로 만든다(useWebViewRecovery). 성공 로드 시 카운터 리셋(onLoad)도 이 묶음에 들어 있다
+      {...recovery.recoveryProps}
     />
   );
 }

@@ -25,6 +25,7 @@ CREATE TABLE `user` (
     `password_hash`        VARCHAR(255) NOT NULL,
     `role`                 VARCHAR(20)  NOT NULL DEFAULT 'USER',
     `status`               VARCHAR(20)  NOT NULL DEFAULT 'ACTIVE',
+    `guestbook_last_checked_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `created_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
@@ -611,6 +612,8 @@ CREATE TABLE `guestbook` (
     `created_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`                  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
+    CONSTRAINT `chk_guestbook_status`
+        CHECK (`status` IN ('ACTIVE', 'INACTIVE')),
     CONSTRAINT `fk_guestbook_user`
         FOREIGN KEY (`user_id`) REFERENCES `user` (`id`)
         ON DELETE SET NULL

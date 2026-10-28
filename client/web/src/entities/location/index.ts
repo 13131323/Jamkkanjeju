@@ -1,12 +1,15 @@
 export { useLocationStore } from './model/store';
 export type { LocationCoords } from './model/store';
 export { forcedJejuCoords, useForcedJejuCoords, FORCED_JEJU_COORDS } from './model/forcedLocation';
-export { useJudgeModeStore, isJudgeModeEnabled, useJudgeModeHydration, useJudgeModeAppSync } from './model/judgeMode';
+export { useJudgeModeStore, isJudgeModeEnabled, useJudgeModeHydration, useIsJudgeModeHydrated, useJudgeModeAppSync } from './model/judgeMode';
 export { useLocationBridge } from './model/useLocationBridge';
-export { useDisplayLocation, resolveDisplayLocation } from './model/resolveDisplayLocation';
+export { useDisplayLocation, resolveDisplayLocation, isOutsideJeju } from './model/resolveDisplayLocation';
 export type { DisplayLocation } from './model/resolveDisplayLocation';
 export { useCurrentCoords, resolveCurrentCoords } from './model/useCurrentCoords';
 export { useCurrentAddress } from './model/useCurrentAddress';
+export { resolveAddressDisplay } from './model/addressDisplay';
+export type { AddressDisplay, AddressDisplayInput } from './model/addressDisplay';
+export { useAddressDisplay } from './model/useAddressDisplay';
 export { geocodeAddress } from './api/geocodeAddress';
 export { toAddressUnit } from './model/addressUnit';
 export type { LocationPermissionStatus } from '@shared/lib/bridge';

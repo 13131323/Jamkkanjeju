@@ -1,6 +1,5 @@
 import { Modal, Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { CloseCircleIcon } from '@/components/CloseCircleIcon/CloseCircleIcon';
 import { Button } from '@/components/Button/Button';
 import { missionCancelModalStyles as styles } from './styles';
 
@@ -15,16 +14,6 @@ function AlertTriangleIcon() {
   );
 }
 
-/**
- * 닫기 아이콘.
- *
- * 예전에는 민무늬 X(#6a6a6a)를 직접 그렸는데, 공유 시트가 쓰는 **원 테두리 X**로 합쳤다
- * (사용자 지시) — 같은 흐름 안에서 닫기 모양이 둘이면 어느 쪽이 맞는지 알 수 없다.
- */
-function CloseIcon() {
-  return <CloseCircleIcon size={24} />;
-}
-
 export interface MissionCancelModalProps {
   visible: boolean;
   /**
@@ -34,7 +23,7 @@ export interface MissionCancelModalProps {
   onPause: () => void;
   /** "포기 할래요" — 진행도 없이 미션을 중단하고 intro로 돌아간다 */
   onAbandon: () => void;
-  /** 우측 상단 X·스크림·하드웨어 백 — 모달만 닫고 미션을 계속한다 */
+  /** 스크림 탭·하드웨어 백 — 모달만 닫고 미션을 계속한다 */
   onClose: () => void;
 }
 
@@ -51,14 +40,10 @@ export interface MissionCancelModalProps {
 export function MissionCancelModal({ visible, onPause, onAbandon, onClose }: MissionCancelModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      {/* 스크림 탭도 X와 같이 "계속하기"로 취급한다 */}
+      {/* 스크림 탭이 "계속하기"다 — 닫기 버튼은 두지 않는다(사용자 지시). 하드웨어 백도 같은 경로다 */}
       <Pressable style={styles.scrim} onPress={onClose}>
         {/* no-op onPress로 감싸 내용 영역 탭이 스크림으로 전파되지 않게 막는다 */}
         <Pressable style={styles.container} onPress={() => undefined}>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="닫고 미션 계속하기" style={styles.closeButton}>
-            <CloseIcon />
-          </Pressable>
-
           <View style={styles.alertCircle}>
             <AlertTriangleIcon />
           </View>

@@ -12,8 +12,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -62,11 +64,14 @@ public class User extends BaseTimeEntity {
     @Column(name = "status", nullable = false, length = 20)
     private UserStatus status;
 
+    @Column(name = "guestbook_last_checked_at", nullable = false)
+    private LocalDateTime guestbookLastCheckedAt;
+
     /** 사용자 계정을 생성하고, 지정하지 않은 값은 기본값으로 채운다. */
     @Builder
     private User(OnboardingResult onboardingResult, String nickname, Integer point,
                  Integer targetStep, String email, String passwordHash,
-                 UserRole role, UserStatus status) {
+                 UserRole role, UserStatus status, LocalDateTime guestbookLastCheckedAt) {
         this.onboardingResult = onboardingResult;
         this.nickname = nickname;
         this.point = point == null ? 0 : point;
@@ -75,6 +80,20 @@ public class User extends BaseTimeEntity {
         this.passwordHash = passwordHash;
         this.role = role == null ? UserRole.USER : role;
         this.status = status == null ? UserStatus.ACTIVE : status;
+        this.guestbookLastCheckedAt = guestbookLastCheckedAt;
+    }
+
+    /** 최초 저장 시 확인 시각을 지정하지 않았다면 Auditing이 기록한 계정 생성 시각으로 채운다. */
+    @PrePersist
+    private void initializeGuestbookLastCheckedAt() {
+        if (guestbookLastCheckedAt == null) {
+            guestbookLastCheckedAt = getCreatedAt();
+        }
+    }
+
+    /** 방명록 목록을 마지막으로 확인한 시각을 갱신한다. */
+    public void checkGuestbooks(LocalDateTime checkedAt) {
+        this.guestbookLastCheckedAt = checkedAt;
     }
 
     /** 사용자에게 온보딩 결과를 배정한다. */

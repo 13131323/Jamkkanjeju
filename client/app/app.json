@@ -3,7 +3,7 @@
     "name": "잠깐제주",
     "slug": "tamnalog",
     "owner": "tamnalogs-team",
-    "version": "1.2.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -92,9 +92,8 @@
           "backgroundColor": "#FFFFFF",
           "enableFullScreenImage_legacy": true,
           "android": {
-            "drawable": {
-              "icon": "./assets/splash-screen-icon.xml"
-            }
+            "image": "./assets/splash-icon.png",
+            "imageWidth": 100
           }
         }
       ]

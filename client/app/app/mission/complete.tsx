@@ -16,8 +16,10 @@ export default function MissionCompleteScreen() {
   // 종류가 다르면 직전에 끝낸 다른 미션의 값이라 무시하고 디자인 폴백을 쓴다.
   const savedResult = useMissionCompleteStore((state) => (state.mission === missionType ? state.result : null));
 
-  // 방명록에 붙일 장소 id. 미션 진행 화면이 완료로 넘어오면서 함께 담아 둔 값이다.
+  // 방명록에 붙일 장소 id/이름. 미션 진행 화면이 완료로 넘어오면서 함께 담아 둔 값이다.
+  // 이름까지 넘겨야 방명록 화면의 잠긴 장소명 입력칸이 빈 채로 보이지 않는다.
   const completedLocationId = savedResult?.completedLocationId ?? null;
+  const completedLocationName = savedResult?.completedLocationName ?? null;
 
   // 방명록에 넘길 좌표. 장소 id가 없는 미션에서는 이 좌표가 곧 방명록의 위치가 된다.
   // 방명록 CTA가 있는 미션(보물찾기·협동)만 읽는다 — 문화는 CTA가 하나뿐이다.
@@ -28,11 +30,16 @@ export default function MissionCompleteScreen() {
    *
    * 리셋을 함께 요청하지 않으면 라우트만 /home이 되고 WebView는 직전에 보던 web 페이지를
    * 그대로 들고 있다(store/homeReset.ts). 이동보다 먼저 요청해야 한 박자 늦지 않는다.
+   *
+   * `replace`가 아니라 `dismissTo`인 이유는 utils/navigate.ts 주석에 있다 — 요약하면 replace는
+   * 스택에 이미 있는 홈을 재사용하지 않고 **홈을 하나 더 만든다.** 미션을 끝낼 때마다 보이지
+   * 않는 홈이 한 벌씩 쌓였고, 리셋 토큰은 그 전부에 걸리므로 WebView가 여러 장 동시에 다시
+   * 로드돼 "홈으로 돌아가는 게 느리다"의 가장 큰 몫이었다.
    */
   const requestHomeReset = useHomeResetStore((state) => state.request);
   const goHome = () => {
     requestHomeReset();
-    navigate.replace('/home');
+    navigate.dismissTo('/home');
   };
 
   // 설정이 없는 미션 타입으로 들어오면(잘못된 딥링크) 홈으로 되돌린다.
@@ -78,6 +85,7 @@ export default function MissionCompleteScreen() {
                 params: {
                   missionType,
                   placeId: completedLocationId === null ? '' : String(completedLocationId),
+                  placeName: completedLocationName ?? '',
                   lat: guestbookCoords ? String(guestbookCoords.lat) : '',
                   lng: guestbookCoords ? String(guestbookCoords.lng) : '',
                 },

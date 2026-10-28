@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -100,6 +102,8 @@ class HomeApiIntegrationTest extends MySqlIntegrationTestSupport {
     private EntityManager entityManager;
     @MockitoSpyBean
     private GuestbookCounter guestbookCounter;
+    @MockitoSpyBean
+    private Clock clock;
 
     @Test
     void 정상_요청이면_200과_명세의_필드와_형식을_반환한다() throws Exception {
@@ -368,17 +372,34 @@ class HomeApiIntegrationTest extends MySqlIntegrationTestSupport {
     }
 
     @Test
-    void 여러_사용자의_일반_길바닥_방명록을_중복_없이_전체_개수로_집계한다() throws Exception {
+    void 여러_사용자의_일반_길바닥_방명록을_확인시각_이후만_집계한다() throws Exception {
+        LocalDateTime checkedAt = LocalDateTime.of(2030, 1, 1, 10, 0);
+        LocalDateTime now = checkedAt.plusHours(2);
+        doReturn(now.atZone(java.time.ZoneId.of("Asia/Seoul")).toInstant()).when(clock).instant();
         User user = saveUser("home-it@example.com");
         User other = saveUser("home-other-it@example.com");
-        long before = ((Number) home(user, BASE_LAT, BASE_LNG).read("$.guestbookCount")).longValue();
+        user.checkGuestbooks(checkedAt);
+        other.checkGuestbooks(checkedAt.plusHours(1));
+        entityManager.flush();
+        assertThat(((Number) home(user, BASE_LAT, BASE_LNG).read("$.guestbookCount")).longValue()).isZero();
 
         locationGuestbook(user);
         roadGuestbook(other);
-        entityManager.flush();
+        entityManager.createNativeQuery("update guestbook set created_at=:time where user_id=:id")
+                .setParameter("time", checkedAt.plusMinutes(30)).setParameter("id", user.getId()).executeUpdate();
+        entityManager.createNativeQuery("update guestbook set created_at=:time where user_id=:id")
+                .setParameter("time", checkedAt.plusMinutes(90)).setParameter("id", other.getId()).executeUpdate();
+        for (LocalDateTime createdAt : List.of(checkedAt.minusSeconds(1), checkedAt, now, now.plusSeconds(1))) {
+            Guestbook boundary = guestbook(user);
+            entityManager.createNativeQuery("update guestbook set created_at=:time where id=:id")
+                    .setParameter("time", createdAt).setParameter("id", boundary.getId()).executeUpdate();
+        }
+        flushAndClear();
 
-        long after = ((Number) home(user, BASE_LAT, BASE_LNG).read("$.guestbookCount")).longValue();
-        assertThat(after).isEqualTo(before + 2);
+        assertThat(((Number) home(user, BASE_LAT, BASE_LNG).read("$.guestbookCount")).longValue()).isEqualTo(3);
+        assertThat(((Number) home(other, BASE_LAT, BASE_LNG).read("$.guestbookCount")).longValue()).isEqualTo(2);
+        assertThat(entityManager.find(User.class, user.getId()).getGuestbookLastCheckedAt()).isEqualTo(checkedAt);
+        assertThat(entityManager.find(User.class, other.getId()).getGuestbookLastCheckedAt()).isEqualTo(checkedAt.plusHours(1));
     }
 
     @Test
@@ -472,7 +493,7 @@ class HomeApiIntegrationTest extends MySqlIntegrationTestSupport {
     @Test
     void 조회_중_예기치_않은_실패는_500_공통_응답이고_내부_메시지를_노출하지_않는다() throws Exception {
         User user = saveUser("home-it@example.com");
-        doThrow(new IllegalStateException("내부 비밀 메시지")).when(guestbookCounter).countAll();
+        doThrow(new IllegalStateException("내부 비밀 메시지")).when(guestbookCounter).countSince(any());
 
         String body = getHome(user, BASE_LAT, BASE_LNG)
                 .andExpect(status().isInternalServerError())

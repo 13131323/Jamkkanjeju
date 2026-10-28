@@ -1,6 +1,9 @@
 package com.jamkkanjeju.server.domain.guestbook.service;
 
 import com.jamkkanjeju.server.domain.guestbook.repository.GuestbookRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,10 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class GuestbookCounter {
 
     private final GuestbookRepository guestbookRepository;
+    private final Clock clock;
 
-    /** 서비스 전체 사용자가 남긴 방명록 개수를 센다. */
-    // TODO: 추후 기획상 집계 기준이 확정되면 현재 전체 개수 집계 로직을 확정된 기준으로 교체한다.
-    public long countAll() {
-        return guestbookRepository.count();
+    /** 마지막 확인 이후부터 서버 현재 시각까지 새로 생성된 방명록 개수를 센다. */
+    public long countSince(LocalDateTime lastCheckedAt) {
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneId.of("Asia/Seoul"));
+        return guestbookRepository.countByCreatedAtGreaterThanAndCreatedAtLessThanEqual(lastCheckedAt, now);
     }
 }

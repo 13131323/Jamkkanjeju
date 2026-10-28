@@ -10,6 +10,7 @@ USER {
 	varchar_255 password_hash "NOT NULL"
 	varchar_20 role "NOT NULL, DEFAULT: USER, Enum: USER, ADMIN"
 	varchar_20 status "NOT NULL, DEFAULT: ACTIVE, Enum: ACTIVE, SUSPENDED, WITHDRAWN"
+	datetime_6 guestbook_last_checked_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP(6)"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	

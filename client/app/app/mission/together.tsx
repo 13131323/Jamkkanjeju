@@ -1,16 +1,16 @@
 import { MAX_PARTY_SIZE } from '@packages/shared';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { CoopStepLayout } from '@/components/Coop/CoopStepLayout/CoopStepLayout';
+import { CoopStepSkeleton } from '@/components/Coop/CoopStepSkeleton/CoopStepSkeleton';
 import { InviteShareSheet } from '@/components/Coop/InviteShareSheet/InviteShareSheet';
 import { PartyMemberCard } from '@/components/Coop/PartyMemberCard/PartyMemberCard';
 import type { StatusTone } from '@/components/Coop/StatusBadge/StatusBadge';
-import { FullBleed } from '@/components/FullBleed/FullBleed';
 import { MissionCancelModal } from '@/components/Mission/MissionCancelModal/MissionCancelModal';
 import { useToast } from '@/components/Toast/Toast';
+import { TOAST_COOP_CTA_CLEARANCE } from '@/components/Toast/styles';
 import { buildInviteUrl } from '@/config/inviteUrl';
 import { COOP_HOST_CHANGED_MESSAGE, COOP_STEP_COPY, coopRejectedMessage } from '@/constants/coopMission';
 import { resolveMissionId } from '@/constants/missionHome';
@@ -22,7 +22,6 @@ import { useMissionLocationPermission } from '@/hooks/useMissionLocationPermissi
 import { useSinglePress } from '@/hooks/useSinglePress';
 import { COOP_ROOM_UNDECIDED, coopRoomToOpen, useCoopPartyStore } from '@/store/coopParty';
 import { coopInviteStyles as styles } from '@/styles/coopInvite';
-import { COOP_BACKGROUND_COLORS, COOP_CIRCLE_COLORS, coopStepStyles } from '@/styles/coopStep';
 import { COOP_FAILURE_MESSAGE, coopFailureMessage } from '@/utils/coopFailure';
 import {
   coopAssignPhase,
@@ -117,7 +116,10 @@ function memberStatus(ready: boolean, isMe: boolean): { label: string; tone: Sta
 }
 
 export default function TogetherMissionScreen() {
-  const { show } = useToast();
+  const { show: showToast } = useToast();
+  // 이 화면(과 CoopStepSkeleton)의 CTA는 항상 CoopStepLayout의 표준 자리에 있다 —
+  // 아래 어떤 토스트든 그 위로 띄우면 되므로 화면 전체가 이 clearance 하나만 쓴다.
+  const show = useCallback((message: string) => showToast(message, { bottomClearance: TOAST_COOP_CTA_CLEARANCE }), [showToast]);
   const cancelGuard = useMissionCancelGuard();
 
   // 홈·마이페이지의 "이어서 진행"이 이 화면으로 곧장 들어온다(missionNavigateTarget.ts).
@@ -127,10 +129,13 @@ export default function TogetherMissionScreen() {
   const {
     status,
     participants,
+    hasServerParticipants,
     currentStep,
     myParticipantId,
     previousParticipants,
     statusFailure,
+    statusErrorNotified,
+    forgetRoomCache,
     rememberParticipants,
     acceptParticipant,
     rejectParticipant,
@@ -214,7 +219,7 @@ export default function TogetherMissionScreen() {
         reset();
         // 방 상태 조회가 좌표를 필수로 받는다 — 권한 없이 들어가면 폴링이 통째로 막힌다
         if (!(await ensureLocationGranted())) {
-          navigate.replace('/home');
+          navigate.dismissTo('/home');
           return;
         }
         // 실패하면 useEnterCoopRoom이 안내를 띄운다. 방이 없는 화면에 남겨 두지 않고 홈으로 보낸다.
@@ -376,17 +381,45 @@ export default function TogetherMissionScreen() {
   //
   // 판정은 `useCoopPartyChanges`에 있다 — 재료 찾기 화면도 같은 규칙을 써야 해서 옮겼다.
   // 이 화면에 남는 것은 "이 단계에서 그 변화가 무슨 뜻인가"뿐이다.
+  /**
+   * 방 상태를 비우고 미션 인트로로 돌아간다. 아래 두 경로가 공유하는 마지막 동작이다.
+   *
+   * 미션 id를 함께 넘긴다 — 인트로의 "다시 시작하기"가 그 id로 방을 열기 때문이다(coopIntroRoute).
+   */
+  const goToIntro = useCallback(() => {
+    // 스토어를 비우기 **전에** 부른다 — 어느 방의 캐시를 지울지는 missionProgressId가 정한다
+    forgetRoomCache();
+    reset();
+    navigate.replace(coopIntroRoute(missionIdForIntro));
+  }, [forgetRoomCache, reset, missionIdForIntro]);
+
+  /**
+   * 돌아올 방이 **없이** 떠난다 — "포기 할래요", 거절당함, 방이 사라짐.
+   *
+   * 쉬기 메모를 함께 버린다. 이 경로들은 방에서 실제로 빠지는 것이라 그 메모가 가리키는 방으로
+   * 돌아갈 일이 없고, 남겨 두면 판정이 필요 없는 자리에서 계속 대조를 시도한다.
+   * (같은 방으로 다시 들어오는 경우에만 대조가 성립한다 — store/coopParty.ts의 resumedAsNewHost)
+   */
+  const leaveToIntro = useCallback(() => {
+    forgetPausedRoom();
+    goToIntro();
+  }, [forgetPausedRoom, goToIntro]);
+
   useCoopPartyChanges({
     participants,
+    hasServerParticipants,
     previousParticipants,
     myParticipantId,
     rememberParticipants,
-    // 초대 단계에서 내가 목록에서 사라졌다면 방장이 나를 거절한 것이다
+    // 초대 단계에서 내가 목록에서 사라졌다면 방장이 나를 거절한 것이다.
+    //
+    // 문구만 다르고 하는 일은 "돌아올 방 없이 떠나기"라 leaveToIntro를 그대로 쓴다. 예전에는
+    // 여기서 reset+replace를 직접 해서, 그 경로만 **쉬기 메모를 버리지 않고 방 캐시도 남겼다** —
+    // 스토어 주석이 거절당함을 forgetPausedRoom 대상으로 못박아 둔 것과 어긋나 있었다.
     onRemoved: useCallback(() => {
       show(REJECTED_MESSAGE);
-      reset();
-      navigate.replace(coopIntroRoute(missionIdForIntro));
-    }, [show, reset, missionIdForIntro]),
+      leaveToIntro();
+    }, [show, leaveToIntro]),
     onBecameHost: useCallback(() => show(COOP_HOST_CHANGED_MESSAGE), [show]),
     // 방장에게는 자기가 누른 거절의 결과이고, 남은 팀원에게는 폴링으로 알게 되는 변화다.
     onDeparted: useCallback((removed) => show(coopRejectedMessage(removed.name)), [show]),
@@ -435,28 +468,6 @@ export default function TogetherMissionScreen() {
   }, [teamToken]);
 
   /**
-   * 방 상태를 비우고 미션 인트로로 돌아간다. 아래 두 경로가 공유하는 마지막 동작이다.
-   *
-   * 미션 id를 함께 넘긴다 — 인트로의 "다시 시작하기"가 그 id로 방을 열기 때문이다(coopIntroRoute).
-   */
-  const goToIntro = useCallback(() => {
-    reset();
-    navigate.replace(coopIntroRoute(missionIdForIntro));
-  }, [reset, missionIdForIntro]);
-
-  /**
-   * 돌아올 방이 **없이** 떠난다 — "포기 할래요", 거절당함, 방이 사라짐.
-   *
-   * 쉬기 메모를 함께 버린다. 이 경로들은 방에서 실제로 빠지는 것이라 그 메모가 가리키는 방으로
-   * 돌아갈 일이 없고, 남겨 두면 판정이 필요 없는 자리에서 계속 대조를 시도한다.
-   * (같은 방으로 다시 들어오는 경우에만 대조가 성립한다 — store/coopParty.ts의 resumedAsNewHost)
-   */
-  const leaveToIntro = useCallback(() => {
-    forgetPausedRoom();
-    goToIntro();
-  }, [forgetPausedRoom, goToIntro]);
-
-  /**
    * "잠깐 쉴게요" — 방을 그대로 두고 나간다(서버에 아무것도 보내지 않는다).
    *
    * 나가던 순간의 **방장 신원**을 남긴다. 쉬는 동안에는 폴링이 꺼져 방장 승계를 볼 수 없고,
@@ -476,9 +487,9 @@ export default function TogetherMissionScreen() {
   // 이 화면에 남아 있어 봐야 빈 목록만 보인다. 폴링도 이미 멈춘 상태다.
   useEffect(() => {
     if (statusFailure !== 'gone' && statusFailure !== 'already-completed') return;
-    show(COOP_FAILURE_MESSAGE[statusFailure]);
+    if (!statusErrorNotified) show(COOP_FAILURE_MESSAGE[statusFailure]);
     leaveToIntro();
-  }, [statusFailure, show, leaveToIntro]);
+  }, [statusFailure, statusErrorNotified, show, leaveToIntro]);
 
   /**
    * 수락·거절. 결과를 받아 실패만 알린다.
@@ -490,7 +501,7 @@ export default function TogetherMissionScreen() {
     (participantId: number) => {
       void (async () => {
         const result = await acceptParticipant(participantId);
-        if (!result.ok) show(coopFailureMessage(result.failure, result.detail));
+        if (!result.ok && !result.apiErrorNotified) show(coopFailureMessage(result.failure, result.detail));
       })();
     },
     [acceptParticipant, show],
@@ -500,7 +511,7 @@ export default function TogetherMissionScreen() {
     (participantId: number) => {
       void (async () => {
         const result = await rejectParticipant(participantId);
-        if (!result.ok) show(coopFailureMessage(result.failure, result.detail));
+        if (!result.ok && !result.apiErrorNotified) show(coopFailureMessage(result.failure, result.detail));
       })();
     },
     [rejectParticipant, show],
@@ -527,7 +538,7 @@ export default function TogetherMissionScreen() {
     void (async () => {
       try {
         const result = await assignRolesAndAdvance();
-        if (!result.ok) show(coopFailureMessage(result.failure, result.detail));
+        if (!result.ok && !result.apiErrorNotified) show(coopFailureMessage(result.failure, result.detail));
       } finally {
         // 실패했으면 다시 누를 수 있어야 한다. 성공한 경우에는 이미 3단계라(이 함수가 재조회까지
         // 기다린다) 이 화면을 떠난 뒤이고, 2단계에 남은 경우에는 `coopAssignPhase`가 곧바로
@@ -560,9 +571,9 @@ export default function TogetherMissionScreen() {
    * 이전 단계 화면은 남아 있었다(사용자 지시: 중간에 미션 홈이나 이전 단계를 거치면 안 된다).
    *
    * 배경만 협동 미션의 것으로 두고 단계 배지·문구를 빼서, 이 대기 자체가 어느 단계로도
-   * 읽히지 않게 한다.
+   * 읽히지 않게 한다. 스피너 대신 세 단계가 공유하는 골격만 자리표시로 그린다(CoopStepSkeleton).
    *
-   * 스피너에 갇히지는 않는다 — 위 effect의 세 갈래(권한 거부·방 열기 실패·성공)가 모두
+   * 이 자리표시 화면에 갇히지는 않는다 — 위 effect의 세 갈래(권한 거부·방 열기 실패·성공)가 모두
    * 화면을 옮기거나 `missionProgressId`를 채우고, 어느 갈래든 `openingRoom`을 내린다.
    * 인트로의 "시작하기"로 들어온 경로는 인트로가 이미 방을 열어 둬서 이 갈래를 타지 않는다.
    *
@@ -571,15 +582,9 @@ export default function TogetherMissionScreen() {
    * 옛 방의 참여자 목록이 그대로 그려진다(shouldOpenCoopRoom 주석).
    */
   if (missionProgressId === null || openingRoom) {
-    return (
-      <FullBleed>
-        <View style={[coopStepStyles.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-          <LinearGradient colors={COOP_BACKGROUND_COLORS} style={coopStepStyles.background} />
-          <LinearGradient colors={COOP_CIRCLE_COLORS} style={coopStepStyles.circle} />
-          <ActivityIndicator />
-        </View>
-      </FullBleed>
-    );
+    // 배경만 협동 미션의 것으로 두고 단계 배지·문구는 그리지 않는다 — 그 중립성을 지키는 자리표시
+    // 화면이 CoopStepSkeleton이다(왜 단계 내용을 그리지 않는지는 그 파일의 주석).
+    return <CoopStepSkeleton />;
   }
 
   return (

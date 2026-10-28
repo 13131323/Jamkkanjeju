@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MissionStatus } from './missionStatus';
+import type { CooperativeMissionStatusResponseCompletedLocation } from './cooperativeMissionStatusResponseCompletedLocation';
 import type { CooperativeMissionStatusResponseCurrentParticipant } from './cooperativeMissionStatusResponseCurrentParticipant';
 import type { CooperativeMissionStatusResponseParticipants } from './cooperativeMissionStatusResponseParticipants';
 import type { CooperativeMissionStatusResponseRoleCards } from './cooperativeMissionStatusResponseRoleCards';
@@ -24,7 +25,7 @@ import type { CooperativeMissionStatusResponseNextLocation } from './cooperative
 | `current_participant` / `participants` | 값 | 값 | `null` |
 | `role_cards` | `null` | 값 | `null` |
 | `role_progresses` / 역할 집계 | `null` | 값(없으면 빈 배열/0) | `null` |
-| `reward` / `next_location` | `null` | `null` | 값 |
+| `completed_location` / `reward` / `next_location` | `null` | `null` | 값 |
 
 4단계의 `next_location` 은 Query 로 받은 사용자 좌표 기준 직선거리(`distance_meter`)를 포함한다.
  */
@@ -34,6 +35,7 @@ export interface CooperativeMissionStatusResponse {
   missionTitle: string;
   missionProgressStatus: MissionStatus;
   currentStep: number;
+  completedLocation?: CooperativeMissionStatusResponseCompletedLocation;
   currentParticipant?: CooperativeMissionStatusResponseCurrentParticipant;
   participants?: CooperativeMissionStatusResponseParticipants;
   roleCards?: CooperativeMissionStatusResponseRoleCards;

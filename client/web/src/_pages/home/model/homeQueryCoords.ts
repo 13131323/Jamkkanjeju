@@ -16,7 +16,25 @@ import { JEJU_CENTER, type Coordinates } from '@shared/config/geo';
  * 좌표를 **아직 모를 때**(권한 미결정·거부, 측위 전)만 섬 중심으로 대체한다. 이 조회 하나에
  * 진행중 미션·방명록 개수·캐릭터 이미지가 함께 실려 있어서, 좌표가 없다고 조회 자체를 멈추면
  * 위치와 무관한 그 값들까지 화면에서 사라진다. 좌표가 도착하면 queryKey가 바뀌어 다시 조회된다.
+ *
+ * 다만 **그대로 싣지는 않는다** — 소수점 4자리로 접는다. 아래 주석 참고.
  */
 export function resolveHomeQueryCoords(currentCoords: Coordinates | null): Coordinates {
-  return currentCoords ?? JEJU_CENTER;
+  if (currentCoords === null) return JEJU_CENTER;
+  return { lat: roundCoord(currentCoords.lat), lng: roundCoord(currentCoords.lng) };
+}
+
+/**
+ * 좌표를 소수점 4자리(약 11m)로 접는다.
+ *
+ * 이 값은 queryKey에 그대로 실리는데(useHomeData), GPS는 가만히 있어도 미세하게 흔들려서 접지 않으면
+ * 흔들릴 때마다 새 키가 된다. 이 화면은 `keepPreviousData`를 일부러 쓰지 않으므로(useHomeData 주석)
+ * 새 키는 곧 `isPending`이고, 배너·진행중 미션·방명록 뱃지·캐릭터 이미지가 통째로 스켈레톤으로 되돌아간다.
+ *
+ * 자릿수는 주소 조회가 이미 쓰고 있는 값과 맞췄다(entities/location/model/useCurrentAddress.ts).
+ * 11m는 "근처 추천"이 달라질 거리가 아니다. 걸어 다닐 때의 갱신까지 줄이려면 더 굵게(3자리≈110m) 접으면
+ * 되지만, 그건 JUDGE_MODE_COORDS의 실효값까지 바꾸므로 따로 판단이 필요하다.
+ */
+function roundCoord(value: number): number {
+  return Math.round(value * 10000) / 10000;
 }

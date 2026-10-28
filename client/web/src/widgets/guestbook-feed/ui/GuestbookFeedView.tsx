@@ -7,6 +7,7 @@ import { SORT_OPTION_LABEL, type SortOption } from '../model/sort';
 import { useGuestbookFeed } from '../model/useGuestbookFeed';
 import { GuestbookCard } from './GuestbookCard';
 import { GuestbookDetailModal } from './GuestbookDetailModal';
+import { GuestbookFeedSkeleton } from './GuestbookFeedSkeleton';
 
 const FEED_TITLE = '방명록';
 const FEED_SUBTITLE = '여행자들이 남긴 흔적을 발견하세요';
@@ -21,7 +22,7 @@ const CATEGORY_TABS: { value: FeedFilterValue; label: string }[] = [
   { value: 'weather', label: '🌤 날씨' },
 ];
 
-const SORT_OPTIONS: SortOption[] = ['latest', 'visited'];
+const SORT_OPTIONS: SortOption[] = ['latest', 'popular', 'mine', 'liked'];
 
 function isSameLocationFilter(a: LocationFilterValue, b: LocationFilterValue): boolean {
   if (a.type !== b.type) return false;
@@ -29,30 +30,12 @@ function isSameLocationFilter(a: LocationFilterValue, b: LocationFilterValue): b
   return true;
 }
 
-function GuestbookHeader({ onlyMine, onToggleOnlyMine }: { onlyMine: boolean; onToggleOnlyMine: () => void }) {
+function GuestbookHeader() {
   return (
     <div className="relative flex w-full flex-col gap-1 px-4 pb-3.5" style={{ paddingTop: `calc(var(--safe-area-top) + 16px)` }}>
-      <button
-        type="button"
-        onClick={onToggleOnlyMine}
-        aria-label="내가 작성한 방명록만 보기"
-        aria-pressed={onlyMine}
-        className="bg-cool-neutral-700 absolute right-4 flex h-9 w-9 items-center justify-center rounded-full"
-        style={{ top: `calc(var(--safe-area-top) + 12px)` }}
-      >
-        <HeartIcon filled={onlyMine} />
-      </button>
       <h1 className="text-heading-h3 text-cool-neutral-white font-semibold">{FEED_TITLE}</h1>
       <p className="text-body-md text-cool-neutral-white">{FEED_SUBTITLE}</p>
     </div>
-  );
-}
-
-function HeartIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill={filled ? '#FF6B6B' : 'none'} stroke={filled ? '#FF6B6B' : '#ffffff'} strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 21s-6.7-4.35-9.3-8.2C.6 9.7 1.4 6 4.6 4.7 7 3.7 9.4 4.6 12 7.3c2.6-2.7 5-3.6 7.4-2.6 3.2 1.3 4 5 1.9 8.1C18.7 16.65 12 21 12 21z" />
-    </svg>
   );
 }
 
@@ -151,19 +134,19 @@ function GuestbookFeed({ cards, onSelect }: { cards: ReturnType<typeof useGuestb
   );
 }
 
-export function GuestbookFeedView() {
-  const { isLoading, isError, cards, orderedGuestbooks, locationOptions, locationFilter, setLocationFilter, cardTypeFilter, setCardTypeFilter, sortOption, setSortOption, onlyMine, setOnlyMine } =
-    useGuestbookFeed();
+export function GuestbookFeedView({ seedLocationTitle = null }: { seedLocationTitle?: string | null }) {
+  const { isLoading, isError, cards, orderedGuestbooks, locationOptions, locationFilter, setLocationFilter, cardTypeFilter, setCardTypeFilter, sortOption, setSortOption } =
+    useGuestbookFeed(seedLocationTitle);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   return (
     <div className="bg-cool-neutral-900 flex w-full flex-col">
-      <GuestbookHeader onlyMine={onlyMine} onToggleOnlyMine={() => setOnlyMine((prev) => !prev)} />
+      <GuestbookHeader />
       <FilterChips locationOptions={locationOptions} locationFilter={locationFilter} onChange={setLocationFilter} />
       <CategoryTabs cardTypeFilter={cardTypeFilter} onChange={setCardTypeFilter} />
       <SortBar sortOption={sortOption} onChange={setSortOption} />
       {isLoading ? (
-        <p className="text-body-sm text-cool-neutral-white w-full px-4 py-12 text-center">불러오는 중...</p>
+        <GuestbookFeedSkeleton />
       ) : isError ? (
         <p className="text-body-sm text-cool-neutral-white w-full px-4 py-12 text-center">방명록을 불러오지 못했어요. 다시 시도해주세요</p>
       ) : (

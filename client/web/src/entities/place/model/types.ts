@@ -1,12 +1,13 @@
 import type { GeneratedApi } from '@packages/shared';
 import type { Coordinates } from '@shared/config/geo';
+import type { MapContentsLocation } from '@shared/api/mapContents';
 
 export type { Coordinates };
 
 export type MapMissionType = Extract<GeneratedApi.AppMissionModelsMissionType, 'TREASURE' | 'COOPERATIVE'>;
 
-// GET /api/v1/map/contents(isClustered=false) 응답의 location 하나 — 개별 마커(detail 티어)에서 쓴다.
-// treasureMission/cooperativeMission 중 있는 쪽 하나를 mission으로 정규화한다(한 장소엔 미션이 최대 하나).
+// GET /api/v2/map/contents(isClustered=false) 응답의 location 하나 — 개별 마커(detail 티어)에서 쓴다.
+// 서버의 단일 mission 필드를 지도 마커가 사용하는 형태로 변환한다.
 export type PlaceLocation = {
   id: number;
   coords: Coordinates;
@@ -16,6 +17,13 @@ export type PlaceLocation = {
   mission: PlaceLocationMission | null;
   guestbooksCount: number;
   representativeImageUrl: string | null;
+  receivedCoupons: PlaceReceivedCoupon[];
+};
+
+// GET /api/v2/map/contents에서 해당 장소에 연결된 현재 사용자의 수령 쿠폰이다.
+export type PlaceReceivedCoupon = {
+  couponPrice: number;
+  locationAddress: string;
 };
 
 export type PlaceLocationMission = {
@@ -26,7 +34,7 @@ export type PlaceLocationMission = {
   hasWrittenGuestbook: boolean | null;
 };
 
-// GET /api/v1/map/contents(isClustered=true) 응답의 location 하나 — wide 티어에서 좌표·미션유형만으로 클러스터링한다.
+// GET /api/v2/map/contents(isClustered=true) 응답의 location 하나 — wide 티어에서 좌표·미션유형만으로 클러스터링한다.
 export type ClusteredPlaceLocation = {
   id: number;
   coords: Coordinates;
@@ -45,16 +53,17 @@ function toMission(mission: GeneratedApi.MapMissionResponse | null | undefined, 
   };
 }
 
-export function toPlaceLocation(location: GeneratedApi.MapLocationResponse): PlaceLocation {
+export function toPlaceLocation(location: MapContentsLocation): PlaceLocation {
   return {
     id: location.id,
     coords: { lat: location.latitude, lng: location.longitude },
     locationTitle: location.locationTitle,
     distanceMeter: location.distanceMeter,
     durationMinutes: location.durationMinutes,
-    mission: toMission(location.treasureMission, 'TREASURE') ?? toMission(location.cooperativeMission, 'COOPERATIVE'),
+    mission: location.mission ? toMission(location.mission, location.mission.missionType) : null,
     guestbooksCount: location.guestbooksCount ?? 0,
     representativeImageUrl: location.representativeImageUrl ?? null,
+    receivedCoupons: (location.receivedCoupons ?? []).map((coupon) => ({ couponPrice: coupon.couponPrice, locationAddress: coupon.locationAddress })),
   };
 }
 

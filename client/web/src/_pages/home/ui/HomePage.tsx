@@ -1,33 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MISSION_ROUTE_BY_TYPE, type GeneratedApi, type HomeMissionCard, type MissionRoute } from '@packages/shared';
-import { toAddressUnit, useCurrentAddress, useCurrentCoords, useDisplayLocation, useJudgeModeAppSync, useJudgeModeStore, useLocationBridge } from '@entities/location';
+import { useAddressDisplay, useDisplayLocation, useJudgeModeAppSync, useJudgeModeStore, useLocationBridge, type AddressDisplay } from '@entities/location';
 import { useStepCount } from '@features/app-bridge';
 import { JudgeCodeModal, JudgeModeShortcut } from '@features/judge-mode';
 // [보류] 위치 직접 입력(AddressModal)과 함께 잠시 꺼 둔다 — 아래 AddressModal 주석 참고
 // import { useSearchPlaces, type SearchResultPlace } from '@features/map-search';
 import { sendToApp } from '@shared/lib/bridge/utils';
+import { Skeleton, SkeletonGroup } from '@shared/ui/skeleton';
 import { Toast } from '@shared/ui/Toast';
+import { getJejuDaylightServerSnapshot, getJejuDaylightSnapshot, subscribeJejuDaylight } from '../model/jejuDaylight';
 import { useHomeData } from '../model/useHomeData';
 import homeBackImage from '@shared/lib/images/home-back-image.png';
-import homeMapImage from '@shared/lib/images/home-map-image.png';
+import homeBackImageNight from '@shared/lib/images/home-back-image3.png';
 import homeTravelNoteIcon from '@shared/lib/images/home-travelnote-icon.png';
-import homeTodoIcon from '@shared/lib/images/home-todo-icon.png';
+import aiCardIcon from '@shared/lib/images/aiCard.png';
 import homeLogoLocationIcon from '@shared/lib/images/home_logo_location_icon.png';
 import homeMyLocationIcon from '@shared/lib/images/home_my_location_icon.png';
 import missionBannerCulture from '@shared/lib/images/mission-banner-culture.png';
 import missionBannerCoop from '@shared/lib/images/mission-banner-coop.png';
 import missionBannerTreasure from '@shared/lib/images/mission-banner-treasure.png';
 import { NavMenuButton, NavMenuModal } from '@widgets/nav-menu';
-
-type TodoItem = {
-  id: string;
-  title: string;
-  description: string;
-};
 
 // 배너 굵은 한 줄(Frame 619의 아래 텍스트)은 서버가 주지 않는 디자인 카피라 미션 종류로 매핑한다.
 // 문구는 "탐라로그 V2 / 배너" 세 variant에서 그대로 가져왔다
@@ -63,14 +59,11 @@ function projectCoordsToMapImage(coords: { lat: number; lng: number }) {
 }
 
 const mock = {
+  // **확정된 실패**에만 쓴다 — 권한 거부/차단, 좌표→주소 변환 실패, 앱 밖 실행.
+  // 아직 모르는 구간(권한 응답 전·측위 전·변환 중)은 자리표시로 둔다(AddressLabel).
   addressFallback: '위치를 확인할 수 없어요',
   missionStatusLabel: '진행중인 미션',
-  todoUnreadCount: 7,
   exploreMapLabel: '지도에서 보기',
-  todoList: [
-    { id: 'guestbook', title: '방명록 작성하기', description: '미션 완료! 아직 방명록을 남기지 않았어요.' },
-    { id: 'ai-postcard', title: 'AI 엽서 만들기', description: '추억을 엽서로 만들어보세요!' },
-  ] satisfies TodoItem[],
   // [보류] 위치 직접 입력 모달의 문구. AddressModal과 함께 잠시 꺼 둔다
   // addressModal: {
   //   title: '위치 선택해주세요',
@@ -81,61 +74,11 @@ const mock = {
   // },
 };
 
-// 화면 전체(배경+지도+전경 UI) 핀치(터치) 확대. 제스처가 끝나면 즉시 scale 1로 bounce 복귀하며, 확대 상태는 유지되지 않음. 확대만 가능(축소 불가)
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 2.2;
-const BOUNCE_TRANSITION = 'transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1)';
-
-function useBounceZoom() {
-  const [scale, setScale] = useState(1);
-  const [isGesturing, setIsGesturing] = useState(false);
-  const pinchStartDistanceRef = useRef<number | null>(null);
-
-  function getTouchDistance(touches: ReactTouchEvent<HTMLDivElement>['touches']) {
-    const [a, b] = [touches[0], touches[1]];
-    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-  }
-
-  function handleTouchStart(e: ReactTouchEvent<HTMLDivElement>) {
-    if (e.touches.length !== 2) return;
-    pinchStartDistanceRef.current = getTouchDistance(e.touches);
-    setIsGesturing(true);
-  }
-
-  function handleTouchMove(e: ReactTouchEvent<HTMLDivElement>) {
-    if (e.touches.length !== 2 || pinchStartDistanceRef.current === null) return;
-    const distance = getTouchDistance(e.touches);
-    setScale(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, distance / pinchStartDistanceRef.current)));
-  }
-
-  function handleTouchEnd(e: ReactTouchEvent<HTMLDivElement>) {
-    if (e.touches.length >= 2) return;
-    pinchStartDistanceRef.current = null;
-    setIsGesturing(false);
-    setScale(1);
-  }
-
-  return {
-    style: {
-      transform: `scale(${scale})`,
-      transition: isGesturing ? 'none' : BOUNCE_TRANSITION,
-    },
-    gestureHandlers: {
-      onTouchStart: handleTouchStart,
-      onTouchMove: handleTouchMove,
-      onTouchEnd: handleTouchEnd,
-      onTouchCancel: handleTouchEnd,
-    },
-  };
-}
-
 export function HomePage() {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // [보류] 위치 직접 입력 모달 — 아래 AddressModal 주석 참고
   // const [isAddressOpen, setIsAddressOpen] = useState(false);
-  const [isTodoListOpen, setIsTodoListOpen] = useState(false);
-  const bounceZoom = useBounceZoom();
 
   // 같은 문구를 연달아 띄울 수 있어야 해서 id를 함께 들고, 그 id를 key로 Toast를 다시 마운트한다
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
@@ -143,8 +86,26 @@ export function HomePage() {
   const enableJudgeMode = useJudgeModeStore((s) => s.enable);
   const disableJudgeMode = useJudgeModeStore((s) => s.disable);
   const [isJudgeCodeOpen, setIsJudgeCodeOpen] = useState(false);
+  // 심사위원 모드 전환 연출이 언제 끝나야 하는지 판단할 근거 — 같은 쿼리라 캐시를 공유한다
+  const { isPending: isHomePending } = useHomeData();
   // Toast의 타이머가 HomePage 리렌더마다 처음부터 다시 돌지 않도록 참조를 고정한다
   const handleToastDone = useCallback(() => setToast(null), []);
+
+  // 배경을 일출~일몰이면 낮, 아니면 밤(노을)로 바꾼다. 화면을 켜둔 채 경계 시각을 넘는 경우도
+  // 스토어가 1분마다 확인해 따라온다(jejuDaylight.ts).
+  //
+  // 렌더 중에 시각을 읽지 않는 이유가 핵심이다 — 홈은 force-dynamic(app/page.tsx)이라 서버가
+  // 요청마다 실제 시각으로 다시 그리지만, `useState(() => ...new Date())`로 두면 서버와 기기가
+  // 각자 렌더링되는 시각에 부르게 돼 값이 어긋날 수 있다. 외부 스토어로 서버·기기 스냅샷을
+  // 각각 한 번씩 고정해 hydration 불일치를 막는다.
+  const isDaytime = useSyncExternalStore(subscribeJejuDaylight, getJejuDaylightSnapshot, getJejuDaylightServerSnapshot);
+
+  // 모드변경 코드칸에 "night"/"day"를 입력하면 임시로 배경을 바꿔 보는 개발용 우회로 —
+  // 컴포넌트 state라 다른 페이지로 이동하면(언마운트) 자동으로 초기화된다.
+  const [backgroundPreview, setBackgroundPreview] = useState<'day' | 'night' | null>(null);
+  const effectiveIsDaytime = backgroundPreview === null ? isDaytime : backgroundPreview === 'day';
+  const backgroundImage = effectiveIsDaytime ? homeBackImage : homeBackImageNight;
+  const isNight = !effectiveIsDaytime;
 
   // Home 진입 시 앱에 위치 권한을 요청하고, 이후 들어오는 권한/좌표 갱신을 스토어에 반영한다.
   // WebView 밖(일반 브라우저)에서는 sendToApp/listenFromApp 모두 no-op이라 그대로 마운트해도 안전하다.
@@ -169,16 +130,19 @@ export function HomePage() {
     setIsJudgeCodeOpen(true);
   }
 
+  /**
+   * 코드가 맞았다. **모달은 여기서 닫지 않는다** — 모드를 켜는 순간 홈이 새 계정으로 다시 조회하는데,
+   * 모달이 바로 사라지면 그 과정이 그대로 노출된다(사용자 지적: 빈 화면이 채워지는 느낌).
+   * 모달이 "입장 중"으로 남아 있다가 조회가 끝나면 스스로 onClose를 부른다(judgeTransition.ts).
+   */
   function handleJudgeCodeSuccess() {
     enableJudgeMode();
-    setIsJudgeCodeOpen(false);
     setToast({ id: Date.now(), message: JUDGE_MODE_ON_MESSAGE });
   }
 
   return (
     <>
-      {/* 핀치(터치) 줌 제스처 감지 영역 — 지도·UI 레이어까지 전부 감싸는 최상위에 둬야 그 위에서 발생하는 터치도 잡힘. touchAction:none으로 브라우저 기본 핀치줌과 충돌 방지 */}
-      <div className="bg-cool-neutral-white relative h-dvh w-full overflow-hidden" style={{ touchAction: 'none' }} {...bounceZoom.gestureHandlers}>
+      <div className="bg-cool-neutral-white relative h-dvh w-full overflow-hidden">
         <svg className="absolute h-0 w-0" aria-hidden="true">
           <defs>
             <filter id="ocean-ripple" x="-20%" y="-20%" width="140%" height="140%">
@@ -200,40 +164,45 @@ export function HomePage() {
           </defs>
         </svg>
 
-        {/* 배경+지도+전경 UI 전부를 함께 확대 — 핀치 확대 시 화면 전체가 하나로 커졌다가 bounce 복귀 */}
-        <div className="absolute inset-0" style={bounceZoom.style}>
+        <div className="absolute inset-0">
           {/* 배경 레이어 — 뷰포트 전체 폭을 채움(모바일 프레임에 가두지 않음) */}
           <div className="absolute inset-0 overflow-hidden">
-            {/* 정적 배경(하늘 포함 전체) */}
-            <Image src={homeBackImage} alt="" aria-hidden="true" fill priority sizes="100vw" className="animate-ken-burns object-cover motion-reduce:animate-none" />
+            {/* 정적 배경(하늘 포함 전체) — 일출~일몰이면 낮, 아니면 밤(노을) 이미지.
+                Ken Burns 확대/이동(animate-ken-burns)은 잠시 꺼 둔다 — scale이 가로까지 키워
+                좌우가 잘리는 문제가 있었다. 키프레임(globals.css)은 그대로 둬서 className에
+                다시 붙이기만 하면 되살아난다. objectPosition은 중앙(50%)에서 46px만큼 위로
+                당겨서, 화면 중앙에 오던 배경 중심을 그만큼 위로 옮긴다. */}
+            <Image src={backgroundImage} alt="" aria-hidden="true" fill priority sizes="100vw" className="object-cover" style={{ objectPosition: 'center calc(50% - 46px)' }} />
 
-            {/* 파도 레이어 — 동일 이미지를 겹쳐 상단 75%부터(수평선 아래)만 노출, 하늘은 정적 유지 */}
+            {/* 파도 레이어 — 동일 이미지를 겹쳐 상단 75%부터(수평선 아래)만 노출, 하늘은 정적 유지.
+                출렁임(filter-[url(#ocean-ripple)])도 같은 이유로 잠시 꺼 둔다 — SVG 필터 정의(위 defs)는
+                그대로 둬서 className에 다시 붙이기만 하면 되살아난다. 위 레이어와 같은 objectPosition을
+                써야 두 레이어가 어긋나지 않고 겹친다. */}
             <div className="absolute inset-0" style={{ clipPath: 'inset(30% 0 0 0)' }}>
-              <Image
-                src={homeBackImage}
-                alt=""
-                aria-hidden="true"
-                fill
-                priority
-                sizes="100vw"
-                className="animate-ken-burns object-cover filter-[url(#ocean-ripple)] motion-reduce:animate-none motion-reduce:filter-none"
-              />
+              <Image src={backgroundImage} alt="" aria-hidden="true" fill priority sizes="100vw" className="object-cover" style={{ objectPosition: 'center calc(50% - 46px)' }} />
             </div>
           </div>
 
+          {/* 지도가 이제 배경 이미지에 섬 그림으로 포함돼 있어(home-back-image.png/3.png), 별도
+              지도 이미지는 안 그린다. 이 박스는 화면엔 안 보이는 "좌표 기준 틀"로만 쓰인다 —
+              배경 속 섬이 이미지 정중앙에 있어 object-cover로 잘려도 항상 화면 정중앙에 오는 걸
+              이용해, 예전 지도 이미지와 같은 중앙 정렬 방식을 그대로 재사용한다. w-[74%]와
+              aspect 비율은 섬을 눈대중으로 잰 추정치라 실기기에서 마커가 섬과 어긋나면 조정할 것.
+              이 박스 자체는 옮기지 않는다 — "지도에서 보기" 버튼이 이 박스 바닥(top-full) 기준이라
+              박스를 옮기면 버튼까지 같이 움직인다(사용자가 원치 않음). 배경만 위로 46px 옮겼으니
+              마커에만 같은 보정치를 넘겨 그만큼 따로 올린다(래핑 div로 감싸면 그 div가 새 위치
+              기준점이 되어 %기반 left/top이 깨지므로, 마커 자신의 transform에 얹는 방식을 쓴다). */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative w-[90%]">
-              <Image src={homeMapImage} alt="제주도 지도" className="h-auto w-full" priority />
-
-              <UserLocationMarker />
+            <div className="relative aspect-[1536/1024] w-[74%]">
+              <UserLocationMarker extraOffsetY={46} />
 
               <button
                 type="button"
                 onClick={() => router.push('/map')}
-                className="bg-cool-neutral-white/20 border-cool-neutral-white/40 text-label-sm text-warm-neutral-900 absolute top-full left-1/2 -mt-4 flex -translate-x-1/2 items-center gap-2 rounded-full border px-2.5 py-2 font-medium whitespace-nowrap shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md"
+                className={`bg-cool-neutral-white/20 border-cool-neutral-white/40 text-label-sm absolute top-full left-1/2 -mt-4 flex -translate-x-1/2 items-center gap-2 rounded-full border px-2.5 py-2 font-medium whitespace-nowrap shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md ${isNight ? 'text-cool-neutral-white' : 'text-warm-neutral-900'}`}
               >
                 <span>{mock.exploreMapLabel}</span>
-                <ChevronRightIcon />
+                <ChevronRightIcon className={isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'} />
               </button>
             </div>
           </div>
@@ -242,28 +211,31 @@ export function HomePage() {
               투명한 영역까지 전부 클릭을 가로채 아래 지도 레이어("지도에서 보기" 버튼 등)를 못 누르게 되므로,
               프레임 자체는 pointer-events-none으로 뚫어두고 실제 UI가 있는 자식들만 pointer-events-auto로 되살린다. */}
           <div className="pointer-events-none relative h-full w-full">
-            <TopBar />
+            <TopBar isNight={isNight} />
 
-            <MissionProgressCard />
+            <MissionProgressCard isNight={isNight} />
 
             {/* 모드변경은 방명록·할 일과 같은 줄이지만 화면 **가장 왼쪽**에 선다(디자인 home_3 > Frame 628: boardX 18, boardY 157).
-                top의 113은 boardY 157에서 상태바 44를 뺀 값이다 — 이 화면의 다른 절대배치와 같은 규칙(TopBar 44→0, 미션카드 89→45).
-                아이콘 슬롯이 40이라 형제(원 47)보다 짧지만, 디자인도 아이콘 중심(y=177)을 원 중심(y=177.5)에 맞춘 배치다. */}
-            <div className="pointer-events-auto absolute" style={{ left: 18, top: `calc(var(--safe-area-top) + 113px)` }}>
-              <JudgeModeShortcut onClick={handleJudgeModePress} />
+                top 106은 디자인 그대로가 아니라, 미션 카드(바닥 82) ↔ 방명록·AI엽서 원(top 102) 간격을 20px로 맞추면서
+                형제(원 47)와의 4px 간격(아이콘 슬롯 40 vs 원 47, 중심을 맞추기 위한 오프셋)을 그대로 유지한 값이다. */}
+            <div className="pointer-events-auto absolute" style={{ left: 18, top: `calc(var(--safe-area-top) + 106px)` }}>
+              <JudgeModeShortcut onClick={handleJudgeModePress} isNight={isNight} />
             </div>
 
-            <div className="pointer-events-auto absolute flex gap-4" style={{ right: 16, top: `calc(var(--safe-area-top) + 109px)` }}>
-              <TravelNoteShortcut />
-              <TodoShortcut onClick={() => setIsTodoListOpen(true)} />
+            {/* 미션 카드 바닥(82)에서 20px 떨어지도록 top을 112→102로 조정했다(사용자 요청).
+                할 일 숏컷은 원격 커밋(qa: 홈 할 일 숏컷 AI엽서 교체)에서 AI엽서 바로가기로 교체됨 —
+                병합 시 밤모드 흰 글자 지원만 이어서 추가했다. */}
+            <div className="pointer-events-auto absolute flex gap-4" style={{ right: 16, top: `calc(var(--safe-area-top) + 102px)` }}>
+              <TravelNoteShortcut isNight={isNight} />
+              <AiPostcardShortcut isNight={isNight} />
             </div>
 
             {/* 화면 끝에서 떠 있는 하단 UI라 디자인 여백(24px)에 안전영역을 더한다.
                 --safe-area-bottom은 앱 WebView에서 항상 0이다(하단 inset은 앱 루트 레이아웃이 네이티브에서 처리).
                 브라우저·iOS 단독 실행에서 홈 인디케이터가 있을 때만 값이 들어온다 */}
             <div className="pointer-events-auto absolute right-4 left-4" style={{ bottom: `calc(24px + var(--safe-area-bottom))` }}>
-              {/* pin */}
-              <NavMenuButton isOpen={isMenuOpen} onClick={() => setIsMenuOpen(true)} className="absolute" style={{ left: 10, top: -90 }} />
+              {/* pin — top -92: 버튼(h-16=64) 아래쪽과 추천 미션 배너 사이 간격을 28px로 맞춘 값(-92+64=-28) */}
+              <NavMenuButton isOpen={isMenuOpen} onClick={() => setIsMenuOpen(true)} className="absolute" style={{ left: 10, top: -92 }} />
 
               <MissionCarousel />
             </div>
@@ -273,12 +245,12 @@ export function HomePage() {
 
       {isMenuOpen && <NavMenuModal onClose={() => setIsMenuOpen(false)} />}
 
-      {isJudgeCodeOpen && <JudgeCodeModal onClose={() => setIsJudgeCodeOpen(false)} onSuccess={handleJudgeCodeSuccess} />}
+      {/* isReady: 모드를 켠 뒤 홈 재조회가 끝났는지. 모달이 직접 useHomeData를 부르면
+          features가 _pages를 import하게 되어 FSD가 깨지므로 여기서 내려준다 */}
+      {isJudgeCodeOpen && <JudgeCodeModal onClose={() => setIsJudgeCodeOpen(false)} onSuccess={handleJudgeCodeSuccess} isReady={!isHomePending} onBackgroundPreview={setBackgroundPreview} />}
 
       {/* [보류] 상단 주소 텍스트 탭 시 하단에서 올라오는 home_ModalBg 모달 — home_1/2/3 세 초안에 동일하게 등장함(각자 파일에 동일 내용으로 중복 구현). 최종 초안 확정 후 공용 컴포넌트로 추출 고려 대상 */}
       {/* {isAddressOpen && <AddressModal onClose={() => setIsAddressOpen(false)} />} */}
-
-      {isTodoListOpen && <TodoListModal onClose={() => setIsTodoListOpen(false)} />}
 
       {toast && <Toast key={toast.id} message={toast.message} onDone={handleToastDone} />}
     </>
@@ -288,20 +260,18 @@ export function HomePage() {
 const JUDGE_MODE_ON_MESSAGE = '심사위원용 모드입니다';
 const JUDGE_MODE_OFF_MESSAGE = '기본 모드로 돌아왔습니다';
 
-function TopBar() {
+function TopBar({ isNight }: { isNight: boolean }) {
   const router = useRouter();
   // 앱이 STEP_COUNT_UPDATE를 보내기 전에는 직전에 저장해 둔 값, 그것도 없으면 0이다.
   // 예전에는 목업 문구("8,432걸음")로 폴백했는데, 실제와 무관한 숫자가 진짜처럼 보였다(useStepCount).
   const steps = useStepCount();
   const stepsLabel = `${steps.toLocaleString('ko-KR')}걸음`;
 
-  // 카카오맵 Geocoder로 현재 좌표를 주소 문자열로 역변환한다.
-  // useDisplayLocation()의 coords는 "제주 지도에 뭘 그릴지" 기준이라 제주 밖이면 null이 되는데,
-  // 주소는 제주 밖에서도 보여줘야 하므로 그 판정을 거치지 않는 useCurrentCoords()를 쓴다.
-  const currentCoords = useCurrentCoords();
-  const { data: address } = useCurrentAddress(currentCoords, true);
-  // 번지·건물번호까지 붙으면 길이가 위치마다 달라져 한 줄 라벨이 옆 요소를 밀어낸다(toAddressUnit)
-  const addressLabel = address ? toAddressUnit(address) : mock.addressFallback;
+  // 카카오맵 Geocoder로 현재 좌표를 주소 문자열로 역변환한다. 좌표·권한·변환 결과를
+  // "아직 모름 / 찾을 수 없음 / 찾음" 세 갈래로 접는 규칙은 entities/location의 addressDisplay에 있다 —
+  // 예전에는 주소 문자열이 없으면 무조건 실패 문구였고, 그래서 홈이 뜰 때마다 정상 경로에서도
+  // "위치를 확인할 수 없어요"가 먼저 떴다가 주소로 바뀌었다(사용자 지적).
+  const addressDisplay = useAddressDisplay();
 
   // 디자인의 top 44는 상태바(44) 바로 아래라는 뜻이라, 실제 inset이 그 44를 대체한다
   return (
@@ -309,15 +279,14 @@ function TopBar() {
       {/* 주소는 표시 전용이다. 예전에는 여기를 3초 꾹 눌러 위치 직접 입력 모달을 열었는데,
           그 모달은 기획 논의가 끝나지 않아 보류되고 제스처는 하단 메뉴 아이콘으로 옮겼다. */}
       <div className="flex items-center gap-1">
-        <Image src={homeLogoLocationIcon} alt="" aria-hidden="true" className="h-4 w-4 object-contain" />
-        <span className="text-label-md text-warm-neutral-900 font-medium">{addressLabel}</span>
-        <ChevronDownIcon />
+        <Image src={homeLogoLocationIcon} alt="" aria-hidden="true" className="h-7.5 w-7 object-contain" />
+        <AddressLabel display={addressDisplay} isNight={isNight} />
       </div>
 
       <button
         type="button"
         onClick={() => router.push('/mypage')}
-        className="bg-cool-neutral-white/20 border-cool-neutral-white/40 text-label-sm text-primary-900 flex h-7 items-center rounded-full border px-3 py-1 font-medium shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md"
+        className={`bg-cool-neutral-white/20 border-cool-neutral-white/40 text-label-sm flex h-7.5 items-center rounded-full border px-3 py-1 font-medium shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md ${isNight ? 'text-cool-neutral-white' : 'text-primary-900'}`}
       >
         {stepsLabel}
       </button>
@@ -325,20 +294,36 @@ function TopBar() {
   );
 }
 
-// 진행중인 미션이 여러 개일 때 자동으로 다음 카드로 넘어가는 간격.
-const MISSION_PROGRESS_AUTO_ADVANCE_MS = 4000;
+/**
+ * 상단 주소 라벨.
+ *
+ * **아직 모르는 구간에 실패 문구를 쓰지 않는다**(entities/location의 addressDisplay 주석).
+ * 자리표시는 캐러셀 스켈레톤과 같은 기법(`animate-pulse`)을 쓰되, 하늘 그림 위라 보이도록
+ * 흰색 계열로 둔다. 폭을 행정동 이름 길이(약 5~8자)에 맞춰 고정해 주소가 도착할 때 옆의
+ * 셰브론이 크게 밀리지 않게 한다 — 실패 문구(12자)로 채우던 예전이 더 크게 밀었다.
+ */
+function AddressLabel({ display, isNight }: { display: AddressDisplay; isNight: boolean }) {
+  if (display.state === 'loading') {
+    return (
+      <span role="status" aria-label="위치를 확인하는 중">
+        <Skeleton tone="onDark" className="my-1 h-3.5 w-20" />
+      </span>
+    );
+  }
 
-function MissionProgressCard() {
+  const label = display.state === 'resolved' ? display.label : mock.addressFallback;
+  return <span className={`text-label-md font-medium ${isNight ? 'text-cool-neutral-white' : 'text-warm-neutral-900'}`}>{label}</span>;
+}
+
+// 진행중인 미션이 여러 개일 때 자동으로 다음 카드로 넘어가는 간격.
+// 4초는 미션 제목을 다 읽기 전에 넘어간다는 지적이 있어 7초로 늘렸다 —
+// 더 늘리면 카드가 여러 장이라는 사실 자체를 눈치채기 어려워진다(아래 인디케이터도 지웠으므로).
+const MISSION_PROGRESS_AUTO_ADVANCE_MS = 7000;
+
+function MissionProgressCard({ isNight }: { isNight: boolean }) {
   const { progressMissions, isPending } = useHomeData();
-  const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
-
-  function handleScroll() {
-    const el = scrollRef.current;
-    if (!el) return;
-    setActiveIndex(Math.round(el.scrollLeft / el.clientWidth));
-  }
 
   // 자동 넘김 — 카드가 2장 이상일 때만. 매 tick마다 현재 스크롤 위치를 기준으로 다음 칸을 계산해서,
   // 사용자가 직접 민 위치에서도 자연스럽게 이어서 순환한다.
@@ -376,55 +361,80 @@ function MissionProgressCard() {
     const el = scrollRef.current;
     if (!el || dragRef.current?.pointerId !== e.pointerId) return;
     dragRef.current = null;
+    // 잡아 둔 포인터는 반드시 놓는다 — 남겨 두면 같은 포인터를 쓰는 다른 곳(개발 오버레이 등)이 어긋난다
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
     el.style.scrollBehavior = '';
   }
 
-  // 진행중인 미션이 없으면(응답 전 포함) 카드 자체를 숨긴다 — MissionCarousel과 동일한 패턴.
-  if (isPending || progressMissions.length === 0) return null;
+  // 응답 전에는 자리(고정 높이 37)만 잡고 내용은 스켈레톤으로 — 바로 위 배너(MissionCarousel)와
+  // 처리를 맞춘다. 이전에는 return null이라 데이터가 오는 순간 카드가 뿅 하고 나타났다.
+  if (isPending) return <MissionProgressSkeleton />;
 
-  // 카드가 줄어드는 순간(미션을 끝내고 홈을 다시 조회한 직후) activeIndex가 목록 밖을 가리켜
-  // 활성 점이 하나도 없는 프레임이 생긴다. 스크롤 위치가 접히면서 onScroll이 곧 바로잡지만,
-  // 그 한 프레임을 없애려고 그릴 때 한 번 더 접는다.
-  const activeDotIndex = Math.min(activeIndex, progressMissions.length - 1);
+  // 진행중인 미션이 없으면 "0/0 | 여행을 시작해보세요." 안내 카드를 대신 보여준다.
+  if (progressMissions.length === 0) return <MissionProgressPlaceholder isNight={isNight} />;
 
-  // 디자인 top 89 = 상태바 44 + 45. inset이 44를 대체하고 45만 더한다
+  // 디자인 top 89 = 상태바 44 + 45. inset이 44를 대체하고 45만 더한다.
+  //
+  // 카드 아래 점 인디케이터는 사용자 요청으로 지웠다. 절대 배치(top 85)라 자리를 차지하지 않았으므로
+  // 아래 요소들의 간격은 그대로다. 점은 pointer-events-none 장식이고 aria도 없어서
+  // 스크린 리더에 알려 주던 정보가 없다 — aria-*로 대체할 것이 없다.
   return (
-    <div>
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onDragStart={(e) => e.preventDefault()}
-        className="pointer-events-auto absolute right-4 left-4 flex snap-x snap-mandatory scrollbar-none overflow-x-auto scroll-smooth select-none [&::-webkit-scrollbar]:hidden"
-        style={{ top: `calc(var(--safe-area-top) + 45px)`, height: 37 }}
-      >
-        {/* missionId는 유형별 테이블의 id라 유형이 다르면 값이 겹친다 — 추천 카드와 같은 복합 키를 쓴다
-              (packages/shared의 missionCard.ts에 같은 주석·같은 규칙이 있다) */}
-        {progressMissions.map((mission) => (
-          <div key={`${mission.missionType}-${mission.missionId}`} className="w-full shrink-0 snap-center">
-            <MissionProgressButton mission={mission} />
-          </div>
-        ))}
-      </div>
-
-      {progressMissions.length > 1 && (
-        <div className="pointer-events-none absolute right-4 left-4 flex items-center justify-center gap-0.75" style={{ top: `calc(var(--safe-area-top) + 85px)` }}>
-          {progressMissions.map((mission, index) => (
-            <span
-              key={`${mission.missionType}-${mission.missionId}`}
-              className={`h-1 rounded-full transition-all ${index === activeDotIndex ? 'bg-cool-neutral-white w-3' : 'bg-cool-neutral-white/50 w-1'}`}
-            />
-          ))}
+    <div
+      ref={scrollRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onDragStart={(e) => e.preventDefault()}
+      className="pointer-events-auto absolute right-4 left-4 flex snap-x snap-mandatory scrollbar-none overflow-x-auto scroll-smooth select-none [&::-webkit-scrollbar]:hidden"
+      style={{ top: `calc(var(--safe-area-top) + 45px)`, height: 37 }}
+    >
+      {/* missionId는 유형별 테이블의 id라 유형이 다르면 값이 겹친다 — 추천 카드와 같은 복합 키를 쓴다
+            (packages/shared의 missionCard.ts에 같은 주석·같은 규칙이 있다) */}
+      {progressMissions.map((mission) => (
+        <div key={`${mission.missionType}-${mission.missionId}`} className="w-full shrink-0 snap-center">
+          <MissionProgressButton mission={mission} isNight={isNight} />
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
-function MissionProgressButton({ mission }: { mission: GeneratedApi.ProgressMission }) {
+function MissionProgressSkeleton() {
+  return (
+    <SkeletonGroup
+      className="bg-cool-neutral-white/20 border-cool-neutral-white/40 absolute right-4 left-4 flex h-full items-center gap-4 rounded-md border px-3 py-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md"
+      style={{ top: `calc(var(--safe-area-top) + 45px)`, height: 37 }}
+    >
+      <Skeleton tone="onDark" className="h-3.5 w-24" />
+      <Skeleton tone="onDark" className="h-3.5 flex-1" />
+    </SkeletonGroup>
+  );
+}
+
+function MissionProgressPlaceholder({ isNight }: { isNight: boolean }) {
+  return (
+    <div
+      className="bg-cool-neutral-white/20 border-cool-neutral-white/40 absolute right-4 left-4 flex h-full items-center justify-between rounded-md border px-3 py-2.5 shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md"
+      style={{ top: `calc(var(--safe-area-top) + 45px)`, height: 37 }}
+    >
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1">
+          <span aria-hidden="true" className={`text-label-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'}`}>
+            🚩
+          </span>
+          <span className={`text-label-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'}`}>{mock.missionStatusLabel}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isNight ? 'bg-cool-neutral-600 text-cool-neutral-white' : 'bg-primary-50 text-cool-neutral-800'}`}>0/0</span>
+        </div>
+        <span className="bg-cool-neutral-500 h-[8.5px] w-px" aria-hidden="true" />
+        <span className={`text-body-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-700'}`}>여행을 시작해보세요.</span>
+      </div>
+      <ChevronRightIcon className={isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'} />
+    </div>
+  );
+}
+
+function MissionProgressButton({ mission, isNight }: { mission: GeneratedApi.ProgressMission; isNight: boolean }) {
   // 배너의 "시작하기"와 같은 NAVIGATE를 쓰지만 resume을 붙인다 — 이미 시작한 미션이라
   // 앱이 인트로("미션 시작하기")를 건너뛰고 진행 화면으로 보낸다. 단계는 그 화면이 스스로 찾는다.
   function handleResume() {
@@ -442,53 +452,57 @@ function MissionProgressButton({ mission }: { mission: GeneratedApi.ProgressMiss
     >
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1">
-          <span aria-hidden="true" className="text-label-sm text-cool-neutral-900">
+          <span aria-hidden="true" className={`text-label-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'}`}>
             🚩
           </span>
-          <span className="text-label-sm text-cool-neutral-900">{mock.missionStatusLabel}</span>
+          <span className={`text-label-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'}`}>{mock.missionStatusLabel}</span>
           {/* 서버 값을 그대로 찍는다. 두 숫자의 의미가 미션 유형마다 다르지만(문화=퀴즈 번호,
               보물찾기=진행도, 협동=단계) 어느 쪽이든 앱의 해당 미션 화면이 쓰는 카운터와 같은 값이라
               화면끼리 어긋나지 않는다. 진행중일 수 없는 조합은 이 카드에 오기 전에 걸러진다
               (model/progressMissions.ts) */}
-          <span className="bg-primary-50 text-cool-neutral-800 rounded-full px-2 py-0.5 text-[10px] font-semibold">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${isNight ? 'bg-cool-neutral-600 text-cool-neutral-white' : 'bg-primary-50 text-cool-neutral-800'}`}>
             {mission.currentStep}/{mission.totalStep}
           </span>
         </div>
         <span className="bg-cool-neutral-500 h-[8.5px] w-px" aria-hidden="true" />
-        <span className="text-body-sm text-cool-neutral-700">{mission.missionTitle}</span>
+        <span className={`text-body-sm ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-700'}`}>{mission.missionTitle}</span>
       </div>
-      <ChevronRightIcon />
+      <ChevronRightIcon className={isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-900'} />
     </button>
   );
 }
 
-function TodoShortcut({ onClick }: { onClick: () => void }) {
+function AiPostcardShortcut({ isNight }: { isNight: boolean }) {
+  const router = useRouter();
   return (
-    <button type="button" onClick={onClick} className="flex flex-col items-center" style={{ width: 49 }}>
+    <button type="button" onClick={() => router.push('/mypage/travel-ending')} className="flex flex-col items-center" style={{ width: 49 }}>
       <span className="bg-cool-neutral-white/20 border-cool-neutral-white/40 relative flex h-11.75 w-11.75 items-center justify-center rounded-full border shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md">
-        <Image src={homeTodoIcon} alt="" aria-hidden="true" className="h-7.5 w-7.5 object-contain" />
-        <span className="text-cool-neutral-white absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-[#5D992A] text-[10px] font-medium">{mock.todoUnreadCount}</span>
+        {/* 엽서 그림에 여백이 있어 다른 숏컷 아이콘보다 작아 보인다 — 원(47)은 그대로 두고 아이콘만 1.5배 */}
+        <Image src={aiCardIcon} alt="" aria-hidden="true" className="h-11.25 w-11.25 object-contain" />
       </span>
-      <span className="text-label-sm text-cool-neutral-950 mt-1.25 font-medium">할 일</span>
+      <span className={`text-label-sm mt-1.25 font-medium ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-950'}`}>AI엽서</span>
     </button>
   );
 }
-function TravelNoteShortcut() {
+function TravelNoteShortcut({ isNight }: { isNight: boolean }) {
   const router = useRouter();
-  // GuestbookCount API 필드는 "안읽은" 개수가 아니라 내가 남긴 방명록 총 개수다 — 배지 자리는 그대로 두고 값만 실 데이터로 교체한다.
+  // 마지막 확인 이후 새 방명록 개수를 표시하며 100개 이상은 99+로 통일한다.
   const { guestbookCount } = useHomeData();
   return (
     <button type="button" onClick={() => router.push('/travel-note')} className="flex flex-col items-center" style={{ width: 49 }}>
       <span className="bg-cool-neutral-white/20 border-cool-neutral-white/40 relative flex h-11.75 w-11.75 items-center justify-center rounded-full border shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md">
         <Image src={homeTravelNoteIcon} alt="" aria-hidden="true" className="h-7.5 w-7.5 object-contain" />
-        <span className="text-cool-neutral-white absolute top-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-[#ff3030] text-[10px] font-medium">{guestbookCount}</span>
+        <span className="text-cool-neutral-white absolute top-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff3030] px-1 text-[10px] font-medium">{guestbookCount >= 100 ? '99+' : guestbookCount}</span>
       </span>
-      <span className="text-label-sm text-cool-neutral-950 mt-1.25 font-medium">방명록</span>
+      <span className={`text-label-sm mt-1.25 font-medium ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-950'}`}>방명록</span>
     </button>
   );
 }
 
-function UserLocationMarker() {
+// extraOffsetY: 배경 objectPosition을 위로 옮긴 만큼(px) 마커도 같이 보정하기 위한 값.
+// className의 -translate-x-1/2 -translate-y-full과 같이 못 쓰고(인라인 style이 transform 전체를
+// 덮어써버림) transform 문자열에 셋 다 합쳐서 쓴다.
+function UserLocationMarker({ extraOffsetY = 0 }: { extraOffsetY?: number }) {
   const { coords } = useDisplayLocation();
   const { characterImgUrl } = useHomeData();
   if (!coords) return null;
@@ -496,7 +510,7 @@ function UserLocationMarker() {
   const { xPercent, yPercent } = projectCoordsToMapImage(coords);
 
   return (
-    <div className="absolute -translate-x-1/2 -translate-y-full" style={{ left: `${xPercent}%`, top: `${yPercent}%` }}>
+    <div className="absolute" style={{ left: `${xPercent}%`, top: `${yPercent}%`, transform: `translate(-50%, calc(-100% - ${extraOffsetY}px))` }}>
       {/* 마커 하단이 뾰족한 지도 핀 형태 — 원 아래에 45도 회전한 정사각형을 겹쳐 뾰족한 꼬리를 만든다(MascotTooltip 말풍선 꼬리와 동일 기법) */}
       <button type="button" className="bg-cool-neutral-white relative flex h-12 w-12 items-center justify-center rounded-full">
         {characterImgUrl ? (
@@ -515,6 +529,18 @@ function UserLocationMarker() {
 // 배너 흰 판 — "탐라로그 V2 / 배너" > Rectangle 5341: 흰 배경, radius 20, drop-shadow 0 4 14 rgba(0,0,0,0.14).
 // radius 20은 --radius-* 토큰(4/8/14/16/999)에 없는 값이라 리터럴로 둔다.
 const BANNER_SURFACE_CLASS = 'bg-cool-neutral-white rounded-[20px] shadow-[0_4px_14px_rgba(0,0,0,0.14)]';
+
+/**
+ * 배너 아래 인디케이터 줄이 차지하는 높이(gap 12 + 점 5)만 잡아 두는 빈 줄.
+ *
+ * 캐러셀은 **아래를 기준으로 배치된다**(`bottom: 24px + safe-area-bottom`). 그래서 응답 전
+ * 인디케이터가 없으면 블록이 17px 짧아지고, 데이터가 도착해 점이 생기는 순간 배너와 그 위의
+ * 메뉴 버튼이 통째로 17px 위로 올라간다 — 사용자가 본 "레이아웃이 살짝 움직였다 나온다"의 한 몫이다.
+ * 점의 개수는 응답 전에는 알 수 없으므로 높이만 미리 잡는다.
+ */
+function IndicatorRowSpacer() {
+  return <div className="mt-3 h-1.25" aria-hidden="true" />;
+}
 
 function MissionCarousel() {
   const { missionCards, isPending, isError, refetch } = useHomeData();
@@ -548,24 +574,27 @@ function MissionCarousel() {
     const el = scrollRef.current;
     if (!el || dragRef.current?.pointerId !== e.pointerId) return;
     dragRef.current = null;
+    // 잡아 둔 포인터는 반드시 놓는다 — 남겨 두면 같은 포인터를 쓰는 다른 곳(개발 오버레이 등)이 어긋난다
+    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
     el.style.scrollBehavior = '';
   }
 
   // 응답 전에는 배너 한 장 높이(98)의 빈 카드를 둔다 — 캐러셀이 사라졌다 나타나며 아래 내용이 밀리지 않게.
   if (isPending) {
     return (
-      <div>
+      <SkeletonGroup>
         <div className={BANNER_SURFACE_CLASS}>
           <div className="flex h-24.5 w-full items-center gap-4 pr-5.5 pl-4.5">
-            <span className="bg-warm-neutral-100 h-15.5 w-15.5 shrink-0 animate-pulse rounded-lg" />
+            <Skeleton className="h-15.5 w-15.5 shrink-0 rounded-lg" />
             <div className="flex flex-1 flex-col gap-1">
-              <span className="bg-warm-neutral-100 h-4 w-1/3 animate-pulse rounded" />
-              <span className="bg-warm-neutral-100 h-5 w-3/5 animate-pulse rounded" />
-              <span className="bg-warm-neutral-100 h-4.5 w-2/5 animate-pulse rounded" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-5 w-3/5" />
+              <Skeleton className="h-4.5 w-2/5" />
             </div>
           </div>
         </div>
-      </div>
+        <IndicatorRowSpacer />
+      </SkeletonGroup>
     );
   }
 
@@ -579,13 +608,16 @@ function MissionCarousel() {
    */
   if (isError) {
     return (
-      <div className={BANNER_SURFACE_CLASS}>
-        <div className="flex h-24.5 w-full items-center justify-between gap-4 pr-5.5 pl-4.5">
-          <p className="text-body-md text-warm-neutral-400">추천 미션을 불러오지 못했어요</p>
-          <button type="button" onClick={() => refetch()} className="border-cool-neutral-200 text-label-sm text-warm-neutral-900 shrink-0 rounded-full border px-3 py-1.5 font-medium">
-            다시 시도
-          </button>
+      <div>
+        <div className={BANNER_SURFACE_CLASS}>
+          <div className="flex h-24.5 w-full items-center justify-between gap-4 pr-5.5 pl-4.5">
+            <p className="text-body-md text-warm-neutral-400">추천 미션을 불러오지 못했어요</p>
+            <button type="button" onClick={() => refetch()} className="border-cool-neutral-200 text-label-sm text-warm-neutral-900 shrink-0 rounded-full border px-3 py-1.5 font-medium">
+              다시 시도
+            </button>
+          </div>
         </div>
+        <IndicatorRowSpacer />
       </div>
     );
   }
@@ -597,25 +629,26 @@ function MissionCarousel() {
 
   return (
     <div>
-      {/* 배너 흰 판을 스크롤러 바깥에 한 겹만 둔다 — 배너가 뷰포트 폭을 꽉 채우는 한 장씩 스냅되므로
-          장당 흰 판을 깔아도 화면은 같은데, 인접 카드의 그림자가 경계에서 비치는 것만 피할 수 있다 */}
-      <div className={BANNER_SURFACE_CLASS}>
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onDragStart={(e) => e.preventDefault()}
-          className="flex snap-x snap-mandatory scrollbar-none overflow-x-auto scroll-smooth select-none [&::-webkit-scrollbar]:hidden"
-        >
-          {missionCards.map((card) => (
-            <div key={card.key} className="w-full shrink-0 snap-center">
-              <MissionBannerContent card={card} />
-            </div>
-          ))}
-        </div>
+      {/* 카드(흰 판 포함)가 통째로 슬라이드된다. 스크롤러가 overflow를 자르므로
+          - 좌우: -mx-4/px-4로 화면 끝까지 넓혀 카드가 화면 가장자리로 완전히 나가게 한다
+          - 상하: 그림자(0 4px 14px)가 잘리지 않게 pt-3/pb-5를 주고 같은 값의 음수 마진으로 레이아웃은 그대로 둔다
+          카드 사이 gap-8(32)은 양쪽 여백 16+16과 같아, 옆 카드가 화면 가장자리에 비쳐 보이지 않는다.
+          그래서 한 장의 스크롤 간격이 스크롤러 폭(clientWidth)과 같다 — handleScroll의 계산이 그대로 맞는다 */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onDragStart={(e) => e.preventDefault()}
+        className="-mx-4 -mt-3 -mb-5 flex snap-x snap-mandatory gap-8 scrollbar-none overflow-x-auto scroll-smooth px-4 pt-3 pb-5 select-none [&::-webkit-scrollbar]:hidden"
+      >
+        {missionCards.map((card) => (
+          <div key={card.key} className={`${BANNER_SURFACE_CLASS} w-full shrink-0 snap-center`}>
+            <MissionBannerContent card={card} />
+          </div>
+        ))}
       </div>
 
       {/* 인디케이터 — home_3 > Frame 616(배너 아래 gap 12) > Frame 194.
@@ -673,8 +706,8 @@ function MissionBannerContent({ card }: { card: HomeMissionCard }) {
         <Image src={style.image} alt="" aria-hidden="true" width={BANNER_ICON_REQUEST_SIZE} height={BANNER_ICON_REQUEST_SIZE} className="h-15.5 w-15.5 object-cover" />
       </span>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {/* Frame 619 — 위 두 줄은 gap 0으로 붙고, 메타 줄만 4 떨어진다 */}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {/* Frame 619 — 위 두 줄은 gap 0으로 붙고, 메타 줄만 2 떨어진다(사용자 요청으로 4→2) */}
         <div className="flex flex-col">
           <p className={`text-label-sm truncate font-medium ${style.titleColor}`}>{card.title}</p>
           <p className="text-label-md text-cool-neutral-950 truncate font-semibold">{MISSION_BANNER_HEADLINE[card.route]}</p>
@@ -760,51 +793,6 @@ function MissionBannerContent({ card }: { card: HomeMissionCard }) {
 //   );
 // }
 
-function TodoListModal({ onClose }: { onClose: () => void }) {
-  const { todoList } = mock;
-  const [isVisible, setIsVisible] = useState(false);
-
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setIsVisible(true));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-
-  return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/80 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`} onClick={onClose}>
-      <div
-        className={`bg-cool-neutral-white mx-4 flex w-full max-w-90 flex-col gap-6 rounded-3xl px-6 py-7 transition-all duration-300 ${isVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <p className="text-heading-h3 text-warm-neutral-900 font-bold">할 일 목록</p>
-          <button type="button" onClick={onClose} aria-label="닫기">
-            <CloseIcon />
-          </button>
-        </div>
-
-        <div className="flex flex-col">
-          {todoList.map((item, index) => (
-            <TodoListItem key={item.id} title={item.title} description={item.description} isFirst={index === 0} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TodoListItem({ title, description, isFirst }: Omit<TodoItem, 'id'> & { isFirst: boolean }) {
-  return (
-    <button type="button" className={`flex items-center justify-between gap-3 py-4 text-left ${isFirst ? '' : 'border-cool-neutral-100 border-t'}`}>
-      {/* TODO: 항목별 화면 연동 */}
-      <div className="flex flex-col gap-1">
-        <span className="text-label-lg text-warm-neutral-900 font-bold">{title}</span>
-        <span className="text-body-sm text-warm-neutral-400">{description}</span>
-      </div>
-      <ChevronRightIcon />
-    </button>
-  );
-}
-
 // [보류] 위치 직접 입력 모달(AddressModal)의 검색 결과 한 줄
 // function LocationListItem({ place }: { place: SearchResultPlace }) {
 //   return (
@@ -819,10 +807,10 @@ function TodoListItem({ title, description, isFirst }: Omit<TodoItem, 'id'> & { 
 //   );
 // }
 
-function ChevronRightIcon({ width = 5, height = 9 }: { width?: number; height?: number }) {
+function ChevronRightIcon({ width = 5, height = 9, className = 'text-cool-neutral-900' }: { width?: number; height?: number; className?: string }) {
   return (
     <svg width={width} height={height} viewBox="0 0 5 9" fill="none" aria-hidden="true">
-      <path d="M1 1L4 4.5L1 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="text-cool-neutral-900" />
+      <path d="M1 1L4 4.5L1 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className={className} />
     </svg>
   );
 }
@@ -839,22 +827,6 @@ function BannerChevronIcon() {
         fillRule="nonzero"
         className="text-cool-neutral-700"
       />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg width="8" height="5" viewBox="0 0 8 5" fill="none" aria-hidden="true">
-      <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-cool-neutral-600" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M4 4L16 16M16 4L4 16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="text-warm-neutral-400" />
     </svg>
   );
 }

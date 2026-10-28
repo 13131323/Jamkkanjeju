@@ -72,7 +72,7 @@ public class HomeService {
         progressMission.addAll(cooperativeProgressMissions(participants, latitude, longitude));
 
         // 7. 방명록 개수 집계
-        long guestbookCount = guestbookCounter.countAll();
+        long guestbookCount = guestbookCounter.countSince(user.getGuestbookLastCheckedAt());
 
         // 8. 온보딩 캐릭터 이미지 구성
         return GetHomeResponse.of(missionRecommend, progressMission, guestbookCount, user.getOnboardingResult());

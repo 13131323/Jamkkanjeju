@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Animated, Text, View } from 'react-native';
+import { subscribeApiErrors } from '@packages/shared';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MIN_BOTTOM_INSET } from '@/styles/safeArea';
 import { TOAST_CTA_CLEARANCE, TOAST_GAP, toastStyles as styles } from './styles';
@@ -57,6 +58,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((message: string, options?: ToastOptions) => {
     setQueue((prev) => enqueue(prev, { message, variant: options?.variant ?? 'dark', bottomClearance: options?.bottomClearance }));
   }, []);
+
+  // API 응답의 서버 메시지도 기존 토스트 큐와 자동 사라짐 효과를 사용한다.
+  useEffect(() => subscribeApiErrors((message) => show(message)), [show]);
 
   const hide = useCallback(() => {
     setQueue(clear());

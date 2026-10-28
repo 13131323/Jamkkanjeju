@@ -72,7 +72,7 @@ describe('sqlite access layer', () => {
 
     const statements = sqliteMocks.execAsync.mock.calls.map((call) => String(call[0]));
     expect(statements.some((sql) => sql.includes('ALTER TABLE Session ADD COLUMN apiOrigin'))).toBe(true);
-    expect(statements.some((sql) => sql.includes('user_version = 3'))).toBe(true);
+    expect(statements.some((sql) => sql.includes('user_version = 4'))).toBe(true);
   });
 
   // v1 = 실제로 출시된 v1.0.0 앱의 상태다. Session 표가 아예 없으므로 위쪽 CREATE가
@@ -88,7 +88,7 @@ describe('sqlite access layer', () => {
     // CREATE가 이미 최신 스키마를 만들었다 — 따라잡을 것이 없다
     expect(statements[0]).toContain('apiOrigin');
     expect(statements.some((sql) => sql.includes('ALTER TABLE'))).toBe(false);
-    expect(statements.some((sql) => sql.includes('user_version = 3'))).toBe(true);
+    expect(statements.some((sql) => sql.includes('user_version = 4'))).toBe(true);
   });
 
   it('v1 DB에서 ALTER를 걸지 않으므로 duplicate column 문구에 의존하지 않는다', async () => {
@@ -100,8 +100,22 @@ describe('sqlite access layer', () => {
     await expect(runSqlAsync('SELECT 1;')).resolves.toBeDefined();
   });
 
-  it('이미 최신 버전이면 마이그레이션을 다시 쓰지 않는다', async () => {
+  // v3 = AppSetting 표가 생기기 전이다. 표를 더하는 변경이라 ALTER가 필요 없다 —
+  // CREATE TABLE IF NOT EXISTS가 매 실행 돌아 옛 DB에도 그대로 생긴다(컬럼을 더한 v2 → v3와 다르다).
+  it('v3 DB는 ALTER 없이 AppSetting 표를 따라잡는다', async () => {
     sqliteMocks.getFirstAsync.mockResolvedValue({ user_version: 3 });
+    const { runSqlAsync } = await import('./sqlite');
+
+    await runSqlAsync('SELECT 1;');
+
+    const statements = sqliteMocks.execAsync.mock.calls.map((call) => String(call[0]));
+    expect(statements[0]).toContain('AppSetting');
+    expect(statements.some((sql) => sql.includes('ALTER TABLE'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('user_version = 4'))).toBe(true);
+  });
+
+  it('이미 최신 버전이면 마이그레이션을 다시 쓰지 않는다', async () => {
+    sqliteMocks.getFirstAsync.mockResolvedValue({ user_version: 4 });
     const { runSqlAsync } = await import('./sqlite');
 
     await runSqlAsync('SELECT 1;');

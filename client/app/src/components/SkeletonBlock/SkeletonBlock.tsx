@@ -19,8 +19,13 @@ const OPACITY_TO = 0.7;
 
 interface SkeletonBlockProps {
   width: number | `${number}%`;
-  height: number;
-  /** 생략하면 높이의 절반 — 막대는 알약 모양, 정사각형은 원이 된다 */
+  /**
+   * 높이. 글줄·카드처럼 크기가 정해진 자리는 dp로 주고, 부모를 꽉 채워야 하는 자리(카메라 프리뷰
+   * 자리표시)만 백분율을 쓴다. 백분율일 때는 `radius`를 생략하지 말 것 — 기본값이 높이의 절반인데
+   * 그 높이를 렌더 전에는 알 수 없다.
+   */
+  height: number | `${number}%`;
+  /** 생략하면 높이의 절반 — 막대는 알약 모양, 정사각형은 원이 된다. height가 백분율이면 필수다 */
   radius?: number;
   /**
    * 블록 색. 기본은 흰색이다 — 인트로처럼 **색이 깔린 배경** 위에서 반투명하게 비치는 용도다.
@@ -59,7 +64,8 @@ export function SkeletonBlock({ width, height, radius, color = '#ffffff', pulse 
         {
           width,
           height,
-          borderRadius: radius ?? height / 2,
+          // height가 백분율이면 절반을 셈할 수 없다 — 그때는 radius를 넘겨야 하고, 안 넘기면 0이다
+          borderRadius: radius ?? (typeof height === 'number' ? height / 2 : 0),
           backgroundColor: color,
           opacity,
         },

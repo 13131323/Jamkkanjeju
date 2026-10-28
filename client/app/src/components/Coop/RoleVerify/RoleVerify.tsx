@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { DashedRect } from '@/components/Coop/DashedBorder/DashedBorder';
@@ -74,6 +74,15 @@ export function RoleVerify({ hint, photoUri: rawPhotoUri, onPressUpload }: RoleV
   const photoUri = resolvePhotoUri(rawPhotoUri);
 
   /**
+   * 소스 객체를 URI가 바뀔 때만 새로 만든다.
+   *
+   * `source={{ uri }}`를 인라인으로 두면 매 렌더 새 참조가 되어, 주소가 그대로여도 Image가
+   * 새 소스로 보고 다시 그린다 — step3는 2초 폴링으로 리렌더가 잦아 사진이 계속 깜빡였다.
+   * 미션 홈 AR 캐릭터에서 같은 방식으로 잡은 깜빡임이다(app/mission/intro.tsx).
+   */
+  const photoSource = useMemo(() => ({ uri: photoUri }), [photoUri]);
+
+  /**
    * 사진이 실제로 그려졌는지 / 못 불러왔는지.
    *
    * **URI 자체를 담는다**(boolean이 아니라). 같은 카드에서 다시 촬영하면 URI가 바뀌는데,
@@ -111,7 +120,7 @@ export function RoleVerify({ hint, photoUri: rawPhotoUri, onPressUpload }: RoleV
             스켈레톤 위를 덮는다 */}
         {!hasPhotoFailed && (
           <Image
-            source={{ uri: photoUri }}
+            source={photoSource}
             style={styles.photo}
             resizeMode="cover"
             onLoad={() => setLoadedUri(photoUri)}

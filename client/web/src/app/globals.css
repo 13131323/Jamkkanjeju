@@ -101,6 +101,20 @@
   --color-sunny-yellow-950: #2c2109;
   --color-sunny-yellow-975: #231903;
 
+  /* Color — Vibrant Orange (base 없음) */
+  --color-vibrant-orange-50: #fff3e6;
+  --color-vibrant-orange-100: #ffe2c2;
+  --color-vibrant-orange-200: #ffc88f;
+  --color-vibrant-orange-300: #ffab57;
+  --color-vibrant-orange-400: #ff8f18;
+  --color-vibrant-orange-500: #e0780a;
+  --color-vibrant-orange-600: #bd6005;
+  --color-vibrant-orange-700: #964803;
+  --color-vibrant-orange-800: #733705;
+  --color-vibrant-orange-900: #502605;
+  --color-vibrant-orange-950: #301502;
+  --color-vibrant-orange-951: #230f01;
+
   /* Typography — font family (Pretendard Variable, next/font/local로 로드 → src/shared/fonts/pretendard.ts) */
   --font-sans: var(--font-pretendard), -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
 
@@ -154,5 +168,29 @@
   }
   to {
     transform: scale(1.2) translate(-2.5%, -1.5%);
+  }
+}
+
+/* 클릭 피드백(눌림 효과). button/a/role=button은 태그만으로 자동 적용되고,
+   시맨틱 태그로 못 바꾸는 요소(카카오맵 마커, 오디오 seek바 등)는 .js-pressable을 붙여 적용한다.
+   .is-pressed는 usePressFeedback(shared/lib/interaction)이 touchstart/touchend로 토글하는 클래스 —
+   RN WebView(Android)에서 :active가 실제 터치로는 신뢰성 있게 안 걸려서 보강용으로 같이 둔다. */
+@layer base {
+  button:not(:disabled),
+  a,
+  [role='button'],
+  .js-pressable {
+    transition: opacity 120ms ease-out;
+  }
+
+  button:not(:disabled):active,
+  a:active,
+  [role='button']:active,
+  .js-pressable:active,
+  button:not(:disabled).is-pressed,
+  a.is-pressed,
+  [role='button'].is-pressed,
+  .js-pressable.is-pressed {
+    opacity: 0.75;
   }
 }

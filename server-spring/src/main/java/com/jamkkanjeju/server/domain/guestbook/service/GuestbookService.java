@@ -123,10 +123,11 @@ public class GuestbookService {
         return ToggleGuestbookLikeResponse.of(guestbookId, isLiked, likeCount);
     }
 
-    /** 활성 방명록을 유형별로 독립 조회하고 방문 장소와 현재 사용자의 좋아요 정보를 반환한다. */
+    /** 활성 방명록을 유형별로 조회하고 현재 사용자의 마지막 확인 시각을 갱신한다. */
+    @Transactional
     public GetGuestbooksResponse getGuestbooks(Long userId, GetGuestbooksRequest request) {
         // 1. 현재 사용자 확인 (유형별 페이지 조건은 요청 DTO에서 검증한다)
-        userRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(CommonErrorCode.UNAUTHORIZED));
 
         // 2. 현재 사용자의 방문 장소 전체를 최근 방문 순서로 조회
@@ -158,6 +159,8 @@ public class GuestbookService {
         List<RoadGuestbookInfo> roadGuestbooks = roadPage.getContent().stream()
                 .map(guestbook -> RoadGuestbookInfo.of(guestbook, likedIds.contains(guestbook.getGuestbookId()),
                         likeCounts.getOrDefault(guestbook.getGuestbookId(), 0L))).toList();
+        // 7. 빈 목록과 페이지 조회를 포함한 정상 조회마다 현재 사용자의 확인 시각 갱신
+        user.checkGuestbooks(LocalDateTime.ofInstant(clock.instant(), ZoneId.of("Asia/Seoul")));
         return GetGuestbooksResponse.of(visitedLocations, generalGuestbooks, roadGuestbooks,
                 GuestbooksPage.of(request.generalPage(), request.generalSize(), generalPage.hasNext()),
                 GuestbooksPage.of(request.roadPage(), request.roadSize(), roadPage.hasNext()));

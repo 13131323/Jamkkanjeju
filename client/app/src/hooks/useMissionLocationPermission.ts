@@ -31,6 +31,18 @@ export function useMissionLocationPermission(enabled: boolean) {
     };
   }, [enabled]);
 
+  /**
+   * 권한 게이트. 요청 → 허용이면 true, 아니면 안내를 띄우고 false.
+   *
+   * 미션 홈(intro)의 "미션 시작하기"가 이것을 쓰고, **이미 완료한 보물찾기의 완료 화면도 진입할 때
+   * 이것을 한 번 돌린다**(app/mission/intro.tsx). 그 화면은 근처 미션·쿠폰을 좌표로 조회해서
+   * 권한이 없으면 목록이 통째로 비는데, 누를 "시작하기"가 없어 안내를 띄울 자리가 없었다 —
+   * 문구를 새로 만들지 않고 같은 게이트를 그대로 쓴다.
+   *
+   * 이미 허용된 기기에서는 다이얼로그가 뜨지 않고 곧바로 true다.
+   * 안드로이드에서 두 번 거부해 다시 물을 수 없게 된 경우(canAskAgain:false)는 시스템 다이얼로그가
+   * 뜨지 않으므로 "설정 열기"가 붙은 안내로 대신한다(resolveMissionLocationGate).
+   */
   const ensureGranted = useCallback(async (): Promise<boolean> => {
     // 최초 요청을 거부했어도 재요청이 가능한 상태면 CTA에서 한 번 더 기회를 준다.
     const current = permissionStatus === Location.PermissionStatus.GRANTED ? { status: permissionStatus, canAskAgain: true } : await Location.requestForegroundPermissionsAsync();

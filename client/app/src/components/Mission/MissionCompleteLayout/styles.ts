@@ -65,7 +65,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   resultRow: {
-    height: 44,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -95,7 +95,7 @@ export const styles = StyleSheet.create({
 
   // 디자인 312x114. 좌 16 / 상 14 / 하 17이고 우측은 26(본문 폭이 171로 고정된다)
   placeCard: {
-    marginTop: 12,
+    marginTop: 8,
     marginHorizontal: 24,
     flexDirection: 'row',
     borderRadius: 16,
@@ -152,7 +152,7 @@ export const styles = StyleSheet.create({
   ctaWrapperRow: { flexDirection: 'row', gap: 8 },
   // Button 컴포넌트 md 사이즈(height52/paddingHorizontal24/radius999)를 그대로 복제해
   // 문화 미션 완료의 렌더 결과가 기존 <Button color="primary" .../> 사용 시와 동일하게 유지되도록 한다.
-  // 보물찾기 완료는 ctaButtonFixed가 덧붙어 160 고정폭이 된다(spec: 160x52)
+  // 보물찾기 완료는 ctaButtonHalf가 덧붙어 화면을 반씩 나눠 갖는다(spec: 160x52 = 360dp 기준의 반)
   ctaButton: {
     height: 52,
     paddingHorizontal: 24,
@@ -160,7 +160,9 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaButtonFixed: { width: 160 },
+  // 두 버튼이 화면을 반씩 나눠 갖는다(고정 160은 360dp가 아닌 기기에서 넘치거나 남는다).
+  // 좌우를 24→16으로 줄인 건 라벨 자리가 112뿐이라 "홈으로 이동하기"가 말줄임되던 걸 막기 위해서다.
+  ctaButtonHalf: { flex: 1, paddingHorizontal: 16 },
   // Button.BUTTON_TEXT_STYLE과 동일. alignSelf:'stretch'는 커스텀 폰트(Pretendard) 폭이 잘못 측정돼
   // 줄바꿈되는 것을 막기 위한 것으로, Button/styles.ts의 동일 주석과 같은 이유다
   ctaButtonText: {

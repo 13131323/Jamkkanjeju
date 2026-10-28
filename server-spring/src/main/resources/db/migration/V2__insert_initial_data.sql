@@ -35,10 +35,10 @@ VALUES
 
 
 INSERT INTO `user`
-    (`id`, `onboarding_result_id`, `nickname`, `email`, `password_hash`, `role`, `status`)
+    (`id`, `onboarding_result_id`, `nickname`, `email`, `password_hash`, `role`, `status`, `guestbook_last_checked_at`)
 VALUES
     (1, NULL, '테스트 사용자', '12345678@gmail.com',
-     '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE');
+     '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE', CURRENT_TIMESTAMP(6));
 
 -- ---------------------------------------------------------------------
 -- AR_CHARACTER

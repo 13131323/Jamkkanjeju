@@ -206,12 +206,23 @@ export function resolveTreasureLocationId(location: GeneratedApi.TreasureMission
  * 서버가 null을 준다) null을 돌려주고, 호출부가 카드를 아예 그리지 않는다 —
  * 없는 설명을 지어내 채우지 않는다.
  */
-export function toPlaceSummary(description: string | null | undefined, maxLength: number): string | null {
+/**
+ * 같은 설명을 **자르지 않고** 한 줄로만 눌러 준다.
+ *
+ * 장소 소개 카드(TreasurePlaceSummaryCard)는 눌러서 펴면 전문을 보여줘야 해서 글자 수로 미리 자른 값을 쓸 수 없다 —
+ * 잘라서 넘기면 펴 봐야 더 나올 것이 없다. 자르는 일은 화면(numberOfLines)이 맡는다.
+ */
+export function toPlaceDescription(description: string | null | undefined): string | null {
   if (typeof description !== 'string') return null;
 
   // TourAPI 설명에는 줄바꿈·연속 공백이 섞여 있어 한 줄로 눌러 준다
   const text = description.replace(/\s+/g, ' ').trim();
-  if (text.length === 0) return null;
+  return text.length === 0 ? null : text;
+}
+
+export function toPlaceSummary(description: string | null | undefined, maxLength: number): string | null {
+  const text = toPlaceDescription(description);
+  if (text === null) return null;
   if (text.length <= maxLength) return text;
 
   const cut = text.slice(0, maxLength);
@@ -250,9 +261,13 @@ export function resolveTreasureRewardLabel(treasureType: TreasureType | null, re
  * 시작/이어하기 응답을 받은 화면이 할 일.
  *
  * - `play`: 진행 중인 진행도다. 지도를 그리고 보물을 찾게 둔다.
- * - `already-complete`: 서버가 **이미 끝난 진행도**를 돌려줬다. 사냥 화면을 그리면 안 된다.
+ * - `already-complete`: 서버가 **이미 끝난 진행도**를 돌려줬고, **인트로도 그 미션을 완료로 본다.**
+ *   인트로로 되돌리면 인트로가 "이미 완료한 미션" 화면을 그린다.
+ * - `finished`: 서버는 끝난 진행도라고 하는데 **인트로는 아직 완료로 보지 않는다**(남은 보상이 있다).
+ *   사냥 화면도 그릴 수 없고 인트로로 되돌릴 수도 없다 — 되돌리면 인트로가 "미션 시작하기"를
+ *   다시 보여주고, 그걸 누르면 같은 응답을 받아 또 되돌아온다(아래 주석의 되먹임). 완료 화면으로 낸다.
  */
-export type TreasureStartOutcome = 'play' | 'already-complete';
+export type TreasureStartOutcome = 'play' | 'already-complete' | 'finished';
 
 /**
  * 시작 응답의 `missionProgressStatus`로 화면을 정한다.
@@ -266,10 +281,32 @@ export type TreasureStartOutcome = 'play' | 'already-complete';
  *   PATCH가 404(TREASURE_MISSION_PROGRESS_NOT_FOUND)로 떨어져 보상 없는 완료 화면으로 밀린다
  * 둘 다 "끝난 미션을 진행 중인 것처럼 그렸다"는 같은 원인이다. 상태를 먼저 본다.
  *
+ * **인트로의 판정을 함께 받는다.** 두 화면이 서로 다른 신호로 완료를 판정하면 되먹임이 생긴다.
+ * 인트로는 진행도 상태를 알 수 없어서(미션 홈 응답 MissionHomeResponse에 상태 필드가 없고,
+ * 진행도를 **조회**하는 엔드포인트 자체가 없다 — POST로 만들어 봐야만 상태를 알 수 있다)
+ * "남은 보상이 세 종류 모두 없음"(isRewardExhausted)을 대리 신호로 쓴다. 그런데 그 둘은 어긋난다.
+ *
+ * | missionProgressStatus | 남은 보상 | 인트로가 그리는 화면 | 예전 동작 |
+ * | --- | --- | --- | --- |
+ * | COMPLETED | 없음 | 이미 완료한 미션 | 되돌리면 끝 — 정상 |
+ * | COMPLETED | **있음** | **미션 시작하기** | 되돌림 → 시작하기 → 또 되돌림 → **무한 반복** |
+ *
+ * 아래 칸이 실재한다. "포기 할래요"(PATCH .../progress/stop)도 서버는 완료로 처리하는데, 그때
+ * 찾은 보물은 3개가 아니라 못 받은 보상이 남는다. 그 미션에 다시 들어오면 인트로는 보상이 남았으니
+ * "미션 시작하기"를 보여주고, 누르면 이 응답이 COMPLETED로 와서 인트로로 되돌아간다 —
+ * 사용자 눈에는 **"시작하기 버튼이 안 눌린다"**로 보인다. 그래서 그 칸은 인트로로 보내지 않고
+ * 완료 화면으로 낸다(진행도 저장이 404로 떨어졌을 때와 같은 처리 — resolveTreasureProgressFailure의
+ * 'progress-gone'과 같은 서버 상태다).
+ *
  * @param photoOnly `?start=photo` — 이미 끝낸 미션에 **일부러** 사진만 찍으러 들어온 경로다
  *   (intro의 완료 화면 "보물이랑 사진찍기"). 이때 COMPLETED는 정상이라 되돌려 보내면 안 된다.
+ * @param isIntroComplete 인트로가 이 미션을 완료로 보는지 — `isRewardExhausted(remainingReward)`.
+ *   두 화면이 **같은 함수**를 읽어야 판정이 갈리지 않는다(@packages/shared의 completion.ts).
  */
-export function resolveTreasureStartOutcome(missionProgressStatus: string, photoOnly: boolean): TreasureStartOutcome {
+export function resolveTreasureStartOutcome(missionProgressStatus: string, photoOnly: boolean, isIntroComplete: boolean): TreasureStartOutcome {
   if (photoOnly) return 'play';
-  return missionProgressStatus === 'COMPLETED' ? 'already-complete' : 'play';
+  // 모르는 상태값은 진행 중으로 흘린다 — 서버가 상태를 늘려도 이어하기가 막히면 안 된다
+  if (missionProgressStatus !== 'COMPLETED') return 'play';
+
+  return isIntroComplete ? 'already-complete' : 'finished';
 }

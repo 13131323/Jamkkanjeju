@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/Button/Button';
 import { FullBleed } from '@/components/FullBleed/FullBleed';
@@ -11,6 +11,7 @@ import { NavigationHeader } from '@/components/NavigationHeader/NavigationHeader
 import { QuizIllustrationCard } from '@/components/Quiz/QuizIllustrationCard/QuizIllustrationCard';
 import { QuizOption, QuizOptionState } from '@/components/Quiz/QuizOption/QuizOption';
 import { QuizProgressBar } from '@/components/Quiz/QuizProgressBar/QuizProgressBar';
+import { QuizSkeleton } from '@/components/Quiz/QuizSkeleton/QuizSkeleton';
 import { QuizResultModal, QuizResultVariant } from '@/components/Quiz/QuizResultModal/QuizResultModal';
 import { isCorrectAnswer, resolveCurrentQuizIndex, resolveQuizAdvance, toPlayableQuizzes } from '@/constants/cultureQuiz';
 import { MISSION_TYPE_INPUT, resolveMissionId } from '@/constants/missionHome';
@@ -24,6 +25,7 @@ import {
 } from '@/services/api/culture-mission/culture-mission';
 import { useGetMissionHomeApiV1MissionsMissionTypeMissionIdGet } from '@/services/api/mission/mission';
 import { navigate } from '@/utils/navigate';
+import { resolveStopCoordinates } from '@/utils/missionStopCoords';
 import { CTA_BOTTOM_GAP, ctaBottomPadding } from '@/styles/safeArea';
 
 /** 한 문제에 허용되는 오답 횟수. 2회 실패하면 정답을 보여주고 넘어간다 */
@@ -43,6 +45,10 @@ const MAX_WRONG_ATTEMPTS = 2;
  * 진행도 API의 latitude/longitude는 **필수 파라미터**라(orval 생성 params 타입) 좌표 없이
  * 요청을 보낼 수는 없다. 그래서 호출부의 선택지는 "지어내서 보낸다"가 아니라
  * "보내지 않고 사용자에게 알린다"뿐이다.
+ *
+ * 예외는 **"포기 할래요" 한 곳뿐**이다(finishByStopping의 isAbandon). 거기서는 요청을 못 보내면
+ * 미션이 서버에 영영 진행중으로 남아 홈에 계속 뜨므로, 호출부가 resolveStopCoordinates로
+ * 폴백을 씌운다 — 이 함수는 그대로 null을 돌려준다.
  */
 async function readCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
   // 심사위원용 모드면 측위하지 않고 제주시청을 보낸다. 서버는 이 좌표로 완료 후 '근처 장소'를
@@ -94,7 +100,7 @@ export default function CultureMissionScreen() {
   const [hasLocationFailed, setHasLocationFailed] = useState(false);
 
   // 진입 시 1회만 진행도를 만든다(이미 진행 중이면 서버가 기존 것을 돌려준다).
-  const { mutate: startMission, data: started, isPending: isStarting, isError: hasStartFailed } = useStartCultureMissionApiV1CultureMissionsCultureMissionIdProgressPost();
+  const { mutate: startMission, mutateAsync: startMissionAsync, data: started, isPending: isStarting, isError: hasStartFailed } = useStartCultureMissionApiV1CultureMissionsCultureMissionIdProgressPost();
   const saveProgress = useSaveCultureMissionProgressApiV1CultureMissionsCultureMissionProgressIdProgressPatch();
   const stopProgress = useStopCultureMissionProgressApiV1CultureMissionsCultureMissionProgressIdProgressStopPatch();
 
@@ -190,23 +196,49 @@ export default function CultureMissionScreen() {
    * 그래서 인트로로 되돌리지 않고 완료 화면으로 보낸다.
    * 진행도가 없거나 이미 끝난 경우(404)에도 화면은 빠져나가야 한다.
    *
-   * 두 곳이 부른다: "포기 할래요"와, 객관식을 다 풀었는데 서버가 아직 완료가 아닌 경우(`submitQuiz`).
+   * 두 곳이 부른다: "포기 할래요"(`isAbandon`)와, 객관식을 다 풀었는데 서버가 아직 완료가 아닌
+   * 경우(`submitQuiz`).
+   *
+   * **포기일 때는 어떤 이유로도 요청을 거르지 않는다.** 요청이 안 나가면 서버는 미션을 계속
+   * 진행중으로 들고 있어 홈의 "진행중인 미션"에 남는다(사용자 확인). 그래서 포기 경로에서만
+   * 좌표 폴백(missionStopCoords.ts)과 진행도 id 확보를 켠다 — 정상 완료 경로는 지어낸 좌표로
+   * '다음 장소'가 뽑히면 안 되므로 기존 동작 그대로 둔다.
    */
-  const finishByStopping = async () => {
+  const finishByStopping = async ({ isAbandon = false }: { isAbandon?: boolean } = {}) => {
     // 중단 응답을 받지 못하면 완료 화면이 직전 미션의 값을 보여주지 않도록 비워 둔다
     clearCompleteResult();
 
-    if (started) {
-      const coords = await readCoordinates();
-      // 좌표를 못 얻으면 중단 요청을 아예 보내지 않는다. 여기서 사용자를 화면에 붙잡아 둘 이유는
-      // 없으므로, 아래 요청 실패와 똑같이 보상 정보 없이 완료 화면으로 내보낸다.
+    // 진입 직후 시작 POST가 끝나기 전에 포기하면 서버엔 진행도가 생겼는데 앱은 id를 모른다.
+    // 시작 엔드포인트는 이미 진행 중이면 기존 진행도를 그대로 돌려주므로, 한 번 더 불러 id를 얻는다.
+    let progressId = started?.cultureMissionProgressId ?? null;
+    if (progressId === null && isAbandon) {
+      try {
+        progressId = (await startMissionAsync({ cultureMissionId })).cultureMissionProgressId;
+      } catch (error) {
+        console.error('[culture] 포기: 진행도 id 확보 실패', error);
+      }
+    }
+
+    if (progressId !== null) {
+      const measured = await readCoordinates();
+      // 정상 완료 경로는 좌표가 없으면 예전처럼 요청을 보내지 않는다
+      const coords = isAbandon ? resolveStopCoordinates(measured) : measured;
+
       if (coords) {
         try {
-          const stopped = await stopProgress.mutateAsync({ cultureMissionProgressId: started.cultureMissionProgressId, params: coords });
+          const stopped = await stopProgress.mutateAsync({ cultureMissionProgressId: progressId, params: coords });
           // 중단은 완료 처리라 nextLocation/reward가 항상 온다(맞힌 게 없으면 reward의 항목이 모두 null)
           saveCompleteResult('culture', { reward: stopped.reward, nextLocation: stopped.nextLocation, completedLocationId: null });
-        } catch {
-          // 중단 요청이 실패해도 사용자를 화면에 붙잡아 둘 이유는 없다
+        } catch (error) {
+          // 포기는 한 번 더 시도한다 — 여기서 놓치면 미션이 영영 진행중으로 남는다
+          if (isAbandon) {
+            try {
+              const stopped = await stopProgress.mutateAsync({ cultureMissionProgressId: progressId, params: coords });
+              saveCompleteResult('culture', { reward: stopped.reward, nextLocation: stopped.nextLocation, completedLocationId: null });
+            } catch (retryError) {
+              console.error('[culture] 포기 중단 요청 실패', retryError);
+            }
+          }
         }
       }
     }
@@ -267,15 +299,17 @@ export default function CultureMissionScreen() {
         {/* 캐시가 아직 없는 첫 프레임과 인트로를 건너뛴 딥링크 진입에서는 제목이 비지 않게 디자인 문구로 받친다 */}
         <NavigationHeader title={missionHome?.missionTitle ?? '오늘의 제주 퀴즈'} onBack={cancelGuard.requestExit} />
 
-        {isPreparing || !currentQuestion ? (
+        {/* 시작 응답을 기다리는 동안에는 **곧 나타날 화면의 모양**을 그대로 그린다(QuizSkeleton).
+            예전에는 가운데 스피너 하나여서, 응답이 오는 순간 진행바·이미지·문제·보기가 한꺼번에 나타났다 */}
+        {isPreparing ? (
+          <QuizSkeleton ctaBottomPadding={ctaBottomPadding(insets.bottom)} />
+        ) : !currentQuestion ? (
+          // 기다려도 바뀌지 않는 상태(시작 실패 · 풀 수 있는 문제 없음)는 자리표시가 아니라 문구로 말한다 —
+          // 기다리면 채워지는 자리에만 스켈레톤을 둔다(together-materials.tsx의 같은 구분).
           <View className="flex-1 items-center justify-center px-6">
-            {isPreparing ? (
-              <ActivityIndicator />
-            ) : (
-              <Text className="text-center font-pretendard-regular text-body-md text-cool-neutral-500">
-                {hasStartFailed ? '퀴즈를 불러오지 못했어요.\n잠시 후 다시 시도해주세요.' : '풀 수 있는 문제가 없어요.'}
-              </Text>
-            )}
+            <Text className="text-center font-pretendard-regular text-body-md text-cool-neutral-500">
+              {hasStartFailed ? '퀴즈를 불러오지 못했어요.\n잠시 후 다시 시도해주세요.' : '풀 수 있는 문제가 없어요.'}
+            </Text>
           </View>
         ) : (
           <>
@@ -340,7 +374,7 @@ export default function CultureMissionScreen() {
           // "잠깐 쉴게요" — 서버가 문제마다 진행도를 이미 저장해 두므로 그대로 나가면 이어서 할 수 있다
           onPause={() => navigate.replace({ pathname: '/mission/intro', params: { mission: 'culture', missionId: String(cultureMissionId) } })}
           // "포기 할래요" — 서버는 중단도 완료로 처리해 맞힌 개수만큼 보상을 준다
-          onAbandon={() => void finishByStopping()}
+          onAbandon={() => void finishByStopping({ isAbandon: true })}
           onClose={cancelGuard.dismiss}
         />
       </LinearGradient>

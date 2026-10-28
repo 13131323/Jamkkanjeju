@@ -111,17 +111,26 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     /**
-     * web이 만든 이미지를 기기 갤러리에 저장해 달라는 신호.
+     * 이미지를 기기 갤러리에 저장해 달라는 신호. 갤러리 쓰기는 네이티브만 할 수 있다.
      *
-     * 도감 카드의 저장 버튼이 쓴다 — 카드는 web이 그리므로 **web만 그림을 만들 수 있고**,
-     * 갤러리 쓰기는 네이티브만 할 수 있다. 그래서 web이 카드를 PNG로 떠서 넘긴다.
+     * **그림을 넘기는 방법이 둘이고, 보내는 쪽이 고른다.**
+     *   - `dataUrl` — web이 **직접 만든** 그림. AR 도감 카드가 쓴다. 카드는 여러 DOM 요소를 합성한
+     *     결과라 web이 PNG로 떠야만 그 그림이 존재한다. 문자열이 수백 KB가 된다.
+     *   - `imageUrl` — **서버에 이미 있는** 그림. AI 엽서가 쓴다. 서버가 완성해 둔 한 장이라
+     *     web이 받아 base64로 바꿔 넘길 이유가 없다. 앱이 그 주소에서 곧장 내려받는다.
      *
-     * `dataUrl`은 `data:image/png;base64,...` 형식이다. 문자열이 수백 KB가 되므로
-     * 저장 버튼처럼 **사용자가 명시적으로 누른 순간**에만 보낸다(자동 전송 금지).
+     * 엽서가 `imageUrl`을 쓰는 이유는 크기만이 아니다 — **web에서 `fetch`로 그 이미지를 읽으면
+     * CORS에 막힌다.** 이미지 호스트가 web origin에 헤더를 열어 주지 않아서, `<img>`로 보이기는
+     * 하는데 바이트는 못 읽었다(기기에서 확인: 저장만 실패). 네이티브 다운로드에는 그 제약이 없다.
+     *
+     * 둘 중 **하나만** 보낸다. 어느 쪽이든 저장 버튼처럼 **사용자가 명시적으로 누른 순간**에만
+     * 보낸다(자동 전송 금지).
      */
     type: z.literal('SAVE_IMAGE'),
     payload: z.object({
-      dataUrl: z.string().startsWith('data:image/'),
+      dataUrl: z.string().startsWith('data:image/').optional(),
+      /** 서버에 이미 있는 이미지 주소. `dataUrl` 대신 쓴다 */
+      imageUrl: z.string().url().optional(),
       /** 갤러리에 남길 파일 이름(확장자 제외). 공백·경로 구분자가 없어야 한다 */
       fileName: z
         .string()
@@ -173,6 +182,77 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
     }),
     traceId: z.string(),
   }),
+  z.object({
+    /**
+     * 회원탈퇴 확인 문구를 입력하고 확정했다는 신호.
+     *
+     * 서버 API를 호출하지 않는다 — 민감정보가 없어 로컬 데이터만 지우는 것으로 "탈퇴"를 구현한다.
+     * 앱이 로컬 세션(SQLite)·WebView 로컬 저장소를 지우고 첫 화면(온보딩)으로 되돌린다.
+     * 앱을 종료하지 않는다 — `BackHandler.exitApp()`은 Activity만 finish할 뿐이라 프로세스가
+     * 죽지 않은 채 재실행되면 지운 적 없는 화면 상태가 그대로 복원되는 문제가 있었다
+     * (app/src/components/HomeWebView/useHomeBridge.ts 참고). index.tsx가 지워진 세션을
+     * 보고 스스로 /onboarding/step1로 리다이렉트하므로 별도의 "초기화 완료" 응답은 필요 없다.
+     */
+    type: z.literal('ACCOUNT_DELETE_REQUEST'),
+    payload: z.object({}),
+    traceId: z.string(),
+  }),
+  z.object({
+    /**
+     * 심사위원 코드 입력 모달이 열려 있는지.
+     *
+     * 이 모달은 web의 React state로만 뜬다 — URL도 히스토리도 바뀌지 않는다. 앱의 하드웨어
+     * 뒤로가기(HomeWebView.tsx의 BackHandler)는 WebView의 `canGoBack`만 보므로, 그대로 두면
+     * 모달이 열려 있어도 뒤로가기가 그냥 앱을 꺼 버린다. 그래서 web이 열고 닫을 때마다 이 값을
+     * 알려 주고, 앱은 `isOpen`인 동안 뒤로가기를 자기가 소비한 뒤 `HARDWARE_BACK_PRESSED`로
+     * "닫아 달라"고 되돌려 준다.
+     */
+    type: z.literal('JUDGE_CODE_MODAL_STATE'),
+    payload: z.object({ isOpen: z.boolean() }),
+    traceId: z.string(),
+  }),
+  z.object({
+    /**
+     * 공유 시트를 앱이 WebView 위에 띄워 달라는 요청. AI 엽서 결과 화면의 "공유"가 보낸다.
+     *
+     * **화면은 web에 그대로 있다.** 앱이 하는 일은 협동 미션 초대에서 쓰던 그 시트
+     * (app/src/components/Share/ShareSheet)를 그대로 올리는 것뿐이다 — 라인·문자·메일로 곧장
+     * 넘기는 일(`Linking.openURL`)과 OS 공유 시트(`Share.share`)는 네이티브만 할 수 있고,
+     * WebView 안의 `navigator.share`는 있으면 OS 시트가 곧바로 뜨고 없으면 링크 복사로 떨어져
+     * **같은 버튼이 기기마다 다르게 동작했다.** 앱 안에서는 늘 같은 시트가 뜨는 편이 낫다.
+     *
+     * payload는 `@packages/shared`의 `ShareContent` 그대로다 — 본문("안내 문구 다음 줄에 링크")과
+     * `line://`·`sms:`·`mailto:` 주소를 만드는 규칙이 web·app 어느 쪽에도 복사되지 않도록,
+     * 조립은 공용 순수 함수(share/shareMessage.ts) 하나만 하고 브릿지는 재료만 옮긴다.
+     *
+     * **app → web 응답이 없다.** 시트가 열린 뒤의 일은 전부 앱 안에서 끝나고(복사 안내도 시트가
+     * 직접 띄운다 — Android에서 RN `Modal`은 별도 윈도우라 web의 토스트가 그 뒤에 가린다),
+     * 무엇보다 **"공유했다"를 알 수 있는 쪽이 없다**: `Share.share`의 결과는 공유 앱을 골랐다까지,
+     * `openURL`은 그 앱이 떴다까지만 뜻한다. 돌려줄 사실이 없는 신호에 응답 타입을 만들면 낡은 web이
+     * 그 응답을 못 알아듣는 실패 모드만 하나 늘어난다.
+     *
+     * **새 type이므로 앱을 먼저 배포한다**(이 union 위 경고). 낡은 앱에서는 이 메시지가 zod 검증에서
+     * 통째로 걸러져 **공유 버튼이 아무 일도 하지 않는다** — web은 앱 WebView 안인지만 보고 갈라서
+     * (`isAppWebView()`) 앱이 받았는지는 알 수 없기 때문이다. 앱 밖 브라우저용 폴백
+     * (`navigator.share`/클립보드)은 그대로 남아 있으니 순서만 지키면 된다.
+     */
+    type: z.literal('SHARE_SHEET'),
+    payload: z.object({
+      /**
+       * 실제로 공유되는 주소. 엽서 이미지 주소이거나, 이 시트를 쓰는 다른 화면의 링크다.
+       *
+       * `.url()`로 조이지 않는 건 시트가 주소를 해석하지 않기 때문이다 — 본문에 붙여 넘길 뿐이라
+       * 형식은 받는 앱이 판단한다. 다만 **빈 문자열은 막는다**: 안내 문구만 남은 글은 받는 사람이
+       * 들어올 방법이 없어 공용 규칙도 그때는 아무것도 보내지 않는다(buildShareMessage).
+       */
+      url: z.string().min(1),
+      /** 링크 앞줄에 붙는 안내 한 줄. 화면마다 달라서(초대 ↔ 엽서) 계약이 값으로 받는다 */
+      headline: z.string().min(1),
+      /** 메일 제목. 생략하면 `headline`을 그대로 쓴다(공용 규칙의 기본값) */
+      mailSubject: z.string().optional(),
+    }),
+    traceId: z.string(),
+  }),
 ]);
 
 /**
@@ -182,6 +262,41 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
  * 한쪽만 옮기면 web 지도에는 마커가 있는데 앱은 제주 밖이라 미션이 시작되지 않는다.
  */
 export const JUDGE_MODE_COORDS = { lat: 33.4996, lng: 126.5312 } as const;
+
+/**
+ * 앱이 WebView에 심는 심사위원용 모드 전역의 이름 — `window.__TAMNALOG_JUDGE_MODE__`.
+ *
+ * **모드의 보관은 앱이, 편집은 web이 한다.** web의 localStorage는 문서가 실행된 뒤에야 읽히므로
+ * 콜드 스타트에서 첫 렌더·첫 요청이 항상 기본 모드로 나갔다. 앱은 sqlite에 남긴 값을 부트스트랩에서
+ * 되살리므로, 그 값을 문서 실행 전에 심으면(injectedJavaScriptBeforeContentLoaded) 그 경쟁이 사라진다
+ * — 토큰을 브릿지가 아니라 주입으로 넘기는 것과 같은 이유다(app/.../authTokenScript.ts).
+ *
+ * **이름과 파싱 규칙을 여기 두는 이유**: 심는 쪽(app)과 읽는 쪽(web)이 문자열을 각자 적으면
+ * 오타 하나로 조용히 "값이 없음"이 된다. 토큰 쪽은 실제로 두 파일에 손으로 복제해 두고 주석으로만
+ * 맞춰 두었는데, 그 방식을 따라가지 않는다.
+ */
+export const JUDGE_MODE_GLOBAL = '__TAMNALOG_JUDGE_MODE__';
+
+/**
+ * 주입된 전역값을 켜짐/꺼짐으로 접는다.
+ *
+ * `true`만 켜짐이다 — 앱이 낡아 전역을 아예 심지 않는 경우(`undefined`)와 구버전이 문자열을 심는
+ * 경우를 모두 안전한 쪽(꺼짐)으로 접는다. 전역은 web이 혼자 읽으므로 낡은 앱에서는 "값이 없다"가
+ * 그대로 관측되고, web은 localStorage로 떨어진다.
+ */
+export function parseInjectedJudgeMode(value: unknown): boolean {
+  return value === true;
+}
+
+/**
+ * 제주 본섬의 중심점.
+ *
+ * **web과 app이 같은 값을 써야 한다** — JUDGE_MODE_COORDS와 같은 이유다. web은 좌표를 아직 모를 때
+ * 홈 조회의 기준점으로 쓰고(_pages/home/model/homeQueryCoords.ts), app은 미션 중단 요청에서
+ * 측위가 끝내 실패했을 때의 폴백으로 쓴다(utils/missionStopCoords.ts). 두 값이 갈리면 같은 "모름"
+ * 상태인데 화면과 서버가 서로 다른 지점을 기준으로 추천을 뽑는다.
+ */
+export const JEJU_CENTER = { lat: 33.361424638771474, lng: 126.52941927591584 } as const;
 
 /**
  * 심사위원용 모드에서 쓰는 고정 토큰 — 서버에 미리 심어 둔 목업 사용자.
@@ -289,6 +404,18 @@ export const AppToWebMessageSchema = z.discriminatedUnion('type', [
     // Android WebView는 시스템 바를 몰라 env(safe-area-inset-*)가 항상 0이다.
     // 네이티브가 실측 inset(dp)을 그대로 넘기고, web이 CSS 변수로 반영한다.
     payload: z.object({ top: z.number(), bottom: z.number() }),
+    traceId: z.string(),
+  }),
+  z.object({
+    /**
+     * 하드웨어 뒤로가기가 눌렸다는 신호.
+     *
+     * `JUDGE_CODE_MODAL_STATE`로 모달이 열렸다고 알린 뒤에만 온다 — 앱은 그동안 뒤로가기를
+     * 자기가 소비하고(BackHandler가 true를 반환해 기본 동작을 막는다) 대신 이 메시지로
+     * "닫아 달라"고 되돌려 준다. web은 열려 있는 모달을 닫는 것으로 응답한다.
+     */
+    type: z.literal('HARDWARE_BACK_PRESSED'),
+    payload: z.object({}),
     traceId: z.string(),
   }),
 ]);
