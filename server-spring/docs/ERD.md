@@ -172,6 +172,7 @@ ACQUIRED_COUPON {
     bigint coupon_id PK, FK "NOT NULL"
     bigint user_id PK, FK "NOT NULL"
     datetime acquired_at "NOT NULL"
+    datetime used_at "NULL: 미사용, 값이 있으면 사용 완료"
     datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
     datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }
