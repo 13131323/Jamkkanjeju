@@ -1,8 +1,10 @@
 'use client';
 
+import type { MapModalRewardDetail } from '@shared/api/mapModal';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MISSION_ROUTE_BY_TYPE, type GeneratedApi } from '@packages/shared';
+import { MISSION_ROUTE_BY_TYPE } from '@packages/shared';
 import { buildGuestbookWriteHref, canWriteGuestbookAt } from '@entities/guestbook';
 import { formatDistance, toRewardBadges, type MapMissionType } from '@entities/place';
 import { sendToApp } from '@shared/lib/bridge/utils';
@@ -20,7 +22,7 @@ export type MissionListItemMission = {
   // map/contents(FilteredMissionModalCard 목록)에만 있음 — map/modals(단일 모달)엔 없다.
   hasWrittenGuestbook?: boolean | null;
   // map/modals(단일 모달)에만 있음 — map/contents 목록엔 없다(보상 상세는 모달에서만 내려준다).
-  rewardDetail?: GeneratedApi.FullRewardDetailResponse;
+  rewardDetail?: MapModalRewardDetail;
 };
 
 export type MissionListItemData = {

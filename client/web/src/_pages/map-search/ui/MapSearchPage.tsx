@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { toAddressUnit, useCurrentAddress, useCurrentCoords } from '@entities/location';
+import { useCurrentCoords } from '@entities/location';
 import { useRecentSearches, useSearchPlaces } from '@features/map-search';
 import type { Coordinates } from '@shared/config/geo';
 import type { SearchResultPlace } from '@features/map-search';
@@ -15,12 +15,12 @@ export function MapSearchPage() {
   const router = useRouter();
   const [keyword, setKeyword] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
 
   // 지도 표시용(useDisplayLocation)이 아니라 실제 현재 좌표를 쓴다 — 제주 밖에서도 검색·주소는 동작해야 한다
   // (useHomeData가 같은 이유로 useCurrentCoords를 쓰는 것과 동일한 근거, entities/location/model/useCurrentCoords.ts 주석 참고).
   const coords = useCurrentCoords();
-  const { data: address } = useCurrentAddress(coords, true);
-  const searchResult = useSearchPlaces(keyword, coords);
+  const searchResult = useSearchPlaces(keyword, coords, isComposing);
   const { keywords: recentKeywords, addRecentSearch } = useRecentSearches();
 
   function handleSelectPlace(place: SearchResultPlace) {
@@ -61,6 +61,8 @@ export function MapSearchPage() {
           type="text"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value.slice(0, SEARCH_KEYWORD_MAX_LENGTH))}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={() => setIsComposing(false)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           maxLength={SEARCH_KEYWORD_MAX_LENGTH}
@@ -75,7 +77,7 @@ export function MapSearchPage() {
         {showRecent ? (
           <RecentSearchSection keywords={recentKeywords} onSelect={handleSelectRecentKeyword} />
         ) : (
-          <SearchResultSections coords={coords} addressLabel={address} query={searchResult} onSelectPlace={handleSelectPlace} />
+          <SearchResultSections coords={coords} query={searchResult} onSelectPlace={handleSelectPlace} />
         )}
       </div>
     </div>
@@ -109,19 +111,20 @@ function RecentSearchSection({ keywords, onSelect }: { keywords: string[]; onSel
 }
 
 type SearchQueryResult = {
-  data?: { recommended: SearchResultPlace[]; mission: SearchResultPlace[] };
+  data?: { locations: SearchResultPlace[] };
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  fetchNextPage: () => unknown;
   isLoading: boolean;
   isError: boolean;
 };
 
 function SearchResultSections({
   coords,
-  addressLabel,
   query,
   onSelectPlace,
 }: {
   coords: Coordinates | null;
-  addressLabel: string | undefined;
   query: SearchQueryResult;
   onSelectPlace: (place: SearchResultPlace) => void;
 }) {
@@ -131,41 +134,30 @@ function SearchResultSections({
   if (query.isLoading) {
     return <SearchResultsSkeleton />;
   }
-  if (query.isError) {
+  if (query.isError && !query.data) {
     return <p className="text-label-md text-warm-neutral-300 pt-10 text-center">검색에 실패했어요. 다시 시도해주세요</p>;
   }
 
-  const { recommended = [], mission = [] } = query.data ?? {};
+  const { locations = [] } = query.data ?? {};
 
-  if (recommended.length === 0 && mission.length === 0) {
+  if (locations.length === 0) {
     return <p className="text-label-md text-warm-neutral-300 pt-10 text-center">검색 결과가 없어요</p>;
   }
 
   return (
-    <>
-      {recommended.length > 0 && (
-        <section>
-          {/* Geocoder가 주는 전체 주소를 그대로 쓰면 "…문연로 6 추천장소"처럼 번지·건물번호까지 붙어
-              제목 길이가 위치마다 들쭉날쭉해진다. 홈 상단 주소와 같은 규칙으로 행정 단위까지만 남긴다(toAddressUnit). */}
-          <h2 className="text-heading-h4 text-warm-neutral-900 font-bold">{addressLabel ? `${toAddressUnit(addressLabel)} 추천장소` : '추천장소'}</h2>
-          <div className="flex flex-col">
-            {recommended.map((item, index) => (
-              <ResultListItem key={item.id} item={item} noDivider={index === recommended.length - 1} onClick={() => onSelectPlace(item)} />
-            ))}
-          </div>
-        </section>
+    <section>
+      <h2 className="text-heading-h4 text-warm-neutral-900 font-bold">검색 결과</h2>
+      <div className="flex flex-col">
+        {locations.map((item, index) => (
+          <ResultListItem key={item.id} item={item} noDivider={index === locations.length - 1} onClick={() => onSelectPlace(item)} />
+        ))}
+      </div>
+      {query.hasNextPage && (
+        <button type="button" disabled={query.isFetchingNextPage} onClick={() => { void query.fetchNextPage(); }} className="text-label-md text-warm-neutral-600 w-full py-4">
+          {query.isFetchingNextPage ? '불러오는 중...' : '더보기'}
+        </button>
       )}
-      {mission.length > 0 && (
-        <section className={recommended.length > 0 ? 'mt-[50px]' : ''}>
-          <h2 className="text-heading-h4 text-warm-neutral-900 font-bold">참여할 수 있는 미션이 있는 지역</h2>
-          <div className="flex flex-col">
-            {mission.map((item, index) => (
-              <ResultListItem key={item.id} item={item} noDivider={index === mission.length - 1} onClick={() => onSelectPlace(item)} />
-            ))}
-          </div>
-        </section>
-      )}
-    </>
+    </section>
   );
 }
 
@@ -179,7 +171,10 @@ function ResultListItem({ item, noDivider, onClick }: { item: SearchResultPlace;
       )}
       <div className="flex min-w-0 flex-col gap-1">
         <span className="text-label-md text-warm-neutral-900 truncate font-medium">{item.name}</span>
-        <span className="bg-warm-neutral-50 text-label-sm text-warm-neutral-600 w-fit rounded-sm px-2 py-0.5 whitespace-nowrap">{item.categoryLabel}</span>
+        <div className="flex min-w-0 gap-1">
+          <span className="bg-warm-neutral-50 text-label-sm text-warm-neutral-600 shrink-0 rounded-sm px-2 py-0.5 whitespace-nowrap">{item.categoryLabel}</span>
+          {item.mission && <span title={item.mission.missionTitle} className="bg-tertiary-100 text-label-sm text-tertiary-800 truncate rounded-sm px-2 py-0.5">{item.mission.missionType === 'TREASURE' ? '보물찾기' : '협동미션'} · {item.mission.missionTitle}</span>}
+        </div>
       </div>
       <span className="text-label-md text-warm-neutral-600 ml-auto shrink-0 font-normal">{item.distanceLabel}</span>
     </button>

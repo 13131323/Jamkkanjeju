@@ -407,6 +407,7 @@ Status Code : `200 OK`
 | --- | --- | --- |
 | `id` | integer | 길바닥 방명록 ID |
 | `userNickname` | string \| null | 작성자 닉네임. 작성자 또는 닉네임이 없으면 null |
+| `characterImgUrl` | string \| null | 작성자의 캐릭터 프로필 이미지 URL. 작성자 또는 프로필 이미지가 없으면 null |
 | `locationAlias` | string | 작성자가 지정한 위치 별칭 |
 | `distanceMeter` | integer | 현재 사용자 위치에서 길바닥 방명록까지의 거리(m) |
 | `durationMinutes` | integer | 현재 사용자 위치에서 길바닥 방명록까지의 예상 이동 시간(분) |
@@ -421,6 +422,7 @@ Status Code : `200 OK`
 {
   "id": 100,
   "userNickname": "제주 여행자",
+  "characterImgUrl": "https://example.com/profile.png",
   "locationAlias": "성산 바다 앞",
   "distanceMeter": 850,
   "durationMinutes": 11,
@@ -434,7 +436,7 @@ Status Code : `200 OK`
 ```
 
 - `contentImageUrl`과 `contentAudioUrl`은 배열이 아닌 단일 URL이다.
-- 작성자가 없어도 ACTIVE 길바닥 방명록은 조회할 수 있으며 `userNickname`만 null로 반환한다.
+- 작성자가 없어도 ACTIVE 길바닥 방명록은 조회할 수 있으며 `userNickname`과 `characterImgUrl`을 null로 반환한다.
 - nullable 필드는 값이 없어도 키를 생략하지 않고 null로 반환한다. 두 응답 유형에만 있는 필드들을 하나의 객체에 합쳐 나열하지 않는다.
 
 ---

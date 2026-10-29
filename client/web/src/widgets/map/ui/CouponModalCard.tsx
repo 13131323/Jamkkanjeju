@@ -19,6 +19,7 @@ export type CouponModalPayload = {
 type CouponModalCardProps = CouponModalPayload & {
   /** 시트가 내려가 있는 상태인지. 상태는 MapView가 들고 있다(마커 탭도 같은 값을 바꾼다) */
   isCollapsed: boolean;
+  embedded?: boolean;
   /** 아래로 끌어 내렸을 때. 닫지 않고 손잡이만 남긴다 */
   onCollapse: () => void;
   /** 손잡이를 위로 끌어 올렸을 때. 마커 탭과 같은 결과다 */
@@ -52,7 +53,7 @@ const COLLAPSED_PEEK_PX = 28;
  * 쿠폰 정보는 app이 쿼리 파라미터로 넘긴다 — completion API가 이미 준 값이라
  * web에서 다시 조회하지 않는다.
  */
-export function CouponModalCard({ couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand }: CouponModalCardProps) {
+export function CouponModalCard({ couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand, embedded = false }: CouponModalCardProps) {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartYRef = useRef<number | null>(null);
@@ -110,23 +111,23 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           없었다. 지금은 지도 탭이 내리는 신호다(MapView의 useDismissOnMapGesture). 닫지 않고 내리는
           이유는 그대로다 — 닫으면 되돌아올 길이 없고, 마커 탭이 되올리는 유일한 경로다. */}
       <div
-        className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[70%] flex-col rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
+        className={`bg-cool-neutral-white flex flex-col ${embedded ? 'relative h-full min-h-0' : 'absolute inset-x-0 bottom-0 z-20 max-h-[70%] rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)]'} ${
           isDragging ? '' : 'transition-transform duration-300 ease-out'
         }`}
-        style={{ transform: sheetTransform }}
+        style={{ transform: embedded ? undefined : sheetTransform }}
       >
         {/* 손잡이 줄만 드래그 영역이면 잡을 곳이 28px뿐이라 끌기가 잘 인식되지 않았다 —
             제목까지 드래그 영역에 넣는다. 그래서 제목은 스크롤 밖 고정이고 스크롤은 사진부터 시작한다.
             드래그 중 제목 글자가 선택되지 않게 select-none을 건다 */}
         <div
           className="shrink-0 px-4 pt-3 select-none"
-          style={{ touchAction: 'none' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          style={{ touchAction: embedded ? 'pan-y' : 'none' }}
+          onPointerDown={embedded ? undefined : handlePointerDown}
+          onPointerMove={embedded ? undefined : handlePointerMove}
+          onPointerUp={embedded ? undefined : handlePointerUp}
+          onPointerCancel={embedded ? undefined : handlePointerUp}
         >
-          <div className="flex justify-center">
+          <div hidden={embedded} style={{ display: embedded ? 'none' : undefined }} className="flex justify-center">
             <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
           </div>
 
@@ -137,7 +138,7 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           </div>
         </div>
 
-        <div className="flex grow flex-col gap-4 overflow-y-auto px-4 pt-4">
+        <div className="flex min-h-0 grow flex-col gap-4 overflow-y-auto px-4 pt-4">
           {/* TourAPI 대표 이미지라 없을 수 있다. 빈 자리를 남기지 않고 회색 판으로 둔다 */}
           {locationImageUrl && !hasImageError ? (
             // 외부 이미지 도메인을 next.config에 등록하지 않아도 되도록 img를 그대로 쓴다

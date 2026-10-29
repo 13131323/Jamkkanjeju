@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import type { GeneratedApi } from '@packages/shared';
 import { useMapLocations } from '@entities/place';
-import { getGetMapModalApiV1MapModalsGetQueryKey, getMapModalApiV1MapModalsGet } from '@/services/api/map/map';
+import { getMapModal, getMapModalQueryKey, type MapModalResponse, type MapModalRewardDetail } from '@shared/api/mapModal';
 import { JEJU_CENTER, type Bounds, type Coordinates } from '@shared/config/geo';
 import { Skeleton } from '@shared/ui/skeleton';
 import { useSheetDragToClose } from '../model/useSheetDrag';
@@ -27,7 +26,7 @@ const MISSION_LABEL: Record<MissionType, string> = {
 };
 
 // map/modals(targetType=LOCATION) 응답만 mission.rewardDetail을 갖고 있다(단일 미션 모달과 같은 API).
-function extractRewardDetail(data: GeneratedApi.GetMapModalApiV1MapModalsGet200 | undefined): GeneratedApi.FullRewardDetailResponse | undefined {
+function extractRewardDetail(data: MapModalResponse | undefined): MapModalRewardDetail | undefined {
   if (!data || !('locationTitle' in data)) return undefined;
   return data.mission?.rewardDetail;
 }
@@ -47,8 +46,8 @@ export function FilteredMissionModalCard({ missionType, bounds, coords, onClose 
     queries: matched.map((location) => {
       const params = { targetType: 'LOCATION' as const, targetId: location.id, userLatitude: center.lat, userLongitude: center.lng };
       return {
-        queryKey: getGetMapModalApiV1MapModalsGetQueryKey(params),
-        queryFn: ({ signal }: { signal: AbortSignal }) => getMapModalApiV1MapModalsGet(params, undefined, signal),
+        queryKey: getMapModalQueryKey(params),
+        queryFn: ({ signal }: { signal: AbortSignal }) => getMapModal(params, signal),
         throwOnError: false,
       };
     }),

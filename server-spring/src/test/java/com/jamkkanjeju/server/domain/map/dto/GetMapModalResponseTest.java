@@ -75,6 +75,18 @@ class GetMapModalResponseTest {
                 .guestbook(guestbook(303L, unnamed, GuestbookStatus.ACTIVE, DATE)).build()).userNickname()).isNull();
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2})
+    void 길바닥_작성자의_프로필과_없는_연결을_반영한다(int authorState) {
+        User author = authorState == 0 ? null : user(15L, "author@example.com");
+        if (authorState == 2) author.assignOnboardingResult(onboarding());
+        RoadGuestbook road = RoadGuestbook.builder()
+                .guestbook(guestbook(100L, author, GuestbookStatus.ACTIVE, DATE))
+                .locationAlias("성산 바다 앞").latitude(33).longitude(126).build();
+        assertThat(GetRoadGuestbookMapModalResponse.of(road, new TravelEstimate(850, 11)).characterImgUrl())
+                .isEqualTo(authorState == 2 ? "https://example.com/profile.png" : null);
+    }
+
     @Test
     void 길바닥_방명록은_단일_URL과_저장된_콘텐츠를_그대로_반환한다() {
         RoadGuestbook road = RoadGuestbook.builder()
@@ -82,7 +94,7 @@ class GetMapModalResponseTest {
                 .locationAlias("성산 바다 앞").latitude(33).longitude(126).build();
         org.springframework.test.util.ReflectionTestUtils.setField(road, "guestbookId", 100L);
         assertThat(GetRoadGuestbookMapModalResponse.of(road, new TravelEstimate(850, 11)))
-                .isEqualTo(new GetRoadGuestbookMapModalResponse(100L, null, "성산 바다 앞", 850, 11, DATE,
+                .isEqualTo(new GetRoadGuestbookMapModalResponse(100L, null, null, "성산 바다 앞", 850, 11, DATE,
                         "https://example.com/photo.jpg", "제주 산책 기록", "https://example.com/audio.mp3", "맑음", "#123456"));
     }
 }

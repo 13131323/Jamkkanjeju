@@ -63,13 +63,11 @@ function hasReceivedCoupons(location: ClusteredPlaceLocation | PlaceLocation): b
   return 'receivedCoupons' in location && location.receivedCoupons.length > 0;
 }
 
-// 미션 없는 장소는 필터(보물찾기/협동미션) 대상이 아니라 항상 보여야 한다 — detail 티어에서 늘 노출.
-// 'coupon' 필터는 미션 유무와 무관하게 쿠폰 사용처만 남긴다(미션 마커는 숨김).
+// 선택한 미션 유형의 장소 또는 획득 쿠폰이 있는 장소만 표시한다.
 function matchesFilter(location: ClusteredPlaceLocation | PlaceLocation, filter: PlaceFilter): boolean {
   if (filter === 'coupon') return hasReceivedCoupons(location);
   if (filter === 'all') return true;
   const type = missionTypeOf(location);
-  if (type === null) return true;
   return type === filter;
 }
 

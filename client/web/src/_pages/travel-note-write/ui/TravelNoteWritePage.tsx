@@ -1,5 +1,6 @@
 'use client';
 
+import { PHOTO_ICON_CONTENT } from '@shared/lib/photoIcon';
 import {
   useEffect,
   useMemo,
@@ -178,13 +179,8 @@ function IconChevronLeft() {
 }
 
 function IconPhoto() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <rect x="2.5" y="3.5" width="15" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="7" cy="8" r="1.25" fill="currentColor" />
-      <path d="M2.5 13.5l4-4 3.5 3.5 2.5-2.5 4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
+  // 서버·사용자 입력이 아닌 기존 고정 SVG 도형만 재사용한다.
+  return <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true" dangerouslySetInnerHTML={{ __html: PHOTO_ICON_CONTENT }} />;
 }
 
 function IconText() {

@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useRef, useState, type ReactNode } from 'react';
+import { use, useState, type ReactNode } from 'react';
 import Image, { type StaticImageData } from 'next/image';
 import { useRouter } from 'next/navigation';
 import { buildGuestbookWriteHref, canWriteGuestbookAt } from '@entities/guestbook';
@@ -15,6 +15,7 @@ import iconTreasure from '@shared/lib/images/icon-mission-treasure.png';
 import iconNavGuestbook from '@shared/lib/images/nav-guestbook.png';
 import { SkeletonImage } from '@shared/ui/SkeletonImage';
 import { Toast } from '@shared/ui/Toast';
+import { useMouseDragScroll } from '@shared/lib/interaction/useMouseDragScroll';
 import { MapDetailSkeleton } from './MapDetailSkeleton';
 
 type MapDetailPageProps = {
@@ -26,7 +27,7 @@ export function MapDetailPage({ params }: MapDetailPageProps) {
   const locationId = Number(placeId);
   const router = useRouter();
   const { coords } = useDisplayLocation();
-  const { data: detail, isLoading, isError, isNotFound } = usePlaceDetail(locationId, coords ?? JEJU_CENTER);
+  const { data: detail, isLoading, isError, isNotFound, hasNextPage, isFetchingNextPage, fetchNextPage } = usePlaceDetail(locationId, coords ?? JEJU_CENTER);
   const [toastMessage, setToastMessage] = useState<{ id: number; text: string } | null>(null);
 
   async function handleWriteGuestbookClick() {
@@ -73,19 +74,20 @@ export function MapDetailPage({ params }: MapDetailPageProps) {
     router.back();
   };
 
-  if (Number.isNaN(locationId)) {
+  if (!Number.isInteger(locationId) || locationId < 1) {
     return <CenteredMessage onBack={goBack} text="장소를 찾을 수 없어요" />;
   }
   if (isLoading) {
     return <MapDetailSkeleton onBack={goBack} />;
   }
   // 없는 장소(404)와 그 밖의 실패(네트워크·서버 오류)는 문구를 갈라야 한다.
-  if (isNotFound || !detail) {
+  if (isNotFound) {
     return <CenteredMessage onBack={goBack} text="장소를 찾을 수 없어요" />;
   }
-  if (isError) {
+  if (isError && !detail) {
     return <CenteredMessage onBack={goBack} text="정보를 불러오지 못했어요. 다시 시도해주세요" />;
   }
+  if (!detail) return <MapDetailSkeleton onBack={goBack} />;
 
   return (
     <div className="bg-cool-neutral-white w-full" style={{ paddingTop: `var(--safe-area-top)` }}>
@@ -112,8 +114,7 @@ export function MapDetailPage({ params }: MapDetailPageProps) {
             <span className="text-label-sm text-cool-neutral-400">총 {detail.nearbyMissions.length}개</span>
           </div>
           <div className="flex flex-col gap-2.5 px-4">
-            {/* missionId는 공통 MISSION.id가 아니라 유형별 세부 미션 id라, 유형이 다르면 값이 겹친다.
-                실제로 TREASURE 1번과 COOPERATIVE 1번이 함께 올 수 있다 — key에 유형을 함께 넣어야 충돌하지 않는다 */}
+            {/* v2의 missionId는 미션 홈 조회·시작에 사용하는 공통 미션 ID다. */}
             {detail.nearbyMissions.map((mission) => (
               <MissionCard key={`${mission.missionType}-${mission.missionId}`} mission={mission} onSelect={() => handleStartMission(mission)} />
             ))}
@@ -123,15 +124,14 @@ export function MapDetailPage({ params }: MapDetailPageProps) {
         <SectionGroup>
           <div className="flex items-center justify-between px-4">
             <h2 className="text-label-lg text-cool-neutral-950 font-bold">방명록</h2>
-            {/* 볼 방명록이 없으면 더보기로 보낼 곳도 없다 */}
-            {detail.reviews.length > 0 && (
+            {hasNextPage && (
               <button
                 type="button"
-                // 피드의 위치 칩은 장소명 문자열이 키다(getLocationFilterOptions) — locationId로는 못 고른다
-                onClick={() => router.push(`/travel-note?location=${encodeURIComponent(detail.locationTitle)}`)}
+                onClick={() => { void fetchNextPage(); }}
+                disabled={isFetchingNextPage}
                 className="text-label-sm text-cool-neutral-400"
               >
-                더보기
+                {isFetchingNextPage ? '불러오는 중...' : '더보기'}
               </button>
             )}
           </div>
@@ -207,7 +207,7 @@ function SectionGroup({ children }: { children: ReactNode }) {
 
 function HeroImage({ imageUrls }: { imageUrls: string[] }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const { scrollRef, dragHandlers } = useMouseDragScroll();
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -220,7 +220,7 @@ function HeroImage({ imageUrls }: { imageUrls: string[] }) {
 
   return (
     <div className="flex flex-col gap-2 pt-3">
-      <div ref={scrollRef} onScroll={handleScroll} className="mx-5 flex h-50 snap-x snap-mandatory scrollbar-none overflow-x-auto rounded-xl [&::-webkit-scrollbar]:hidden">
+      <div ref={scrollRef} {...dragHandlers} onScroll={handleScroll} className="mx-5 flex h-50 cursor-grab select-none active:cursor-grabbing snap-x snap-mandatory scrollbar-none overflow-x-auto rounded-xl [&::-webkit-scrollbar]:hidden">
         {imageUrls.map((url) => (
           <SkeletonImage key={url} src={url} className="h-50 w-full shrink-0 snap-center" />
         ))}
