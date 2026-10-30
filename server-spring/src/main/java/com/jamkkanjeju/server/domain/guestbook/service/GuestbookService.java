@@ -62,6 +62,7 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -134,13 +135,19 @@ public class GuestbookService {
         List<VisitedLocationInfo> visitedLocations = visitedLocationRepository.findAllByUserId(userId).stream()
                 .map(visited -> VisitedLocationInfo.from(visited.getLocation())).toList();
 
-        // 3. 장소 연결이 유지된 활성 일반 방명록 페이지 조회
-        Slice<LocationGuestbook> generalPage = locationGuestbookRepository.findSliceByStatus(
-                GuestbookStatus.ACTIVE, PageRequest.of(request.generalPage(), request.generalSize()));
+        // 3. 유형·조회 기준을 적용한 전체 후보에서 일반 페이지 조회
+        PageRequest generalRequest = PageRequest.of(request.generalPage(), request.generalSize());
+        Slice<LocationGuestbook> generalPage = "ROAD".equals(request.guestbookType())
+                ? new SliceImpl<>(List.of(), generalRequest, false)
+                : locationGuestbookRepository.findSliceByFilters(GuestbookStatus.ACTIVE,
+                        request.sort(), userId, generalRequest);
 
-        // 4. 활성 길바닥 방명록 페이지를 별도 조건으로 조회
-        Slice<RoadGuestbook> roadPage = roadGuestbookRepository.findSliceByStatus(
-                GuestbookStatus.ACTIVE, PageRequest.of(request.roadPage(), request.roadSize()));
+        // 4. 같은 필터로 길바닥 페이지를 독립 조회하고 제외된 유형은 빈 페이지로 유지
+        PageRequest roadRequest = PageRequest.of(request.roadPage(), request.roadSize());
+        Slice<RoadGuestbook> roadPage = "GENERAL".equals(request.guestbookType())
+                ? new SliceImpl<>(List.of(), roadRequest, false)
+                : roadGuestbookRepository.findSliceByFilters(GuestbookStatus.ACTIVE,
+                        request.sort(), userId, roadRequest);
 
         // 5. 실제 반환할 두 페이지의 ID만 모아 좋아요 여부·전체 개수를 일괄 조회
         List<Long> guestbookIds = Stream.concat(

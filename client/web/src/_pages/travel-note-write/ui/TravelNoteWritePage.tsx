@@ -15,7 +15,7 @@ import {
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { parseGuestbookWriteParams, useCreateGuestbook } from '@entities/guestbook';
-import { GeneratedApi } from '@packages/shared';
+import type { CreateGuestbookInput } from '@entities/guestbook/model/createGuestbook';
 import { isAppWebView, sendToApp } from '@shared/lib/bridge/utils';
 import { useIsKeyboardOpen, useKeyboardInset } from '@shared/lib/interaction/useKeyboardInset';
 import travelNoteCompleteMark from '@shared/lib/images/travel-note-complete-mark.png';
@@ -98,17 +98,14 @@ const TOOL_MENU: { key: ToolKey; label: string }[] = [
 
 const WAVEFORM_BARS = [8, 14, 10, 16, 6, 12, 15, 9, 17, 11, 13, 7, 15, 10, 14, 8];
 
-// file이 null이면 앱 번들 기본 제공 mock 오디오, 있으면 사용자가 직접 가져온 오디오다.
-type SoundItem = { id: string; label: string; url: string; file: File | null };
-
-// 사용자가 아직 아무 파일도 안 가져왔을 때를 위한 기본 제공 mock 오디오 1개(요구사항).
-const DEFAULT_MOCK_SOUND: SoundItem = { id: 'mock-default', label: '2026.08.29', url: '/audios/mock-audio-01.mp3', file: null };
+// 사용자가 직접 가져온 오디오 파일과 미리듣기 정보다.
+type SoundItem = { id: string; label: string; url: string; file: File };
 
 const ACCEPTED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_PHOTO_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_PHOTO_FILE_SIZE_BYTES = 10_000_000; // 10MB(10,000,000바이트)
 
-// 멀티파트 업로드 용량을 적당히 제한한다(음성 메모 수준의 짧은 녹음을 기준으로 넉넉히 잡은 값).
-const MAX_SOUND_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+// 서버와 동일하게 이미지·오디오 각각 10MB를 적용한다.
+const MAX_SOUND_FILE_SIZE_BYTES = 10_000_000; // 10MB(10,000,000바이트)
 
 // 오디오 MIME 타입은 기기·브라우저마다 보고값이 갈려(특히 m4a/aac) 확장자도 함께 본다.
 const ACCEPTED_SOUND_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/aac', 'audio/x-aac', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/webm'];
@@ -452,6 +449,52 @@ function TextTabContent({ value, onChange, isCompact }: { value: string; onChang
   );
 }
 
+/** 사진·소리 파일의 서버 제한을 클릭해서 확인하는 안내창이다. */
+function UploadInfo({ kind }: { kind: 'photo' | 'sound' }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const label = kind === 'photo' ? '사진 업로드 안내' : '소리 업로드 안내';
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOutside(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') { setOpen(false); buttonRef.current?.focus(); }
+    }
+    document.addEventListener('pointerdown', closeOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative flex shrink-0 items-center">
+      <button ref={buttonRef} type="button" aria-label={label} aria-expanded={open}
+        aria-controls={`upload-info-${kind}`} onClick={() => setOpen((value) => !value)}
+        className="text-cool-neutral-400 flex h-7 w-7 items-center justify-center rounded-full">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
+          <path d="M12 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <circle cx="12" cy="7.5" r="1" fill="currentColor" />
+        </svg>
+      </button>
+      {open ? (
+        <div id={`upload-info-${kind}`} role="note" aria-label={label}
+          className="bg-cool-neutral-white border-cool-neutral-200 text-label-sm text-cool-neutral-700 absolute top-full -left-24 z-30 mt-1 w-64 max-w-[80vw] rounded-xl border px-3 py-2.5 leading-relaxed shadow-lg">
+          <p>{kind === 'photo' ? '허용 확장자: JPG, JPEG, PNG, WebP' : '허용 확장자: MP3, M4A, AAC, WAV, OGG, WebM'}</p>
+          <p>파일당 최대 10MB</p>
+          {kind === 'sound' ? <p>재생 시간은 최대 30초까지 가능해요.</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type PhotoItem = { id: string; url: string; file: File };
 
 function PhotoPicker({ photos, selectedId, onSelect, onAddPhotos }: { photos: PhotoItem[]; selectedId: string | null; onSelect: (id: string) => void; onAddPhotos: (files: File[]) => void }) {
@@ -466,7 +509,7 @@ function PhotoPicker({ photos, selectedId, onSelect, onAddPhotos }: { photos: Ph
   return (
     <div className="flex w-full flex-col gap-3 px-6">
       <div className="flex items-center justify-between">
-        <p className="text-label-md text-cool-neutral-950 font-bold">찍어둔 사진 선택하기</p>
+        <div className="flex items-center gap-1"><p className="text-label-md text-cool-neutral-950 font-bold">찍어둔 사진 선택하기</p><UploadInfo kind="photo" /></div>
         <button type="button" onClick={() => inputRef.current?.click()} className="text-label-sm text-tertiary-600 font-semibold">
           사진첩에서 가져오기
         </button>
@@ -565,16 +608,17 @@ function SoundTabContent({ sounds, selectedId, onSelect, onAddSounds }: { sounds
   }
 
   return (
-    <div className="flex w-full flex-col gap-4 px-6">
+    <div className="flex w-full flex-col gap-3 px-6">
       {/* 미리듣기 재생 전용 — 화면에는 노출하지 않는다 */}
       <audio ref={audioRef} onEnded={() => setPlayingId(null)} className="hidden" />
       <div className="flex items-center justify-between">
-        <p className="text-label-md text-cool-neutral-950 font-bold">담아둔 소리 선택하기</p>
+        <div className="flex items-center gap-1"><p className="text-label-md text-cool-neutral-950 font-bold">담아둔 소리 선택하기</p><UploadInfo kind="sound" /></div>
         <button type="button" onClick={() => inputRef.current?.click()} className="text-label-sm text-tertiary-600 font-semibold">
           파일에서 가져오기
         </button>
       </div>
       <input ref={inputRef} type="file" accept="audio/mpeg,audio/mp4,.m4a,audio/aac,audio/wav,audio/ogg,audio/webm" multiple onChange={handleFilesChange} className="hidden" />
+      {sounds.length === 0 ? <p className="text-label-md text-cool-neutral-400">아직 가져온 소리가 없어요</p> : null}
       <div className="flex flex-col gap-4">
         {sounds.map((sound) => (
           <SoundRow
@@ -1040,7 +1084,7 @@ export function TravelNoteWritePage() {
   const [contentWriting, setContentWriting] = useState('');
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  const [sounds, setSounds] = useState<SoundItem[]>([DEFAULT_MOCK_SOUND]);
+  const [sounds, setSounds] = useState<SoundItem[]>([]);
   const [selectedSoundId, setSelectedSoundId] = useState<string | null>(null);
   const [contentTemperature, setContentTemperature] = useState(18);
   const [isTemperatureSheetOpen, setIsTemperatureSheetOpen] = useState(false);
@@ -1182,22 +1226,22 @@ export function TravelNoteWritePage() {
   function handleSave() {
     if (!canSave || isSaving) return;
 
-    // 기본 제공 mock 오디오는 실제 파일이 없어(file: null) 전송 대상이 아니고, 사용자가 가져온 파일을 선택했을 때만 실어보낸다.
-    const audioFiles = selectedSound?.file ? [selectedSound.file] : null;
+    // 사용자가 선택한 오디오 파일만 전송한다.
+    const audioFile = selectedSound?.file ?? null;
     /**
      * **2단계 카드에 올라간 것만 보낸다.** 사진첩에서 여러 장을 가져와도 카드에 서는 건 고른 한 장이고,
      * 고른 것을 다시 눌러 빼면 카드에서 사라진다 — 목록에만 남은 사진까지 올리면 저장된 방명록이
      * 사용자가 보고 "저장완료"를 누른 그 화면과 달라진다. 소리를 다루는 방식과 같은 규칙이다.
      */
-    const imageFiles = selectedPhoto ? [selectedPhoto.file] : null;
+    const imageFile = selectedPhoto?.file ?? null;
     // 기온도 마찬가지다 — 날씨를 고르지 않으면 카드에 기온 줄 자체가 없으므로 기본값 18°C를 보내지 않는다.
     const contentTemperatureCelsius = contentWeather != null ? contentTemperature : null;
 
-    // POST /api/v1/guestbooks(GuestbookCreateRequest, multipart/form-data)에 맞춘 payload.
+    // POST /api/v2/guestbooks의 단일 파일 multipart 요청을 구성한다.
     // placeId/missionId는 지도 쪽(entities/place)에서 이미 서버 숫자 id를 문자열로 실어보낸 것이라 그대로 Number() 변환한다.
-    const payload: GeneratedApi.GuestbookCreateRequest = hasLocation
+    const payload: CreateGuestbookInput = hasLocation
       ? {
-          guestbookType: GeneratedApi.GuestbookType.GENERAL,
+          guestbookType: 'GENERAL',
           locationId: Number(params.placeId),
           visitedAt,
           contentWriting: contentWriting.trim() || null,
@@ -1205,11 +1249,11 @@ export function TravelNoteWritePage() {
           contentTemperatureCelsius,
           contentColorCode,
           missionId: params.missionId ? Number(params.missionId) : null,
-          imageFiles,
-          audioFiles,
+          imageFile,
+          audioFile,
         }
       : {
-          guestbookType: GeneratedApi.GuestbookType.ROAD,
+          guestbookType: 'ROAD',
           locationAlias: locationAlias.trim(),
           latitude: params.lat ?? null,
           longitude: params.lng ?? null,
@@ -1218,8 +1262,8 @@ export function TravelNoteWritePage() {
           contentWeather,
           contentTemperatureCelsius,
           contentColorCode,
-          imageFiles,
-          audioFiles,
+          imageFile,
+          audioFile,
         };
 
     createGuestbook(payload, { onSuccess: () => setIsSaved(true) });

@@ -445,7 +445,7 @@ public class MapService {
     private Map<Long, List<ReceivedCoupon>> receivedCoupons(Long userId, List<Long> locationIds) {
         return acquiredCouponRepository.findAllByUserIdAndCouponLocationIdIn(userId, locationIds).stream()
                 .collect(Collectors.groupingBy(acquired -> acquired.getCoupon().getLocation().getId(),
-                        Collectors.mapping(acquired -> ReceivedCoupon.from(acquired.getCoupon()), Collectors.toList())));
+                        Collectors.mapping(ReceivedCoupon::from, Collectors.toList())));
     }
 
     /** 같은 contentId는 한 번만 조회하고 이미지 없음·외부 조회 실패의 null도 요청 내에서 유지한다. */

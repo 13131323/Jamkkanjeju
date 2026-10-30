@@ -2,10 +2,12 @@ package com.jamkkanjeju.server.domain.map.dto;
 
 import com.jamkkanjeju.server.domain.guestbook.entity.RoadGuestbook;
 import com.jamkkanjeju.server.domain.home.entity.Coupon;
+import com.jamkkanjeju.server.domain.home.entity.AcquiredCoupon;
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import com.jamkkanjeju.server.domain.map.service.TravelEstimator.TravelEstimate;
 import com.jamkkanjeju.server.domain.mission.entity.Mission;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /** 지도 홈의 상세 응답. 장소별 미션·방명록·수령 쿠폰과 길바닥 방명록을 담는다. */
 public record GetMapContentsResponse(
@@ -58,12 +60,14 @@ public record GetMapContentsResponse(
         }
     }
 
-    /** 현재 사용자가 획득한 쿠폰의 금액과 사용처 주소이다. */
-    public record ReceivedCoupon(int couponPrice, String locationAddress) {
+    /** 현재 사용자가 획득한 쿠폰의 ID·금액·사용처 주소와 사용 시각이다. */
+    public record ReceivedCoupon(Long couponId, int couponPrice, String locationAddress, LocalDateTime usedAt) {
 
         /** 장소가 연결된 수령 쿠폰을 응답 정보로 변환한다. */
-        public static ReceivedCoupon from(Coupon coupon) {
-            return new ReceivedCoupon(coupon.getCouponPrice(), coupon.getLocation().getAddress());
+        public static ReceivedCoupon from(AcquiredCoupon acquiredCoupon) {
+            Coupon coupon = acquiredCoupon.getCoupon();
+            return new ReceivedCoupon(coupon.getId(), coupon.getCouponPrice(), coupon.getLocation().getAddress(),
+                    acquiredCoupon.getUsedAt());
         }
     }
 

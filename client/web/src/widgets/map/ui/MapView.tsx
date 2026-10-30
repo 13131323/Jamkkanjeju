@@ -281,6 +281,7 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
           isCollapsed={isCouponSheetCollapsed}
           onCollapse={() => setIsCouponSheetCollapsed(true)}
           onExpand={() => setIsCouponSheetCollapsed(false)}
+          onUsed={closeModal}
         />
       )}
     </div>

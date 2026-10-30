@@ -94,6 +94,8 @@ Status Code : `200 OK`
 | `locations[].guestbooksCount` | integer | 해당 장소의 ACTIVE 방명록 수. 없으면 0 |
 | `locations[].representativeImageUrl` | string \| null | TourAPI 장소 대표 이미지 URL. 제공하지 못하면 null |
 | `locations[].receivedCoupons` | object[] \| null | 현재 사용자가 실제 지급받은 쿠폰 중 해당 장소의 쿠폰 목록. 없으면 null |
+| `locations[].receivedCoupons[].couponId` | integer | 획득한 쿠폰의 ID. 로그인 사용자와 함께 획득 쿠폰을 식별하는 값 |
+| `locations[].receivedCoupons[].usedAt` | string \| null | 쿠폰 사용 시각. `YYYY-MM-DDTHH:mm:ss` 형식이며 미사용이면 null |
 | `locations[].receivedCoupons[].couponPrice` | integer | 쿠폰 금액 |
 | `locations[].receivedCoupons[].locationAddress` | string | 쿠폰 사용 장소의 주소 |
 | `roadGuestbooks` | object[] | 같은 확장 범위 안의 길바닥 방명록 목록. 없으면 빈 배열 |
@@ -124,6 +126,8 @@ Status Code : `200 OK`
       "representativeImageUrl": "https://example.com/locations/101.jpg",
       "receivedCoupons": [
         {
+          "couponId": 1,
+          "usedAt": null,
           "couponPrice": 1000,
           "locationAddress": "제주특별자치도 제주시 예시로 44"
         }

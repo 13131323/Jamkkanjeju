@@ -1,8 +1,8 @@
-import { getWriteAvailabilityApiV1GuestbooksWriteAvailabilityGet } from '@/services/api/guestbook/guestbook';
+import { DEFAULT_GUESTBOOK_FILTERS, getGuestbooks } from '@shared/api/guestbooks';
 
-// GET /api/v1/guestbooks/write-availability — 방명록 작성 페이지 진입 전에 먼저 확인해,
-// 방문 기록이 없는 장소면 애초에 페이지를 열지 않는다(호출부에서 안내 토스트를 띄운다).
+/** v2 조회의 본인 방문 장소 목록으로 작성 진입 가능 여부를 확인한다. 최종 검증은 작성 API가 한다. */
 export async function canWriteGuestbookAt(locationId: number): Promise<boolean> {
-  const { canWrite } = await getWriteAvailabilityApiV1GuestbooksWriteAvailabilityGet({ locationId });
-  return canWrite;
+  const response = await getGuestbooks({ ...DEFAULT_GUESTBOOK_FILTERS, guestbookType: 'GENERAL',
+    generalPage: 0, generalSize: 1, roadPage: 0, roadSize: 1 });
+  return response.visitedLocations.some((location) => location.id === locationId);
 }

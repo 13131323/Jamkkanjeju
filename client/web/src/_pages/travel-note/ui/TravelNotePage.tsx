@@ -8,30 +8,21 @@ import { NavMenuButton, NavMenuModal } from '@widgets/nav-menu';
 
 export function TravelNotePage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  // 지도 상세의 "더보기"로 들어오면 그 장소 칩을 미리 골라준다
-  const seedLocationTitle = useSearchParams().get('location');
+  const searchParams = useSearchParams();
+  // 기존 장소 링크로 진입하면 새 유형 구분의 장소 방명록을 조회한다.
+  const requestedType = searchParams.get('guestbookType');
+  const initialGuestbookType = requestedType === 'ROAD' ? 'ROAD'
+    : requestedType === 'GENERAL' || searchParams.has('location') ? 'GENERAL' : 'ALL';
 
   return (
     <div className="bg-cool-neutral-900 relative h-dvh w-full overflow-hidden">
       <div className="h-full w-full overflow-x-hidden overflow-y-auto">
-        <GuestbookFeedView seedLocationTitle={seedLocationTitle} />
+        <GuestbookFeedView initialGuestbookType={initialGuestbookType} />
       </div>
 
       {/* safe-area(상태바) 구간을 항상 배경색으로 덮는다 — 탭이 top-0가 아니라 safe-area 아래에서 고정되면서
           그 위 좁은 띠로 스크롤되는 카드가 그대로 비쳐 보이던 문제 */}
       <div className="bg-cool-neutral-900 pointer-events-none absolute inset-x-0 top-0 z-10" style={{ height: `var(--safe-area-top)` }} />
-
-      {/* 하단 메뉴/방명록작성 버튼 영역 위로 점점 진해지는 블러 — 뒤에 스크롤되는 카드가 버튼 아래서 자연스럽게 흐려지도록 */}
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[5]"
-        style={{
-          height: 160,
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          maskImage: 'linear-gradient(to bottom, transparent 0%, black 100%)',
-          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 100%)',
-        }}
-      />
 
       <NavMenuButton
         isOpen={isMenuOpen}

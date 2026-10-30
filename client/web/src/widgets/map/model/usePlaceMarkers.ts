@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef } from 'react';
 import iconCollaborationAsset from '@shared/lib/images/icon-mission-collaboration.png';
 import iconCouponStoreAsset from '@shared/lib/images/icon-coupon-store.png';
 import iconTreasureAsset from '@shared/lib/images/icon-mission-treasure.png';
 import openChestAsset from '@shared/lib/images/treasure-chest-open.png';
 import type { PlaceFilter } from '@features/place-filter';
-import { subscribeUsedCoupons, usedCouponsVersion } from '@entities/coupon';
 import type { PlaceLocationMission } from '@entities/place';
 import type { Bounds, Coordinates } from '@shared/config/geo';
 import { addPlaceMarkerBadge, createClusterElement, createPlaceMarkerElement, type ClusterColorScheme } from './markerElements';
@@ -57,7 +56,7 @@ function isDoneCoopMission(mission: PlaceLocationMission | null): boolean {
 // 쿠폰 마커 탭 시 CouponModalCard에 넘길 값. locationAddress는 서버가 그대로 준 필수값이라
 // string이지만, useMapModal의 MapModalState는 app 진입 경로(주소가 없을 수 있음)와 모양을 맞추려
 // string | null을 받는다 — 여기서 string을 넘겨도 그대로 들어간다.
-export type PlaceCouponClickPayload = { locationId: number; hasMission: boolean; couponLocation: string; couponPrice: number; locationAddress: string; locationImageUrl: string | null };
+export type PlaceCouponClickPayload = { locationId: number; hasMission: boolean; couponId: number; usedAt: string | null; couponLocation: string; couponPrice: number; locationAddress: string; locationImageUrl: string | null };
 
 export type PlaceMarkerHandlers = {
   // 개별 마커(detail 티어) 중 미션 있는 장소 클릭 시 map_contents-modal
@@ -102,10 +101,6 @@ export function usePlaceMarkers(
   useEffect(() => {
     handlersRef.current = handlers;
   });
-  // usedCoupons 저장소가 바뀌면(다른 마커/시트에서 쿠폰을 사용 완료해도) 이 마커들도 다시 그려
-  // 흐림 표시를 갱신해야 한다 — result가 그대로여도 재실행되도록 버전 값을 effect 의존성에 넣는다.
-  // (흐림 여부는 signature에 들어 있어, 바뀐 마커만 다시 그려진다)
-  const usedCouponsVersionValue = useSyncExternalStore(subscribeUsedCoupons, usedCouponsVersion, () => 0);
 
   useEffect(() => {
     if (!map) return;
@@ -162,7 +157,7 @@ export function usePlaceMarkers(
     } else {
       for (const place of result.places) {
         // 모든 장소는 사진·방명록 개수·이름을 유지하고 쿠폰·미션만 좌측 배지로 구분한다.
-        const couponSelection = selectPlaceCoupon(place.locationTitle, place.receivedCoupons);
+        const couponSelection = selectPlaceCoupon(place.receivedCoupons);
 
         specs.push({
           key: `place:${place.id}`,
@@ -176,7 +171,7 @@ export function usePlaceMarkers(
             place.mission?.type ?? null,
             // 완료 여부로 아이콘이 갈리므로(missionIconSrc) 미션을 끝내고 돌아오면 이 마커만 다시 그려진다
             place.mission?.isCompleted ?? null,
-            couponSelection ? [couponSelection.allUsed, couponSelection.coupon.couponPrice, couponSelection.coupon.locationAddress] : null,
+            couponSelection ? [couponSelection.allUsed, couponSelection.coupon.couponId, couponSelection.coupon.usedAt, couponSelection.coupon.couponPrice, couponSelection.coupon.locationAddress] : null,
           ]),
           coords: place.coords,
           xAnchor: 0.5,
@@ -198,6 +193,8 @@ export function usePlaceMarkers(
                   hasMission: place.mission !== null,
                   couponLocation: place.locationTitle,
                   couponPrice: couponSelection.coupon.couponPrice,
+                  couponId: couponSelection.coupon.couponId,
+                  usedAt: couponSelection.coupon.usedAt,
                   locationAddress: couponSelection.coupon.locationAddress,
                   locationImageUrl: place.representativeImageUrl,
                 });
@@ -240,7 +237,7 @@ export function usePlaceMarkers(
     // 이번 목록에 없는 마커(화면을 벗어났거나 필터·줌 단계로 사라진 것)만 지운다
     previous.forEach(({ overlay }) => overlay.setMap(null));
     markersRef.current = next;
-  }, [map, result, filter, level, usedCouponsVersionValue]);
+  }, [map, result, filter, level]);
 
   useEffect(() => {
     return () => {

@@ -15,5 +15,7 @@ export function getCardCandidates(record: NormalizedGuestbook): CardType[] {
     candidates.push('audio');
   }
 
+  // 날씨만 저장된 기록도 기존 메모 카드로 표시한다.
+  if (candidates.length === 0 && record.contentWeather?.trim()) candidates.push('note');
   return candidates;
 }

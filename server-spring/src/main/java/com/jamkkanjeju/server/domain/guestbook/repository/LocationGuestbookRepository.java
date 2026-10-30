@@ -21,12 +21,13 @@ import org.springframework.data.repository.query.Param;
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
 
     /**
-     * 결과: 공통 방명록 상태가 일치하고 방문 기록·장소가 존재하는 일반 방명록의 요청 Slice이다.
-     * 저장 시각·공통 방명록 ID 내림차순이며 전체 개수는 집계하지 않는다.
-     * {@code visitedLocation.location}, {@code guestbook.user.onboardingResult}, {@code mission.missionType}을
-     * 함께 로딩한다. 작성자·온보딩·미션이 없어도 유지하고, 결과가 없으면 내용이 빈 Slice이다.
-     * 사용: 방명록 조회({@code GET /api/v2/guestbooks})에서 서비스가 ACTIVE와 일반 페이지 조건을 전달하여
-     * {@code generalGuestbooks}와 {@code generalGuestbooksPage}를 구성하고 반환 행의 ID만 좋아요 조회에 쓴다.
+     * 결과: 상태·사용자 조회 조건에 맞는 방명록의 요청 Slice이다. 조건을 적용한 뒤 페이징한다.
+     * 인기순은 전체 좋아요 수·저장 시각·공통 ID 내림차순, 나머지는 저장 시각·공통 ID 내림차순이다.
+     * 방문 기록·장소가 존재하는 행만 포함하며 {@code visitedLocation.location},
+     * {@code guestbook.user.onboardingResult}, {@code mission.missionType}을 함께 로딩한다.
+     * 작성자·온보딩·미션이 없어도 유지하며 결과가 없으면 빈 Slice이다.
+     * 사용: 방명록 조회({@code GET /api/v2/guestbooks})에서 서비스가 ACTIVE·필터·인증 사용자 ID를 전달하여
+     * 해당 유형의 목록과 페이지 정보를 구성한다. 내 글·좋아요 여부는 인증 사용자를 기준으로 조회한다.
      */
     @EntityGraph(attributePaths = {"visitedLocation.location", "guestbook.user.onboardingResult", "mission.missionType"})
     @Query("""
@@ -34,9 +35,17 @@ public interface LocationGuestbookRepository extends JpaRepository<LocationGuest
             join l.visitedLocation v
             join v.location location
             where l.guestbook.status = :status
-            order by l.guestbook.savedAt desc, l.guestbook.id desc
+              and (:sort <> 'MINE' or l.guestbook.user.id = :userId)
+              and (:sort <> 'LIKED' or exists (
+                select 1 from GuestbookLike liked
+                where liked.id.guestbookId = l.guestbook.id and liked.id.userId = :userId))
+            order by case when :sort = 'POPULAR' then (
+                select count(likes) from GuestbookLike likes where likes.id.guestbookId = l.guestbook.id
+            ) else 0 end desc, l.guestbook.savedAt desc, l.guestbook.id desc
             """)
-    Slice<LocationGuestbook> findSliceByStatus(@Param("status") GuestbookStatus status, Pageable pageable);
+    Slice<LocationGuestbook> findSliceByFilters(@Param("status") GuestbookStatus status,
+                                                 @Param("sort") String sort,
+                                                 @Param("userId") Long userId, Pageable pageable);
 
     /**
      * 결과: 장소와 공통 방명록 상태가 일치하는 장소 방명록의 요청 페이지와 다음 페이지 존재 여부이다.

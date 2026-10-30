@@ -52,4 +52,9 @@ public class AcquiredCoupon extends BaseTimeEntity {
         this.acquiredAt = acquiredAt;
         this.usedAt = usedAt;
     }
+
+    /** 서비스에서 미사용 여부를 확인한 쿠폰의 사용 시각을 기록한다. */
+    public void use(LocalDateTime usedAt) {
+        this.usedAt = usedAt;
+    }
 }

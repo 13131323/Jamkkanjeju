@@ -1,4 +1,5 @@
 import type { GeneratedApi } from '@packages/shared';
+import type { GeneralGuestbook, RoadGuestbook } from '@shared/api/guestbooks';
 
 export type GuestbookKind = 'GENERAL' | 'ROAD';
 
@@ -11,6 +12,7 @@ export type NormalizedGuestbookMission = {
 export type NormalizedGuestbook = {
   key: string; // `${kind}-${id}` — general/road는 id 시퀀스가 별개라 합친 피드에서 겹칠 수 있어 별도 고유키를 둔다
   id: number;
+  userId?: number | null;
   kind: GuestbookKind;
   displayLocationName: string; // GENERAL: location.locationTitle, ROAD: locationAlias
   locationTitle: string | null; // GENERAL 전용 위치 필터용 원본 값 (ROAD는 null)
@@ -30,10 +32,11 @@ export type NormalizedGuestbook = {
   likeCount?: number;
 };
 
-export function normalizeGeneralGuestbook(record: GeneratedApi.GeneralGuestbookResponse): NormalizedGuestbook {
+export function normalizeGeneralGuestbook(record: GeneralGuestbook): NormalizedGuestbook {
   return {
     key: `general-${record.id}`,
     id: record.id,
+    userId: record.userId,
     kind: 'GENERAL',
     displayLocationName: record.location.locationTitle,
     locationTitle: record.location.locationTitle,
@@ -41,9 +44,9 @@ export function normalizeGeneralGuestbook(record: GeneratedApi.GeneralGuestbookR
     userNickname: record.userNickname ?? null,
     visitedAt: record.visitedAt,
     savedAt: record.savedAt,
-    contentImageUrls: record.contentImageUrls ?? null,
+    contentImageUrls: record.contentImageUrl ? [record.contentImageUrl] : null,
     contentWriting: record.contentWriting ?? null,
-    contentAudioUrls: record.contentAudioUrls ?? null,
+    contentAudioUrls: record.contentAudioUrl ? [record.contentAudioUrl] : null,
     audioTitle: record.audioTitle ?? null,
     contentWeather: record.contentWeather ?? null,
     contentColorCode: record.contentColorCode ?? null,
@@ -53,10 +56,11 @@ export function normalizeGeneralGuestbook(record: GeneratedApi.GeneralGuestbookR
   };
 }
 
-export function normalizeRoadGuestbook(record: GeneratedApi.RoadGuestbookResponse): NormalizedGuestbook {
+export function normalizeRoadGuestbook(record: RoadGuestbook): NormalizedGuestbook {
   return {
     key: `road-${record.id}`,
     id: record.id,
+    userId: record.userId,
     kind: 'ROAD',
     displayLocationName: record.locationAlias,
     locationTitle: null,
@@ -64,9 +68,9 @@ export function normalizeRoadGuestbook(record: GeneratedApi.RoadGuestbookRespons
     userNickname: record.userNickname ?? null,
     visitedAt: record.visitedAt,
     savedAt: record.savedAt,
-    contentImageUrls: record.contentImageUrls ?? null,
+    contentImageUrls: record.contentImageUrl ? [record.contentImageUrl] : null,
     contentWriting: record.contentWriting ?? null,
-    contentAudioUrls: record.contentAudioUrls ?? null,
+    contentAudioUrls: record.contentAudioUrl ? [record.contentAudioUrl] : null,
     audioTitle: record.audioTitle ?? null,
     contentWeather: record.contentWeather ?? null,
     contentColorCode: record.contentColorCode ?? null,

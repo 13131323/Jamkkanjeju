@@ -1,12 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toCouponUsageConditions } from '@packages/shared';
-import { isCouponUsed, markCouponUsed, subscribeUsedCoupons, usedCouponServerSnapshot } from '@entities/coupon';
+import { markAcquiredCouponUsed } from '@shared/api/coupons';
+import { UseCouponConfirmModal } from './UseCouponConfirmModal';
 import { toHttpsImageUrl } from '@shared/lib/imageUrl';
 import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 export type CouponModalPayload = {
+  /** 구형 앱 URL에는 식별자·서버 사용 상태가 없어 해당 경우 사용 버튼을 활성화하지 않는다. */
+  couponId?: number;
+  usedAt?: string | null;
   /** 쿠폰 사용처. 서버의 couponLocation */
   couponLocation: string;
   couponPrice: number;
@@ -17,6 +22,7 @@ export type CouponModalPayload = {
 };
 
 type CouponModalCardProps = CouponModalPayload & {
+  onUsed: () => void;
   /** 시트가 내려가 있는 상태인지. 상태는 MapView가 들고 있다(마커 탭도 같은 값을 바꾼다) */
   isCollapsed: boolean;
   embedded?: boolean;
@@ -53,7 +59,7 @@ const COLLAPSED_PEEK_PX = 28;
  * 쿠폰 정보는 app이 쿼리 파라미터로 넘긴다 — completion API가 이미 준 값이라
  * web에서 다시 조회하지 않는다.
  */
-export function CouponModalCard({ couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand, embedded = false }: CouponModalCardProps) {
+export function CouponModalCard({ couponId, usedAt, couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand, onUsed, embedded = false }: CouponModalCardProps) {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartYRef = useRef<number | null>(null);
@@ -62,10 +68,18 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
   // 실패하면 이미지가 아예 없을 때와 같은 회색 판으로 되돌린다.
   const [hasImageError, setHasImageError] = useState(false);
 
-  // localStorage는 React 밖의 상태다. effect에서 setState로 읽으면 cascading render가 되고
-  // 서버 렌더에는 저장소가 없어 hydration이 어긋난다 — 외부 저장소 구독으로 읽는다.
-  const getSnapshot = useCallback(() => isCouponUsed(couponLocation, couponPrice), [couponLocation, couponPrice]);
-  const isUsed = useSyncExternalStore(subscribeUsedCoupons, getSnapshot, usedCouponServerSnapshot);
+  const isUsed = usedAt != null;
+  const canUse = couponId !== undefined && usedAt === null;
+  const [showConfirm, setShowConfirm] = useState(false);
+  const queryClient = useQueryClient();
+  const useCoupon = useMutation({
+    mutationFn: markAcquiredCouponUsed,
+    onSuccess: () => {
+      setShowConfirm(false);
+      void queryClient.invalidateQueries({ queryKey: ['/api/v2/map/contents'] });
+      onUsed();
+    },
+  });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
@@ -94,11 +108,6 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
     setDragY(0);
     setIsDragging(false);
     dragStartYRef.current = null;
-  }
-
-  function handleUseCoupon() {
-    // 저장이 구독자에게 알리므로 여기서 따로 상태를 바꾸지 않는다
-    markCouponUsed(couponLocation, couponPrice);
   }
 
   // translateY의 100%는 **시트 자기 높이** 기준이라, 높이를 측정하지 않고도 "손잡이만 남기고 내리기"를
@@ -176,14 +185,17 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
               누르면 되돌릴 수 없으므로 disabled로 바꿔 두 번 눌리지 않게 한다 */}
           <button
             type="button"
-            onClick={handleUseCoupon}
-            disabled={isUsed}
-            className={`text-label-md text-cool-neutral-white flex h-12 w-full items-center justify-center rounded-full font-medium ${isUsed ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
+            onClick={() => setShowConfirm(true)}
+            disabled={!canUse || useCoupon.isPending}
+            className={`text-label-md text-cool-neutral-white flex h-12 w-full items-center justify-center rounded-full font-medium ${!canUse ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
           >
             {isUsed ? '쿠폰 사용 완료' : '쿠폰 사용하기'}
           </button>
         </div>
       </div>
+      {showConfirm && <UseCouponConfirmModal pending={useCoupon.isPending} onCancel={() => setShowConfirm(false)} onConfirm={() => {
+        if (couponId !== undefined && usedAt === null && !useCoupon.isPending) useCoupon.mutate(couponId);
+      }} />}
     </>
   );
 }

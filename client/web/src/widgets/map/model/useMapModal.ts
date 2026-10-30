@@ -6,7 +6,7 @@ export type MapModalState =
   // representativeImageUrl: 클릭한 마커가 그린 장소 이미지. 카드가 자기 응답에 장소 이미지가 없을 때 대신 쓴다
   | { type: 'mission'; locationId: number; representativeImageUrl: string | null }
   | { type: 'place'; locationId: number; representativeImageUrl: string | null }
-  | { type: 'placeCoupon'; locationId: number; hasMission: boolean; couponLocation: string; couponPrice: number; locationAddress: string | null; locationImageUrl: string | null }
+  | { type: 'placeCoupon'; locationId: number; hasMission: boolean; couponId: number; usedAt: string | null; couponLocation: string; couponPrice: number; locationAddress: string | null; locationImageUrl: string | null }
   | { type: 'filteredMission'; missionType: 'treasure' | 'coop' }
   | { type: 'roadGuestbook'; guestbookId: number }
   // 쿠폰 사용 시트(쿠폰사용.png). 마커 클릭이 아니라 app이 넘긴 쿼리 파라미터로 열린다 —

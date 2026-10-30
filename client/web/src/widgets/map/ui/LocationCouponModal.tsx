@@ -28,6 +28,8 @@ export function LocationCouponModal({ locationId, hasMission, coupon, markerImag
     if (element) element.scrollTo({ left: index * element.clientWidth, behavior: 'smooth' });
   }
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    // 포털로 열린 확인창의 포인터는 뒤쪽 캐러셀이 가로채지 않는다.
+    if (!event.currentTarget.contains(event.target as Node)) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     start.current = { x: event.clientX, y: event.clientY, left: event.currentTarget.scrollLeft, dragging: false };
     suppressClick.current = false;
@@ -91,7 +93,7 @@ export function LocationCouponModal({ locationId, hasMission, coupon, markerImag
         )}
         {coupon && (
           <div className="h-full min-w-0 shrink-0 basis-full snap-center overflow-hidden" aria-label="쿠폰 정보">
-            <CouponModalCard {...coupon} isCollapsed={false} onCollapse={onClose} onExpand={() => undefined} embedded />
+            <CouponModalCard {...coupon} isCollapsed={false} onCollapse={onClose} onExpand={() => undefined} onUsed={onClose} embedded />
           </div>
         )}
       </div>

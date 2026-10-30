@@ -14,8 +14,10 @@ export type MapContentsParams = {
 
 /** 장소에 연결된 단일 활성 미션. ID는 공통 MISSION.id다. */
 export type MapContentsMission = GeneratedApi.MapMissionResponse & { missionType: 'TREASURE' | 'COOPERATIVE' };
-export type MapContentsLocation = Omit<GeneratedApi.MapLocationResponse, 'treasureMission' | 'cooperativeMission'> & {
+export type MapContentsReceivedCoupon = { couponId: number; couponPrice: number; locationAddress: string; usedAt: string | null };
+export type MapContentsLocation = Omit<GeneratedApi.MapLocationResponse, 'treasureMission' | 'cooperativeMission' | 'receivedCoupons'> & {
   mission: MapContentsMission | null;
+  receivedCoupons: MapContentsReceivedCoupon[] | null;
 };
 export type DetailedMapContents = {
   locations: MapContentsLocation[];

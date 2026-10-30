@@ -1,6 +1,6 @@
 import type { GeneratedApi } from '@packages/shared';
 import type { Coordinates } from '@shared/config/geo';
-import type { MapContentsLocation } from '@shared/api/mapContents';
+import type { MapContentsLocation, MapContentsReceivedCoupon } from '@shared/api/mapContents';
 
 export type { Coordinates };
 
@@ -21,10 +21,7 @@ export type PlaceLocation = {
 };
 
 // GET /api/v2/map/contents에서 해당 장소에 연결된 현재 사용자의 수령 쿠폰이다.
-export type PlaceReceivedCoupon = {
-  couponPrice: number;
-  locationAddress: string;
-};
+export type PlaceReceivedCoupon = MapContentsReceivedCoupon;
 
 export type PlaceLocationMission = {
   type: MapMissionType;
@@ -63,7 +60,7 @@ export function toPlaceLocation(location: MapContentsLocation): PlaceLocation {
     mission: location.mission ? toMission(location.mission, location.mission.missionType) : null,
     guestbooksCount: location.guestbooksCount ?? 0,
     representativeImageUrl: location.representativeImageUrl ?? null,
-    receivedCoupons: (location.receivedCoupons ?? []).map((coupon) => ({ couponPrice: coupon.couponPrice, locationAddress: coupon.locationAddress })),
+    receivedCoupons: (location.receivedCoupons ?? []).map((coupon) => ({ couponId: coupon.couponId, couponPrice: coupon.couponPrice, locationAddress: coupon.locationAddress, usedAt: coupon.usedAt })),
   };
 }
 
