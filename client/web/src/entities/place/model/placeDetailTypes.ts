@@ -1,4 +1,5 @@
-import type { GeneratedApi } from '@packages/shared';
+import type { MapLocationDetailResponse, MapLocationMission } from '@shared/api/mapLocationDetail';
+import type { MapModalRewardDetail } from '@shared/api/mapModal';
 import type { MapMissionType } from './types';
 
 export type PlaceDetailMission = {
@@ -7,7 +8,7 @@ export type PlaceDetailMission = {
   missionTitle: string;
   description: string | null;
   isCompleted: boolean;
-  rewardDetail: GeneratedApi.FullRewardDetailResponse;
+  rewardDetail: MapModalRewardDetail;
 };
 
 export type PlaceNearbyMission = PlaceDetailMission & {
@@ -19,7 +20,8 @@ export type PlaceReview = {
   id: number;
   missionTitle: string | null;
   representativeImageUrl: string | null;
-  userNickname: string;
+  userId: number | null;
+  userNickname: string | null;
   characterImgUrl: string | null;
   visitedAt: string;
   contentWriting: string | null;
@@ -40,7 +42,7 @@ export type PlaceDetail = {
   locationMission: PlaceDetailMission | null;
 };
 
-function toMission(mission: GeneratedApi.LocationMissionResponse | GeneratedApi.NearbyMissionResponse): PlaceDetailMission {
+function toMission(mission: MapLocationMission): PlaceDetailMission {
   return {
     missionId: mission.missionId,
     missionType: mission.missionType as MapMissionType,
@@ -51,7 +53,7 @@ function toMission(mission: GeneratedApi.LocationMissionResponse | GeneratedApi.
   };
 }
 
-export function toPlaceDetail(response: GeneratedApi.LocationDetailResponse): PlaceDetail {
+export function toPlaceDetail(response: MapLocationDetailResponse): PlaceDetail {
   return {
     locationTitle: response.locationTitle,
     locationCategory: response.locationCategory,
@@ -68,6 +70,7 @@ export function toPlaceDetail(response: GeneratedApi.LocationDetailResponse): Pl
     })),
     reviews: response.guestbooks.map((entry) => ({
       id: entry.id,
+      userId: entry.userId,
       missionTitle: entry.missionTitle ?? null,
       representativeImageUrl: entry.representativeImageUrl ?? null,
       userNickname: entry.userNickname,

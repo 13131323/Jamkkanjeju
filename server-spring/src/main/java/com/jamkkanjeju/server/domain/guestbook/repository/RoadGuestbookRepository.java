@@ -21,30 +21,38 @@ import org.springframework.data.repository.query.Param;
 public interface RoadGuestbookRepository extends JpaRepository<RoadGuestbook, Long> {
 
     /**
-     * 결과: 공통 방명록 상태가 일치하는 길바닥 방명록의 요청 Slice이다.
-     * 저장 시각·공통 방명록 ID 내림차순이며 전체 개수는 집계하지 않는다.
-     * {@code guestbook.user.onboardingResult}를 함께 로딩하고 작성자·온보딩이 없어도 방명록은 유지한다.
-     * 결과가 없으면 내용이 빈 Slice이다.
-     * 사용: 방명록 조회({@code GET /api/v2/guestbooks})에서 서비스가 ACTIVE와 길바닥 페이지 조건을 전달하여
-     * {@code roadGuestbooks}와 {@code roadGuestbooksPage}를 구성하고 반환 행의 ID만 좋아요 조회에 쓴다.
+     * 결과: 상태·사용자 조회 조건에 맞는 방명록의 요청 Slice이다. 조건을 적용한 뒤 페이징한다.
+     * 인기순은 전체 좋아요 수·저장 시각·공통 ID 내림차순, 나머지는 저장 시각·공통 ID 내림차순이다.
+     * {@code guestbook.user.onboardingResult}를 함께 로딩한다. 작성자·온보딩이 없어도 유지하며
+     * 결과가 없으면 빈 Slice이다.
+     * 사용: 방명록 조회({@code GET /api/v2/guestbooks})에서 서비스가 ACTIVE·필터·인증 사용자 ID를 전달하여
+     * 해당 유형의 목록과 페이지 정보를 구성한다. 내 글·좋아요 여부는 인증 사용자를 기준으로 조회한다.
      */
     @EntityGraph(attributePaths = "guestbook.user.onboardingResult")
     @Query("""
             select r from RoadGuestbook r
             where r.guestbook.status = :status
-            order by r.guestbook.savedAt desc, r.guestbook.id desc
+              and (:sort <> 'MINE' or r.guestbook.user.id = :userId)
+              and (:sort <> 'LIKED' or exists (
+                select 1 from GuestbookLike liked
+                where liked.id.guestbookId = r.guestbook.id and liked.id.userId = :userId))
+            order by case when :sort = 'POPULAR' then (
+                select count(likes) from GuestbookLike likes where likes.id.guestbookId = r.guestbook.id
+            ) else 0 end desc, r.guestbook.savedAt desc, r.guestbook.id desc
             """)
-    Slice<RoadGuestbook> findSliceByStatus(@Param("status") GuestbookStatus status, Pageable pageable);
+    Slice<RoadGuestbook> findSliceByFilters(@Param("status") GuestbookStatus status,
+                                             @Param("sort") String sort,
+                                             @Param("userId") Long userId, Pageable pageable);
 
     /**
      * 결과: 공통 방명록 ID와 공통 방명록 상태가 일치하는 길바닥 방명록 한 건이다.
-     * {@code guestbook.user}를 함께 로딩하며 작성자가 없어도 방명록은 유지하고 사용자만 null이다.
+     * {@code guestbook.user.onboardingResult}를 함께 로딩하며 작성자가 없어도 방명록은 유지하고 사용자만 null이다.
      * 해당 ID가 없거나 상태가 다르면 빈 {@code Optional}이다.
      * 사용: 지도 모달 조회({@code GET /api/v2/map/modals})에서 서비스가 ACTIVE를 전달하여
-     * 위치 별칭·거리·시간의 좌표와 작성자 닉네임·방문일·저장된 콘텐츠를 구성한다.
+     * 위치 별칭·거리·시간의 좌표와 작성자 닉네임·캐릭터 프로필 이미지·방문일·저장된 콘텐츠를 구성한다.
      * 빈 결과는 서비스에서 조회 대상 없음 오류로 처리한다.
      */
-    @EntityGraph(attributePaths = "guestbook.user")
+    @EntityGraph(attributePaths = "guestbook.user.onboardingResult")
     Optional<RoadGuestbook> findByGuestbookIdAndGuestbookStatus(Long guestbookId, GuestbookStatus status);
 
     /**

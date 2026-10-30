@@ -1,4 +1,5 @@
 import { toHttpsImageUrl } from '@shared/lib/imageUrl';
+import { PHOTO_ICON_CONTENT } from '@shared/lib/photoIcon';
 import { unwrapHeading } from './headingRotation';
 
 // MapMainScreen.tsx의 PlaceMarker 스타일 그대로 — 미션 없는 로컬장소 마커에 사용 (usePlaceMarkers.ts 참고).
@@ -9,14 +10,27 @@ export function createPlaceMarkerElement(name: string, count: number, imageSrc?:
 
   const iconWrap = document.createElement('div');
   iconWrap.className = 'relative h-[52px] w-[49px] drop-shadow-[0_4px_14px_rgba(0,0,0,0.5)]';
+  iconWrap.dataset.placeMarkerIcon = 'true';
 
   const photoBox = document.createElement('div');
   photoBox.className = 'absolute top-1 left-0 h-12 w-12 overflow-hidden rounded-lg border-2 border-cool-neutral-white bg-warm-neutral-200 shadow-[0_4px_10px_rgba(0,0,0,0.5)]';
+  // 사진이 없거나 로딩에 실패해도 기존 사진 아이콘이 남도록 사진 아래에 배치한다.
+  const placeholder = document.createElement('div');
+  placeholder.className = 'absolute inset-0 flex items-center justify-center text-warm-neutral-500';
+  const photoIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  photoIcon.setAttribute('width', '24');
+  photoIcon.setAttribute('height', '24');
+  photoIcon.setAttribute('viewBox', '0 0 20 20');
+  photoIcon.setAttribute('fill', 'none');
+  photoIcon.setAttribute('aria-hidden', 'true');
+  photoIcon.innerHTML = PHOTO_ICON_CONTENT;
+  placeholder.appendChild(photoIcon);
+  photoBox.appendChild(placeholder);
   if (imageSrc) {
     const img = document.createElement('img');
     img.alt = '';
-    img.className = 'h-full w-full object-cover';
-    // 원격 이미지 실패 시 배경색만 남은 빈 박스로 자연스럽게 되돌아간다(createContentPinElement와 동일한 처리).
+    img.className = 'relative h-full w-full object-cover';
+    // 원격 이미지가 실패하면 숨겨 사진 없음 아이콘이 보이게 한다.
     img.addEventListener('error', () => {
       img.style.display = 'none';
     });
@@ -40,6 +54,20 @@ export function createPlaceMarkerElement(name: string, count: number, imageSrc?:
   wrapper.appendChild(nameLabel);
 
   return wrapper;
+}
+
+/** 장소 사진 좌측에 배지를 겹쳐 붙인다. 쿠폰이 첫 줄, 함께 있는 미션은 둘째 줄에 배치한다. */
+export function addPlaceMarkerBadge(marker: HTMLElement, imageSrc: string, dimmed: boolean, row: 0 | 1 = 0): void {
+  const target = marker.querySelector<HTMLElement>('[data-place-marker-icon]') ?? marker;
+  target.style.position = 'relative';
+  target.style.overflow = 'visible';
+  const badge = createContentPinElement(imageSrc, 24);
+  badge.className += ` absolute ${row === 0 ? '-top-1' : 'top-5'} -left-2 z-20`;
+  if (dimmed) {
+    const image = badge.querySelector('img');
+    if (image) image.style.filter = 'brightness(0.5)';
+  }
+  target.appendChild(badge);
 }
 
 // MapMainScreen.tsx의 ContentPinMarker 스타일 그대로(size로 배율만 조정).

@@ -266,7 +266,7 @@ class GetGuestbooksApiIntegrationTest extends GuestbookIntegrationTestSupport {
                 .andExpect(jsonPath("$.roadGuestbooks", hasSize(1)));
     }
 
-    @ParameterizedTest @CsvSource({"generalPage,-1", "generalSize,0", "roadPage,-1", "roadSize,-1", "generalPage,0.5", "roadSize,abc"})
+    @ParameterizedTest @CsvSource({"generalPage,-1", "generalSize,0", "roadPage,-1", "roadSize,-1", "generalPage,0.5", "roadSize,abc", "generalSize,11", "roadSize,11", "guestbookType,LOCATION", "sort,new", "sort,''"})
     void 잘못된페이지는_공통400이며_데이터는_유지한다(String field, String value) throws Exception {
         Map<String, List<Map<String, Object>>> before = state();
         mvc.perform(query().param(field, value)).andExpect(status().isBadRequest())
@@ -286,12 +286,91 @@ class GetGuestbooksApiIntegrationTest extends GuestbookIntegrationTestSupport {
     @Test void 스웨거에_네페이지조건과_조회응답이있고_POST는_multipart를_유지한다() throws Exception {
         String body = json(mvc.perform(get("/v3/api-docs")));
         List<String> names = JsonPath.read(body, "$.paths['/api/v2/guestbooks'].get.parameters[*].name");
-        assertThat(names).containsExactlyInAnyOrder("generalPage", "generalSize", "roadPage", "roadSize");
-        List<Number> defaults = JsonPath.read(body, "$.paths['/api/v2/guestbooks'].get.parameters[*].schema.default");
-        assertThat(defaults.stream().map(Number::intValue).toList()).containsExactlyInAnyOrder(0, 10, 0, 10);
+        assertThat(names).containsExactlyInAnyOrder("generalPage", "generalSize", "roadPage", "roadSize", "guestbookType", "sort");
+        List<Object> defaults = JsonPath.read(body, "$.paths['/api/v2/guestbooks'].get.parameters[*].schema.default");
+        assertThat(defaults.stream().filter(Number.class::isInstance).map(Number.class::cast).map(Number::intValue).toList()).containsExactlyInAnyOrder(0, 10, 0, 10);
         Map<String, Object> properties = JsonPath.read(body, "$.components.schemas.GetGuestbooksResponse.properties");
         assertThat(properties).containsOnlyKeys("visitedLocations", "generalGuestbooks", "roadGuestbooks", "generalGuestbooksPage", "roadGuestbooksPage");
         Map<String, Object> content = JsonPath.read(body, "$.paths['/api/v2/guestbooks'].post.requestBody.content");
         assertThat(content).containsKey("multipart/form-data");
+    }
+
+    @ParameterizedTest @CsvSource({"ALL,1,1", "GENERAL,1,0", "ROAD,0,1"})
+    void 유형필터는_선택한목록만_반환한다(String type, int generalCount, int roadCount) throws Exception {
+        general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW, null);
+        road(other, GuestbookStatus.ACTIVE, NOW); reload();
+        mvc.perform(query().param("guestbookType", type))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.generalGuestbooks", hasSize(generalCount)))
+                .andExpect(jsonPath("$.roadGuestbooks", hasSize(roadCount)))
+                .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(false))
+                .andExpect(jsonPath("$.roadGuestbooksPage.hasNext").value(false));
+    }
+
+    @ParameterizedTest @CsvSource({"content_writing", "content_img_url", "content_audio_url", "content_weather"})
+    void 콘텐츠유무와_관계없이_최신순으로_페이지를반환한다(String column) throws Exception {
+        LocationGuestbook old = general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW.minusDays(1), null);
+        RoadGuestbook oldRoad = road(other, GuestbookStatus.ACTIVE, NOW.minusDays(1));
+        LocationGuestbook blank = general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW, null);
+        RoadGuestbook missing = road(other, GuestbookStatus.ACTIVE, NOW); reload();
+        jdbc.update("update guestbook set " + column + "='   ' where id=?", blank.getGuestbookId());
+        jdbc.update("update guestbook set " + column + "=null where id=?", missing.getGuestbookId());
+        String first = json(mvc.perform(query().param("generalSize", "1").param("roadSize", "1"))
+                .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(true))
+                .andExpect(jsonPath("$.roadGuestbooksPage.hasNext").value(true)));
+        assertThat(ids(first, "generalGuestbooks")).containsExactly(blank.getGuestbookId());
+        assertThat(ids(first, "roadGuestbooks")).containsExactly(missing.getGuestbookId());
+        String second = json(mvc.perform(query().param("generalSize", "1").param("roadSize", "1")
+                .param("generalPage", "1").param("roadPage", "1"))
+                .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(false))
+                .andExpect(jsonPath("$.roadGuestbooksPage.hasNext").value(false)));
+        assertThat(ids(second, "generalGuestbooks")).containsExactly(old.getGuestbookId());
+        assertThat(ids(second, "roadGuestbooks")).containsExactly(oldRoad.getGuestbookId());
+    }
+
+    @Test void 내글과_좋아요필터는_인증사용자기준이며_첨부가없어도_포함한다() throws Exception {
+        LocationGuestbook mine = general(current, ownVisit(), GuestbookStatus.ACTIVE, NOW.minusHours(2), null);
+        LocationGuestbook theirs = general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW, null);
+        RoadGuestbook mineRoad = road(current, GuestbookStatus.ACTIVE, NOW.minusHours(1));
+        RoadGuestbook theirsRoad = road(other, GuestbookStatus.ACTIVE, NOW);
+        like(mine.getGuestbook(), other); like(theirs.getGuestbook(), current);
+        like(mineRoad.getGuestbook(), current); like(theirsRoad.getGuestbook(), other); reload();
+        String mineBody = json(mvc.perform(query().param("sort", "MINE")));
+        assertThat(ids(mineBody, "generalGuestbooks")).containsExactly(mine.getGuestbookId());
+        assertThat(ids(mineBody, "roadGuestbooks")).containsExactly(mineRoad.getGuestbookId());
+        String likedBody = json(mvc.perform(query().param("sort", "LIKED")));
+        assertThat(ids(likedBody, "generalGuestbooks")).containsExactly(theirs.getGuestbookId());
+        assertThat(ids(likedBody, "roadGuestbooks")).containsExactly(mineRoad.getGuestbookId());
+        String otherBody = json(mvc.perform(get(URL).header("Authorization", bearer(other)).param("sort", "LIKED")));
+        assertThat(ids(otherBody, "generalGuestbooks")).containsExactly(mine.getGuestbookId());
+        assertThat(ids(otherBody, "roadGuestbooks")).containsExactly(theirsRoad.getGuestbookId());
+        jdbc.update("update guestbook set content_img_url=null where id=?", theirs.getGuestbookId()); em.clear();
+        mvc.perform(query().param("sort", "LIKED").param("guestbookType", "GENERAL"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.generalGuestbooks", hasSize(1)))
+                .andExpect(jsonPath("$.roadGuestbooks", hasSize(0)));
+    }
+
+    @Test void 인기순은_전체후보에서_정렬한뒤_페이지를자르고_동률은_저장시각과ID순이다() throws Exception {
+        LocationGuestbook popular = general(other, ownVisit(), GuestbookStatus.ACTIVE, NOW.minusDays(2), null);
+        RoadGuestbook popularRoad = road(other, GuestbookStatus.ACTIVE, NOW.minusDays(2));
+        for (int i = 0; i < 12; i++) {
+            general(current, ownVisit(), GuestbookStatus.ACTIVE, NOW, null);
+            road(current, GuestbookStatus.ACTIVE, NOW);
+        }
+        like(popular.getGuestbook(), current); like(popular.getGuestbook(), other);
+        like(popularRoad.getGuestbook(), current); like(popularRoad.getGuestbook(), other); reload();
+        String latest = json(request());
+        String first = json(mvc.perform(query().param("sort", "POPULAR"))
+                .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(true))
+                .andExpect(jsonPath("$.roadGuestbooksPage.hasNext").value(true))
+                .andExpect(jsonPath("$.generalGuestbooks[0].likeCount").value(2)));
+        assertThat(ids(first, "generalGuestbooks")).startsWith(popular.getGuestbookId());
+        assertThat(ids(first, "roadGuestbooks")).startsWith(popularRoad.getGuestbookId());
+        assertThat(ids(first, "generalGuestbooks").subList(1, 10)).containsExactlyElementsOf(ids(latest, "generalGuestbooks").subList(0, 9));
+        String second = json(mvc.perform(query().param("sort", "POPULAR").param("generalPage", "1").param("roadPage", "1"))
+                .andExpect(jsonPath("$.generalGuestbooks", hasSize(3)))
+                .andExpect(jsonPath("$.roadGuestbooks", hasSize(3)))
+                .andExpect(jsonPath("$.generalGuestbooksPage.hasNext").value(false)));
+        assertThat(ids(second, "generalGuestbooks")).doesNotContainAnyElementsOf(ids(first, "generalGuestbooks"));
+        assertThat(ids(second, "roadGuestbooks")).doesNotContainAnyElementsOf(ids(first, "roadGuestbooks"));
     }
 }

@@ -1,9 +1,7 @@
 -- 제주시청 심사위원 좌표(33.4996, 126.5312) 주변의 지도·미션 테스트 데이터.
 -- 현재 로컬 DB에 수집된 실제 TourAPI 장소 중 20개를 선택했다. 기존 가짜 content_id 990001~990008은 포함하지 않는다.
 -- 장소 간격은 최소 약 500m, 심사위원 좌표로부터 약 300m~2.9km이며 원본 content_id·장소명·주소·분류·좌표를 유지한다.
--- 장소 1~5에는 보물찾기 31~35, 장소 6~10에는 협동 36~40을 각각 하나씩 연결한다.
--- 추천·진행도 확인용 기존 사용자·문화 미션 진행도·팀·방명록은 유지하고 연결 장소와 보물 좌표만 맞춘다.
--- 미션 유형과 역할 카드는 V2 데이터를 이름으로 찾아 연결한다.
+-- 사용자·문화 미션 진행도·방문 기록·방명록과 라토커피제주 보물찾기·블루메베이글 협동 미션을 포함한다.
 
 -- ---------------------------------------------------------------------
 -- 사용자
@@ -14,13 +12,13 @@ UPDATE `user`
 SET `onboarding_result_id` = (SELECT `id` FROM `onboarding_result` WHERE `user_type` = '제주 사진작가' ORDER BY `id` LIMIT 1)
 WHERE `id` = 1;
 
--- 협동 미션 팀원과 방명록 작성자로 쓰는 사용자. 비밀번호는 1번 사용자와 같다.
+-- 방명록 작성자로 쓰는 사용자. 비밀번호는 1번 사용자와 같다.
 INSERT INTO `user`
     (`id`, `onboarding_result_id`, `nickname`, `email`, `password_hash`, `role`, `status`, `guestbook_last_checked_at`)
 VALUES
-    (2, NULL, '함께 걷는 친구', '22345678@gmail.com',
+    (2, 2, '함께 걷는 친구', '22345678@gmail.com',
      '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE', CURRENT_TIMESTAMP(6)),
-    (3, NULL, '바다 보는 여행자', '32345678@gmail.com',
+    (3, 3, '바다 보는 여행자', '32345678@gmail.com',
      '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE', CURRENT_TIMESTAMP(6));
 
 -- ---------------------------------------------------------------------
@@ -51,47 +49,43 @@ VALUES
     (19, 129148, '산지 등대', '제주특별자치도 제주시 사라봉동길 108-1 (건입동)', '문화관광', 100, 33.5209144715, 126.5456624039),
     (20, 2854335, '피커스 제주', '제주특별자치도 제주시 아연로 444-1 (오등동)', '음식', 100, 33.4739110719, 126.5287816055);
 
+-- ---------------------------------------------------------------------
+-- 장소 쿠폰과 1번 사용자의 획득 쿠폰
+-- ---------------------------------------------------------------------
+
+INSERT INTO `coupon` (`id`, `location_id`, `coupon_price`)
+VALUES
+    (1, 1, 1000),
+    (2, 2, 2000),
+    (3, 3, 3000);
+
+INSERT INTO `acquired_coupon` (`coupon_id`, `user_id`, `acquired_at`)
+VALUES
+    (1, 1, CURRENT_TIMESTAMP),
+    (2, 1, CURRENT_TIMESTAMP);
+
+-- ---------------------------------------------------------------------
+-- 라토커피제주(장소 1번)의 보물찾기·블루메베이글(장소 2번)의 협동 미션
+-- ---------------------------------------------------------------------
+
+INSERT INTO `mission` (`mission_type_id`)
+SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE';
+
+INSERT INTO `cooperative_mission` (`mission_id`, `location_id`, `status`)
+VALUES (LAST_INSERT_ID(), 2, 'ACTIVE');
+
+INSERT INTO `mission` (`mission_type_id`)
+SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE';
+
+INSERT INTO `treasure_mission` (`mission_id`, `location_id`, `item_total_count`, `status`)
+VALUES (LAST_INSERT_ID(), 1, 3, 'ACTIVE');
+
 INSERT INTO `visited_location`
     (`id`, `user_id`, `location_id`, `last_visited_at`)
 VALUES
     (1, 1, 1, '2026-10-01 11:00:00'),
     (2, 2, 7, '2026-10-02 15:30:00'),
     (3, 3, 4, '2026-10-03 07:10:00');
-
--- ---------------------------------------------------------------------
--- 보물찾기·협동 미션 (공통 MISSION 31 ~ 40)
--- ---------------------------------------------------------------------
-
-INSERT INTO `mission` (`id`, `mission_type_id`)
-VALUES
-    (31, (SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE')),
-    (32, (SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE')),
-    (33, (SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE')),
-    (34, (SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE')),
-    (35, (SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE')),
-    (36, (SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE')),
-    (37, (SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE')),
-    (38, (SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE')),
-    (39, (SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE')),
-    (40, (SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE'));
-
-INSERT INTO `treasure_mission`
-    (`mission_id`, `location_id`, `item_total_count`, `status`, `ar_character_id`, `point`, `coupon_id`)
-VALUES
-    (31, 1, 3, 'ACTIVE', NULL, 100, NULL),
-    (32, 2, 4, 'ACTIVE', NULL, 150, NULL),
-    (33, 3, 5, 'ACTIVE', NULL, 200, NULL),
-    (34, 4, 3, 'ACTIVE', NULL, 120, NULL),
-    (35, 5, 3, 'ACTIVE', NULL, 100, NULL);
-
-INSERT INTO `cooperative_mission`
-    (`mission_id`, `location_id`, `status`, `ar_character_id`, `point`, `coupon_id`)
-VALUES
-    (36, 6, 'ACTIVE', NULL, 200, NULL),
-    (37, 7, 'ACTIVE', NULL, 200, NULL),
-    (38, 8, 'ACTIVE', NULL, 250, NULL),
-    (39, 9, 'ACTIVE', NULL, 200, NULL),
-    (40, 10, 'ACTIVE', NULL, 200, NULL);
 
 -- ---------------------------------------------------------------------
 -- 문화 미션 진행
@@ -105,64 +99,6 @@ VALUES
     (2, 2, 1, 'COMPLETED', 3, 3, '2026-09-30 18:00:00');
 
 -- ---------------------------------------------------------------------
--- 보물찾기 진행
--- ---------------------------------------------------------------------
-
--- 1번 사용자: 라토커피제주(31) 완료, 남춘식당(33) 5개 중 2개 발견
--- 2번 사용자: 블루메베이글(32) 완료 (1번 사용자의 추천에는 영향 없음)
-INSERT INTO `treasure_mission_progress`
-    (`id`, `treasure_mission_id`, `user_id`, `found_item_count`, `mission_status`, `completed_at`)
-VALUES
-    (1, 31, 1, 3, 'COMPLETED', '2026-10-01 11:40:00'),
-    (2, 33, 1, 2, 'IN_PROGRESS', NULL),
-    (3, 32, 2, 4, 'COMPLETED', '2026-10-02 10:20:00');
-
--- 목데이터의 보물 위치는 각 미션에 연결된 장소의 대표 좌표를 사용한다.
-INSERT INTO `treasure_mission_progress_item`
-    (`treasure_mission_progress_id`, `item_index`, `item_status`, `longitude`, `latitude`, `found_at`)
-VALUES
-    (1, 1, 'FOUND', 126.5281672061, 33.4987305369, '2026-10-01 11:15:00'),
-    (1, 2, 'FOUND', 126.5281672061, 33.4987305369, '2026-10-01 11:25:00'),
-    (1, 3, 'FOUND', 126.5281672061, 33.4987305369, '2026-10-01 11:40:00'),
-    (2, 1, 'FOUND', 126.5375247049, 33.4996944686, '2026-10-05 09:10:00'),
-    (2, 2, 'FOUND', 126.5375247049, 33.4996944686, '2026-10-05 09:30:00'),
-    (2, 3, 'UNFOUND', 126.5375247049, 33.4996944686, NULL),
-    (3, 1, 'FOUND', 126.5331112664, 33.496741947, '2026-10-02 09:40:00'),
-    (3, 2, 'FOUND', 126.5331112664, 33.496741947, '2026-10-02 09:55:00'),
-    (3, 3, 'FOUND', 126.5331112664, 33.496741947, '2026-10-02 10:05:00');
-
--- ---------------------------------------------------------------------
--- 협동 미션 진행
--- ---------------------------------------------------------------------
-
--- 팀 1: 형돈(36) 완료 팀 (1번 HOST, 2번 MEMBER)
--- 팀 2: 만세국수(37) 2단계 진행 중 팀 (1번 HOST, 2번 MEMBER, 3번 초대 대기)
-INSERT INTO `cooperative_mission_progress`
-    (`id`, `cooperative_mission_id`, `current_step`, `mission_status`, `team_token`, `completed_at`)
-VALUES
-    (1, 36, 3, 'COMPLETED', 'mock-team-0001', '2026-09-28 16:00:00'),
-    (2, 37, 2, 'IN_PROGRESS', 'mock-team-0002', NULL);
-
-INSERT INTO `cooperative_mission_participant`
-    (`id`, `cooperative_mission_progress_id`, `user_id`, `participant_status`, `participant_role`, `joined_at`)
-VALUES
-    (1, 1, 1, 'ACCEPTED', 'HOST', '2026-09-28 14:00:00'),
-    (2, 1, 2, 'ACCEPTED', 'MEMBER', '2026-09-28 14:05:00'),
-    (3, 2, 1, 'ACCEPTED', 'HOST', '2026-10-06 13:00:00'),
-    (4, 2, 2, 'ACCEPTED', 'MEMBER', '2026-10-06 13:03:00'),
-    (5, 2, 3, 'PENDING', 'MEMBER', NULL);
-
--- 1번 사용자는 진행 중인 팀에서 역할을 두 개 맡아, 홈 진행 목록에서 팀이 한 번만 나오는지 확인할 수 있다.
-INSERT INTO `cooperative_mission_role_progress`
-    (`cooperative_mission_participant_id`, `cooperative_role_card_id`, `item_img_url`, `progress_status`, `completed_at`)
-VALUES
-    (1, (SELECT `id` FROM `cooperative_role_card` WHERE `role_name` = '땅지기'), NULL, 'COMPLETED', '2026-09-28 15:00:00'),
-    (2, (SELECT `id` FROM `cooperative_role_card` WHERE `role_name` = '물지기'), NULL, 'COMPLETED', '2026-09-28 15:20:00'),
-    (3, (SELECT `id` FROM `cooperative_role_card` WHERE `role_name` = '빛지기'), NULL, 'COMPLETED', '2026-10-06 13:40:00'),
-    (3, (SELECT `id` FROM `cooperative_role_card` WHERE `role_name` = '바람지기'), NULL, 'IN_PROGRESS', NULL),
-    (4, (SELECT `id` FROM `cooperative_role_card` WHERE `role_name` = '이웃지기'), NULL, 'IN_PROGRESS', NULL);
-
--- ---------------------------------------------------------------------
 -- 방명록 (장소 방명록 3건, 길바닥 방명록 2건)
 -- ---------------------------------------------------------------------
 
@@ -170,24 +106,24 @@ INSERT INTO `guestbook`
     (`id`, `user_id`, `visited_at`, `content_img_url`, `content_writing`, `content_audio_url`, `audio_title`,
      `content_weather`, `content_temperature_celsius`, `content_color_code`, `saved_at`, `status`)
 VALUES
-    (1, 1, '2026-10-01', NULL, '라토커피제주 근처에서 보물을 다 찾았다!', NULL, NULL, '맑음', 22.5, '#4FC3F7',
+    (1, 1, '2026-10-01', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/guestbooke_test/test_image.png', '라토커피제주 근처에서 보물을 다 찾았다!', NULL, NULL, '맑음', 22.5, '#4FC3F7',
      '2026-10-01 12:00:00', 'ACTIVE'),
-    (2, 1, '2026-10-04', NULL, '돌담길 따라 걷다가 쉬어 간 곳', NULL, NULL, '흐림', 19.0, '#A5D6A7',
+    (2, 1, '2026-10-04', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/guestbooke_test/test_image.png', '돌담길 따라 걷다가 쉬어 간 곳', NULL, NULL, '흐림', 19.0, '#A5D6A7',
      '2026-10-04 17:30:00', 'ACTIVE'),
-    (3, 2, '2026-10-02', NULL, '만세국수에서 든든하게 먹고 쉬어 갔다', NULL, NULL, '맑음', 23.0, '#FFB74D',
+    (3, 2, '2026-10-02', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/guestbooke_test/test_image.png', '만세국수에서 든든하게 먹고 쉬어 갔다', NULL, NULL, '맑음', 23.0, '#FFB74D',
      '2026-10-02 16:00:00', 'ACTIVE'),
-    (4, 3, '2026-10-03', NULL, '행복밀 근처를 산책했다', NULL, NULL, '맑음', 15.5, '#FF8A65',
+    (4, 3, '2026-10-03', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/guestbooke_test/test_image.png', '행복밀 근처를 산책했다', NULL, NULL, '맑음', 15.5, '#FF8A65',
      '2026-10-03 07:30:00', 'ACTIVE'),
-    (5, 3, '2026-10-03', NULL, '바람 많이 부는 해안도로', NULL, NULL, '바람', 17.0, '#90A4AE',
+    (5, 3, '2026-10-03', 'https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/guestbooke_test/test_image.png', '바람 많이 부는 해안도로', NULL, NULL, '바람', 17.0, '#90A4AE',
      '2026-10-03 10:10:00', 'ACTIVE');
 
 INSERT INTO `location_guestbook` (`guestbook_id`, `visited_location_id`, `mission_id`)
 VALUES
-    (1, 1, 31),
-    (3, 2, 37),
+    (1, 1, NULL),
+    (3, 2, NULL),
     (4, 3, NULL);
 
 INSERT INTO `road_guestbook` (`guestbook_id`, `location_alias`, `latitude`, `longitude`)
 VALUES
-    (2, '종달리 돌담길', 33.4950, 126.8970),
-    (5, '애월 해안도로', 33.4630, 126.3100);
+    (2, '제주시청 앞 골목', 33.5000, 126.5308),
+    (5, '제주시청 남동쪽 산책길', 33.4988, 126.5320);

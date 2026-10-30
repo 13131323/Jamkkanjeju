@@ -84,7 +84,8 @@ class TourApiOverviewClientTest {
     /** 설명 조회 요청 파라미터를 검사하고 준비된 응답을 전달한다. */
     private void respond(String body) {
         server.expect(requestTo(org.hamcrest.Matchers.containsString("/detailCommon2?")))
-                .andExpect(queryParam("contentId", "123")).andExpect(queryParam("overviewYN", "Y"))
+                .andExpect(queryParam("contentId", "123"))
+                .andExpect(request -> assertThat(request.getURI().getQuery()).doesNotContain("overviewYN"))
                 .andExpect(queryParam("serviceKey", "test-key")).andExpect(queryParam("MobileOS", "ETC"))
                 .andExpect(queryParam("MobileApp", "test")).andExpect(queryParam("_type", "json"))
                 .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));

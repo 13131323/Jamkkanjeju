@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLocationModal, usePlaceDetail } from '@entities/place';
+import { useLocationModal } from '@entities/place';
 import type { Coordinates } from '@shared/config/geo';
 import { JEJU_CENTER } from '@shared/config/geo';
 import { formatVisitedAt } from '@shared/lib/formatVisitedAt';
@@ -13,34 +13,24 @@ import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 type PlaceModalCardProps = {
   locationId: number;
-  /** 클릭한 마커의 장소 이미지. map/modals 응답엔 장소 이미지가 없어 이 값으로 채운다 */
+  /** 클릭한 마커의 장소 이미지. v2 대표 이미지를 못 받은 경우 보완한다. */
   markerImageUrl: string | null;
   coords: Coordinates | null;
   onClose: () => void;
+  embedded?: boolean;
 };
 
 // map_place-modal — 미션 없는 장소 마커 클릭 시 뜨는 바텀시트.
 // targetType=LOCATION 응답(mission은 항상 null)을 쓴다 — 방명록 마커/클러스터 클릭은 더 이상 이 컴포넌트를 쓰지 않고
 // RoadGuestbookDetailModal(targetType=ROAD_GUESTBOOK)로 분리됐다(05.md 참고).
 // 좌우 여백 없이 화면에 꽉 차게 열리고, 방명록 목록이 길어질 수 있어 핸들/헤더만 드래그로 닫고 본문은 스크롤한다.
-export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose }: PlaceModalCardProps) {
+export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose, embedded = false }: PlaceModalCardProps) {
   const router = useRouter();
   const center = coords ?? JEJU_CENTER;
   const { data, isLoading } = useLocationModal(locationId, center);
-  /**
-   * 방명록 목록만 **장소 상세**에서 가져온다.
-   *
-   * map/modals(LOCATION)는 이름 그대로 "최신 방명록"만 내려줘서 목록이 몇 건에서 끊긴다.
-   * 그런데 같은 응답의 guestbooksCount는 그 장소의 **전체** 개수라, 헤더의 "방명록 N개"와
-   * 아래 카드 수가 서로 맞지 않았다. map/locations/{id}는 자르지 않고 다 주므로(상세 화면이
-   * 쓰는 그것) 개수를 맞추려면 목록을 이쪽에서 받아야 한다.
-   *
-   * 나머지(장소명·분류·개수·거리)는 그대로 modals를 쓴다 — 시트를 띄우는 데 필요한 값이라
-   * 먼저 오는 쪽이 낫고, 상세 응답은 TourAPI까지 거쳐 더 늦게 온다.
-   */
-  const { data: detail } = usePlaceDetail(locationId, center);
-  // 상세가 닿기 전에는 modals가 준 몇 건으로 먼저 채운다 — 비워두면 빈 시트가 잠깐 보인다.
-  const guestbooks = detail?.reviews ?? data?.guestbooks ?? [];
+  // v2 모달 응답의 최신 방명록을 사용하며 별도의 v1 상세 API는 호출하지 않는다.
+  const guestbooks = data?.guestbooks ?? [];
+  const imageUrl = data?.representativeImageUrl ?? markerImageUrl;
   const { dragY, isDragging, dragHandlers } = useSheetDragToClose(onClose);
 
   // 마운트 직후 프레임에 translateY를 0으로 바꿔 아래에서 위로 슬라이드-업하며 등장시킨다(NavMenuModal과 동일한 패턴).
@@ -57,13 +47,13 @@ export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose }: 
 
   return (
     <div
-      className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[370px] flex-col rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
+      className={`bg-cool-neutral-white flex flex-col ${embedded ? 'relative h-full min-h-0' : 'absolute inset-x-0 bottom-0 z-20 max-h-[370px] rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)]'} ${
         isDragging ? '' : 'transition-transform duration-300 ease-out'
       }`}
-      style={{ transform: isVisible ? `translateY(${dragY}px)` : 'translateY(100%)' }}
+      style={{ transform: embedded ? undefined : isVisible ? `translateY(${dragY}px)` : 'translateY(100%)' }}
     >
       {/* 핸들만 항상 드래그 영역 — 로딩 중에도 바로 닫을 수 있어야 한다 */}
-      <div className="flex shrink-0 justify-center px-4 pt-3" style={{ touchAction: 'none' }} {...dragHandlers}>
+      <div hidden={embedded} className="flex shrink-0 justify-center px-4 pt-3" style={{ display: embedded ? 'none' : undefined, touchAction: embedded ? 'pan-y' : 'none' }} {...(embedded ? {} : dragHandlers)}>
         <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
       </div>
 
@@ -74,10 +64,10 @@ export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose }: 
       ) : (
         <>
           {/* 헤더는 드래그 영역 — 아래 방명록 목록은 자체 스크롤 영역이라 여기서 pointer 이벤트를 가로채면 스크롤과 충돌한다 */}
-          <div className="shrink-0 px-4" style={{ touchAction: 'none' }} {...dragHandlers}>
+          <div className="shrink-0 px-4" style={{ touchAction: embedded ? 'pan-y' : 'none' }} {...(embedded ? {} : dragHandlers)}>
             <div className="mt-4 flex items-start gap-4">
-              {/* GET /api/v1/map/modals(targetType=LOCATION) 응답엔 장소 자체의 대표 이미지 필드가 없다(방명록 항목에만 있음) — 그래서 클릭한 마커가 그린 이미지를 쓰고, 그것도 없으면 placeholder */}
-              {markerImageUrl ? <SkeletonImage src={markerImageUrl} className="h-12 w-12 shrink-0 rounded-lg" /> : <div className="h-12 w-12 shrink-0 rounded-lg bg-[#272727]" />}
+              {/* v2 대표 이미지를 우선 사용하고 마커 이미지로 보완한다. */}
+              {imageUrl ? <SkeletonImage src={imageUrl} className="h-12 w-12 shrink-0 rounded-lg" /> : <div className="h-12 w-12 shrink-0 rounded-lg bg-[#272727]" />}
 
               <div className="flex h-auto flex-1 flex-col gap-2">
                 {/* 한 줄에 다 안 들어갈 때만(이름이 길 때만) 자연스럽게 줄바꿈되도록 name·카테고리·상세보기를 같은 flex-wrap 행에 둔다.
@@ -88,6 +78,8 @@ export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose }: 
 
                   <button
                     type="button"
+                    // 헤더의 드래그 핸들러가 버튼 클릭의 포인터를 잡지 않도록 한다.
+                    onPointerDown={(event) => event.stopPropagation()}
                     onClick={() => router.push(`/map/${data.id}`)}
                     className="border-cool-neutral-200 bg-cool-neutral-white text-label-sm text-warm-neutral-900 ml-auto flex shrink-0 items-center gap-1 rounded-full border px-3 py-1.5 font-medium"
                   >
@@ -108,7 +100,7 @@ export function PlaceModalCard({ locationId, markerImageUrl, coords, onClose }: 
             <div className="border-cool-neutral-100 mt-4 border-t" />
           </div>
 
-          <div className="grid grow grid-cols-2 gap-x-3 gap-y-5 overflow-y-auto px-4 pt-4" style={{ paddingBottom: SHEET_BOTTOM_PADDING }}>
+          <div className="grid min-h-0 grow grid-cols-2 gap-x-3 gap-y-5 overflow-y-auto px-4 pt-4" style={{ paddingBottom: SHEET_BOTTOM_PADDING }}>
             {guestbooks.map((entry) => (
               <div key={entry.id} className="flex flex-col gap-2">
                 {entry.representativeImageUrl ? (

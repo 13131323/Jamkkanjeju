@@ -308,12 +308,14 @@ class GetMapModalApiIntegrationTest extends MySqlIntegrationTestSupport {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void 길바닥_방명록은_작성자_유무와_무관하게_단일콘텐츠를_반환한다(boolean author) throws Exception {
+        if (author) current.assignOnboardingResult(persist(onboarding()));
         RoadGuestbook road = road(author ? current : null, GuestbookStatus.ACTIVE, true);
         Map<String, List<Map<String, Object>>> before = snapshot();
         TravelEstimator.TravelEstimate expected = travel.estimate(33.45, 126.92, 33.46, 126.93);
         String body = request(current, "ROAD_GUESTBOOK", road.getGuestbookId()).andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(road.getGuestbookId()))
                 .andExpect(jsonPath("$.userNickname").value(author ? equalTo("지도 작성자") : nullValue()))
+                .andExpect(jsonPath("$.characterImgUrl").value(author ? equalTo("https://example.com/profile.png") : nullValue()))
                 .andExpect(jsonPath("$.locationAlias").value("성산 바다 앞"))
                 .andExpect(jsonPath("$.distanceMeter").value(expected.distanceMeter()))
                 .andExpect(jsonPath("$.durationMinutes").value(expected.durationMinutes()))
@@ -325,7 +327,7 @@ class GetMapModalApiIntegrationTest extends MySqlIntegrationTestSupport {
                 .andExpect(jsonPath("$.contentColorCode").value("#123456"))
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         Map<String, Object> json = JsonPath.read(body, "$");
-        assertThat(json.keySet()).containsExactlyInAnyOrder("id", "userNickname", "locationAlias", "distanceMeter",
+        assertThat(json.keySet()).containsExactlyInAnyOrder("id", "userNickname", "characterImgUrl", "locationAlias", "distanceMeter",
                 "durationMinutes", "visitedAt", "contentImageUrl", "contentWriting", "contentAudioUrl", "contentWeather", "contentColorCode");
         assertThat(request(current, "ROAD_GUESTBOOK", road.getGuestbookId()).andReturn().getResponse()
                 .getContentAsString(StandardCharsets.UTF_8)).isEqualTo(body);

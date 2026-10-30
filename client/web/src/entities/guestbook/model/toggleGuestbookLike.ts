@@ -1,43 +1,35 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import type { GeneratedApi } from '@packages/shared';
-import { useSetGuestbookLikeApiV1GuestbooksGuestbookIdLikePut } from '@/services/api/guestbook/guestbook';
+import { useRef } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { GUESTBOOKS_QUERY_KEY, toggleGuestbookLike, type GuestbooksResponse, type GuestbookLikeResponse } from '@shared/api/guestbooks';
 
-// GET /api/v1/guestbooks 쿼리의 키 접두어(useGuestbooks.ts) — scope별로 캐시가 여러 개 있을 수 있어 접두어로 전부 매칭한다.
-const GUESTBOOKS_QUERY_KEY_PREFIX = ['/api/v1/guestbooks'];
-
-// PUT /api/v1/guestbooks/{guestbookId}/like 연동.
-// 화면(GuestbookDetailModal)이 클릭 즉시 자체 상태로 낙관적 업데이트를 하고, 이 훅은 성공 시 서버가 확정한
-// isLiked/likeCount를 GET /api/v1/guestbooks 캐시에도 반영해 목록으로 돌아가거나 모달을 다시 열어도 어긋나지 않게 한다.
+/** 처리 중 중복 호출과 자동 재시도를 막고 모든 방명록 페이지에 서버 응답을 반영한다. */
 export function useToggleGuestbookLike() {
   const queryClient = useQueryClient();
-  const { mutate } = useSetGuestbookLikeApiV1GuestbooksGuestbookIdLikePut();
+  const pendingRef = useRef(false);
+  const mutation = useMutation({
+    mutationFn: toggleGuestbookLike,
+    retry: false,
+    onSuccess: (result) => {
+      queryClient.setQueriesData<GuestbooksResponse>({ queryKey: GUESTBOOKS_QUERY_KEY }, (data) => {
+        if (!data) return data;
+        const update = <T extends { id: number }>(item: T) => item.id === result.guestbookId ? { ...item, isLiked: result.isLiked, likeCount: result.likeCount } : item;
+        return { ...data, generalGuestbooks: data.generalGuestbooks.map(update), roadGuestbooks: data.roadGuestbooks.map(update) };
+      });
+      // 좋아요한 목록의 포함 여부와 인기순 페이지도 서버 기준으로 다시 조회한다.
+      void queryClient.invalidateQueries({ queryKey: GUESTBOOKS_QUERY_KEY });
+    },
+    // 전송 결과가 불확실해도 다시 토글하지 않고 조회로 현재 상태를 확인한다.
+    onError: () => { void queryClient.invalidateQueries({ queryKey: GUESTBOOKS_QUERY_KEY }); },
+    onSettled: () => { pendingRef.current = false; },
+  });
 
-  function toggleLike(target: { id: number; guestbookType: GeneratedApi.GuestbookType }, nextIsLiked: boolean, callbacks?: { onError?: () => void }) {
-    mutate(
-      { guestbookId: target.id, data: { guestbookType: target.guestbookType, isLiked: nextIsLiked } },
-      {
-        onSuccess: (response) => {
-          queryClient.setQueriesData<GeneratedApi.GuestbookListResponse>({ queryKey: GUESTBOOKS_QUERY_KEY_PREFIX }, (data) => (data ? applyLikeResult(data, response) : data));
-        },
-        onError: () => callbacks?.onError?.(),
-      },
-    );
+  function toggleLike(id: number, callbacks?: { onSuccess?: (result: GuestbookLikeResponse) => void }) {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    mutation.mutate(id, { onSuccess: callbacks?.onSuccess });
   }
 
-  return { toggleLike };
-}
-
-function applyLikeResult(data: GeneratedApi.GuestbookListResponse, result: GeneratedApi.GuestbookLikeResponse): GeneratedApi.GuestbookListResponse {
-  if (result.guestbookType === 'GENERAL') {
-    return {
-      ...data,
-      generalGuestbooks: data.generalGuestbooks.map((item) => (item.id === result.guestbookId ? { ...item, isLiked: result.isLiked, likeCount: result.likeCount } : item)),
-    };
-  }
-  return {
-    ...data,
-    roadGuestbooks: data.roadGuestbooks.map((item) => (item.id === result.guestbookId ? { ...item, isLiked: result.isLiked, likeCount: result.likeCount } : item)),
-  };
+  return { toggleLike, isPending: mutation.isPending };
 }

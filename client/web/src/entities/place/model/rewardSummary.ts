@@ -1,9 +1,9 @@
-import type { GeneratedApi } from '@packages/shared';
+import type { MapModalRewardDetail } from '@shared/api/mapModal';
 
 export type RewardBadge = { label: string; isReceived: boolean };
 
 // 미션의 전체 보상(rewardDetail)에서 화면에 보여줄 배지 목록을 뽑는다. 설정되지 않은 보상 항목은 null이라 걸러낸다.
-export function toRewardBadges(rewardDetail: GeneratedApi.FullRewardDetailResponse): RewardBadge[] {
+export function toRewardBadges(rewardDetail: MapModalRewardDetail): RewardBadge[] {
   const badges: RewardBadge[] = [];
 
   if (rewardDetail.point) {

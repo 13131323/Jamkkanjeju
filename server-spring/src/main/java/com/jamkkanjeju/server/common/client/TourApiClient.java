@@ -115,7 +115,6 @@ public class TourApiClient {
                             .queryParam("MobileApp", "{mobileApp}")
                             .queryParam("_type", "json")
                             .queryParam("contentId", "{contentId}")
-                            .queryParam("overviewYN", "Y")
                             .build(Map.of(
                                     "serviceKey", properties.serviceKey(),
                                     "mobileOs", properties.mobileOs(),

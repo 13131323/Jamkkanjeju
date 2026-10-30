@@ -255,6 +255,7 @@ CREATE TABLE `acquired_coupon` (
     `coupon_id`   BIGINT   NOT NULL,
     `user_id`     BIGINT   NOT NULL,
     `acquired_at` DATETIME NOT NULL,
+    `used_at`     DATETIME NULL,
     `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`coupon_id`, `user_id`),

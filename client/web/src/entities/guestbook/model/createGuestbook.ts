@@ -1,42 +1,65 @@
 'use client';
 
-import { useMutation, type UseMutationOptions } from '@tanstack/react-query';
-import type { GeneratedApi } from '@packages/shared';
+import { useMutation, useQueryClient, type UseMutationOptions } from '@tanstack/react-query';
 import { orvalClient } from '@shared/api/axios/instance';
+import { GUESTBOOKS_QUERY_KEY } from '@shared/api/guestbooks';
 
-// POST /api/v1/guestbooks — orval이 생성한 createGuestbookApiV1GuestbooksPost(services/api/guestbook/guestbook.ts)는
-// imageFiles/audioFiles(Blob[])를 formData.append(key, blobArray)로 통째로 넣어버리는 버그가 있다
-// (FormData.append는 파일 하나씩 넣어야 한다 — 배열을 그대로 넘기면 타입 에러이자 런타임에서도 깨진다).
-// 생성 파일은 "Do not edit manually"라 손대지 않고(재생성 시 사라짐) 여기서 FormData를 직접 만든다.
-function toFormData(input: GeneratedApi.GuestbookCreateRequest): FormData {
-  const formData = new FormData();
-  formData.append('guestbookType', input.guestbookType);
-  if (input.locationId != null) formData.append('locationId', String(input.locationId));
-  if (input.locationAlias != null) formData.append('locationAlias', input.locationAlias);
-  if (input.latitude != null) formData.append('latitude', String(input.latitude));
-  if (input.longitude != null) formData.append('longitude', String(input.longitude));
-  formData.append('visitedAt', input.visitedAt);
-  if (input.contentWriting != null) formData.append('contentWriting', input.contentWriting);
-  if (input.contentWeather != null) formData.append('contentWeather', input.contentWeather);
-  if (input.contentTemperatureCelsius != null) formData.append('contentTemperatureCelsius', String(input.contentTemperatureCelsius));
-  if (input.contentColorCode != null) formData.append('contentColorCode', input.contentColorCode);
-  if (input.missionId != null) formData.append('missionId', String(input.missionId));
-  input.imageFiles?.forEach((file) => formData.append('imageFiles', file));
-  input.audioFiles?.forEach((file) => formData.append('audioFiles', file));
-  return formData;
+/** v2 작성 API에 전송할 단일 첨부 파일과 콘텐츠이다. */
+export type CreateGuestbookInput = {
+  guestbookType: 'GENERAL' | 'ROAD';
+  locationId?: number | null;
+  locationAlias?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  visitedAt: string;
+  imageFile?: File | null;
+  audioFile?: File | null;
+  audioTitle?: string | null;
+  contentWriting?: string | null;
+  contentWeather?: string | null;
+  contentTemperatureCelsius?: number | null;
+  contentColorCode?: string | null;
+  missionId?: number | null;
+};
+export type CreateGuestbookResponse = {
+  guestbookId: number; guestbookType: 'GENERAL' | 'ROAD'; locationId: number | null;
+  locationAlias: string | null; latitude: number | null; longitude: number | null;
+  visitedAt: string; contentImageUrl: string | null; contentWriting: string | null;
+  contentAudioUrl: string | null; audioTitle: string | null; contentWeather: string | null;
+  contentTemperatureCelsius: number | null; contentColorCode: string | null;
+  missionId: number | null; savedAt: string;
+};
+
+/** 선택된 파일만 multipart로 전송하며 boundary는 브라우저가 설정한다. */
+export function createGuestbook(input: CreateGuestbookInput): Promise<CreateGuestbookResponse> {
+  const data = new FormData();
+  data.append('guestbookType', input.guestbookType);
+  data.append('visitedAt', input.visitedAt);
+  const locationFields = input.guestbookType === 'GENERAL'
+    ? { locationId: input.locationId, missionId: input.missionId }
+    : { locationAlias: input.locationAlias, latitude: input.latitude, longitude: input.longitude };
+  for (const [key, value] of Object.entries({ ...locationFields, contentWriting: input.contentWriting,
+    contentWeather: input.contentWeather, contentTemperatureCelsius: input.contentTemperatureCelsius,
+    contentColorCode: input.contentColorCode })) {
+    if (value != null) data.append(key, String(value));
+  }
+  if (input.imageFile) data.append('imageFile', input.imageFile);
+  if (input.audioFile) {
+    data.append('audioFile', input.audioFile);
+    if (input.audioTitle != null) data.append('audioTitle', input.audioTitle);
+  }
+  return orvalClient<CreateGuestbookResponse>({ url: '/api/v2/guestbooks', method: 'POST', data });
 }
 
-function createGuestbook(input: GeneratedApi.GuestbookCreateRequest): Promise<GeneratedApi.GuestbookCreateResponse> {
-  return orvalClient<GeneratedApi.GuestbookCreateResponse>({
-    url: '/api/v1/guestbooks',
-    method: 'POST',
-    headers: { 'Content-Type': 'multipart/form-data' },
-    data: toFormData(input),
+export function useCreateGuestbook(options?: UseMutationOptions<CreateGuestbookResponse, unknown, CreateGuestbookInput>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...options,
+    mutationFn: createGuestbook,
+    retry: false,
+    onSuccess: (...args) => {
+      void queryClient.invalidateQueries({ queryKey: GUESTBOOKS_QUERY_KEY });
+      options?.onSuccess?.(...args);
+    },
   });
-}
-
-export function useCreateGuestbook(
-  options?: UseMutationOptions<GeneratedApi.GuestbookCreateResponse, unknown, GeneratedApi.GuestbookCreateRequest>,
-) {
-  return useMutation({ mutationFn: createGuestbook, ...options });
 }

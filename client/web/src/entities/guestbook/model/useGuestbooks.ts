@@ -1,17 +1,20 @@
 'use client';
 
-import type { GeneratedApi } from '@packages/shared';
-import { useGetGuestbooksApiV1GuestbooksGet } from '@/services/api/guestbook/guestbook';
+import { useQuery } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
+import { DEFAULT_GUESTBOOK_FILTERS, getGuestbooks, GUESTBOOKS_QUERY_KEY, type GuestbookFilters } from '@shared/api/guestbooks';
 
-// GET /api/v1/guestbooks — travel-note 피드(GuestbookFeedView)가 쓴다. scope 생략 시 서버 기본값은 ALL.
-export function useGuestbooks(scope?: GeneratedApi.GuestbookScope) {
-  return useGetGuestbooksApiV1GuestbooksGet(
-    { scope },
-    {
-      query: {
-        // 조회 실패를 피드 화면에서 직접 처리하기 위해 queryClient 기본값(throwOnError:true)을 이 쿼리에서만 끈다.
-        throwOnError: false,
-      },
+/** 선택한 페이지의 일반·길바닥 방명록을 각각 최대 10개씩 조회하며 이전 목록과 합치지 않는다. */
+export function useGuestbooks(page = 0, filters: GuestbookFilters = DEFAULT_GUESTBOOK_FILTERS) {
+  const params = { ...filters, generalPage: page, generalSize: 10, roadPage: page, roadSize: 10 };
+  const query = useQuery({
+    queryKey: [...GUESTBOOKS_QUERY_KEY, params],
+    queryFn: ({ signal }) => getGuestbooks(params, signal),
+    throwOnError: false,
+    retry: (failureCount, error) => {
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      return !(status !== undefined && status >= 400 && status < 500) && failureCount < 2;
     },
-  );
+  });
+  return { ...query, hasNextPage: (query.data?.generalGuestbooksPage.hasNext ?? false) || (query.data?.roadGuestbooksPage.hasNext ?? false) };
 }

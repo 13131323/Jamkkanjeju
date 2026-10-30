@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MISSION_ROUTE_BY_TYPE, type GeneratedApi, type HomeMissionCard, type MissionRoute } from '@packages/shared';
@@ -12,6 +12,7 @@ import { JudgeCodeModal, JudgeModeShortcut } from '@features/judge-mode';
 import { sendToApp } from '@shared/lib/bridge/utils';
 import { Skeleton, SkeletonGroup } from '@shared/ui/skeleton';
 import { Toast } from '@shared/ui/Toast';
+import { useMouseDragScroll } from '@shared/lib/interaction/useMouseDragScroll';
 import { getJejuDaylightServerSnapshot, getJejuDaylightSnapshot, subscribeJejuDaylight } from '../model/jejuDaylight';
 import { useHomeData } from '../model/useHomeData';
 import homeBackImage from '@shared/lib/images/home-back-image.png';
@@ -322,8 +323,7 @@ const MISSION_PROGRESS_AUTO_ADVANCE_MS = 7000;
 
 function MissionProgressCard({ isNight }: { isNight: boolean }) {
   const { progressMissions, isPending } = useHomeData();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
+  const { scrollRef, dragHandlers } = useMouseDragScroll();
 
   // 자동 넘김 — 카드가 2장 이상일 때만. 매 tick마다 현재 스크롤 위치를 기준으로 다음 칸을 계산해서,
   // 사용자가 직접 민 위치에서도 자연스럽게 이어서 순환한다.
@@ -341,30 +341,7 @@ function MissionProgressCard({ isNight }: { isNight: boolean }) {
     return () => clearInterval(timer);
   }, [progressMissions.length]);
 
-  // 데스크톱 브라우저 테스트용 마우스 드래그 스와이프 — 터치는 overflow-x-auto가 기본으로 처리하므로 mouse만 개입 (MissionCarousel과 동일한 패턴)
-  function handlePointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    if (!el || e.pointerType !== 'mouse') return;
-    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startScrollLeft: el.scrollLeft };
-    el.setPointerCapture(e.pointerId);
-    el.style.scrollBehavior = 'auto';
-  }
-
-  function handlePointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    const drag = dragRef.current;
-    if (!el || !drag || e.pointerId !== drag.pointerId) return;
-    el.scrollLeft = drag.startScrollLeft - (e.clientX - drag.startX);
-  }
-
-  function handlePointerUp(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    if (!el || dragRef.current?.pointerId !== e.pointerId) return;
-    dragRef.current = null;
-    // 잡아 둔 포인터는 반드시 놓는다 — 남겨 두면 같은 포인터를 쓰는 다른 곳(개발 오버레이 등)이 어긋난다
-    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-    el.style.scrollBehavior = '';
-  }
+  // 마우스 드래그는 공통 훅으로 처리하고 터치는 브라우저 기본 스크롤을 사용한다.
 
   // 응답 전에는 자리(고정 높이 37)만 잡고 내용은 스켈레톤으로 — 바로 위 배너(MissionCarousel)와
   // 처리를 맞춘다. 이전에는 return null이라 데이터가 오는 순간 카드가 뿅 하고 나타났다.
@@ -381,11 +358,7 @@ function MissionProgressCard({ isNight }: { isNight: boolean }) {
   return (
     <div
       ref={scrollRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      onDragStart={(e) => e.preventDefault()}
+      {...dragHandlers}
       className="pointer-events-auto absolute right-4 left-4 flex snap-x snap-mandatory scrollbar-none overflow-x-auto scroll-smooth select-none [&::-webkit-scrollbar]:hidden"
       style={{ top: `calc(var(--safe-area-top) + 45px)`, height: 37 }}
     >
@@ -545,8 +518,7 @@ function IndicatorRowSpacer() {
 function MissionCarousel() {
   const { missionCards, isPending, isError, refetch } = useHomeData();
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
+  const { scrollRef, dragHandlers } = useMouseDragScroll();
 
   function handleScroll() {
     const el = scrollRef.current;
@@ -554,30 +526,7 @@ function MissionCarousel() {
     setActiveIndex(Math.round(el.scrollLeft / el.clientWidth));
   }
 
-  // 데스크톱 브라우저 테스트용 마우스 드래그 스와이프 — 터치는 overflow-x-auto가 기본으로 처리하므로 mouse만 개입
-  function handlePointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    if (!el || e.pointerType !== 'mouse') return;
-    dragRef.current = { pointerId: e.pointerId, startX: e.clientX, startScrollLeft: el.scrollLeft };
-    el.setPointerCapture(e.pointerId);
-    el.style.scrollBehavior = 'auto';
-  }
-
-  function handlePointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    const drag = dragRef.current;
-    if (!el || !drag || e.pointerId !== drag.pointerId) return;
-    el.scrollLeft = drag.startScrollLeft - (e.clientX - drag.startX);
-  }
-
-  function handlePointerUp(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = scrollRef.current;
-    if (!el || dragRef.current?.pointerId !== e.pointerId) return;
-    dragRef.current = null;
-    // 잡아 둔 포인터는 반드시 놓는다 — 남겨 두면 같은 포인터를 쓰는 다른 곳(개발 오버레이 등)이 어긋난다
-    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-    el.style.scrollBehavior = '';
-  }
+  // 마우스 드래그는 공통 훅으로 처리하고 터치는 브라우저 기본 스크롤을 사용한다.
 
   // 응답 전에는 배너 한 장 높이(98)의 빈 카드를 둔다 — 캐러셀이 사라졌다 나타나며 아래 내용이 밀리지 않게.
   if (isPending) {
@@ -637,11 +586,7 @@ function MissionCarousel() {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onDragStart={(e) => e.preventDefault()}
+        {...dragHandlers}
         className="-mx-4 -mt-3 -mb-5 flex snap-x snap-mandatory gap-8 scrollbar-none overflow-x-auto scroll-smooth px-4 pt-3 pb-5 select-none [&::-webkit-scrollbar]:hidden"
       >
         {missionCards.map((card) => (

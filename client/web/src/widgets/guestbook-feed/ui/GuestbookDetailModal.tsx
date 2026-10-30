@@ -5,12 +5,14 @@ import { useToggleGuestbookLike } from '@entities/guestbook';
 import type { NormalizedGuestbook } from '../model/normalizeGuestbook';
 import { formatRelativeTime } from '../model/relativeTime';
 import AudioPlayerCard from '@/widgets/guestbook-feed/ui/AudioCard';
+import { useMouseDragScroll } from '@shared/lib/interaction/useMouseDragScroll';
 
 // NavMenuModal(widgets/nav-menu)과 동일한 fade-in 오버레이 패턴 — 배경 어둡게 + 중앙 팝업.
 // 카드 크기는 유지한 채, 좌우로 다음/이전 방명록이 살짝 보이는 scroll-snap 캐러셀.
 export function GuestbookDetailModal({ guestbooks, initialId, onClose }: { guestbooks: NormalizedGuestbook[]; initialId: string; onClose: () => void }) {
   const [isVisible, setIsVisible] = useState(false);
   const selectedRef = useRef<HTMLDivElement>(null);
+  const { scrollRef, dragHandlers } = useMouseDragScroll();
 
   useLayoutEffect(() => {
     selectedRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'auto' });
@@ -24,7 +26,9 @@ export function GuestbookDetailModal({ guestbooks, initialId, onClose }: { guest
   return (
     <div className={`fixed inset-0 z-50 bg-black/80 transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`} onClick={onClose}>
       <div
-        className="flex h-full snap-x snap-mandatory scrollbar-none items-center gap-6 overflow-x-auto px-10 py-6 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        ref={scrollRef}
+        {...dragHandlers}
+        className="flex h-full snap-x snap-mandatory scrollbar-none select-none items-center gap-6 overflow-x-auto px-10 py-6 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{ scrollSnapType: 'x mandatory' }}
       >
         {guestbooks.map((guestbook) => (
@@ -44,17 +48,13 @@ export function GuestbookDetailModal({ guestbooks, initialId, onClose }: { guest
 }
 
 function GuestbookDetailCardContent({ guestbook }: { guestbook: NormalizedGuestbook }) {
-  const { toggleLike } = useToggleGuestbookLike();
-  // 클릭 즉시 반영할 낙관적 오버라이드. null이면 서버(guestbook.isLiked/likeCount)를 그대로 보여준다.
-  const [optimisticLike, setOptimisticLike] = useState<{ isLiked: boolean; likeCount: number } | null>(null);
-  const isLiked = optimisticLike?.isLiked ?? guestbook.isLiked ?? false;
-  const likeCount = optimisticLike?.likeCount ?? guestbook.likeCount ?? 0;
+  const { toggleLike, isPending } = useToggleGuestbookLike();
+  const [likeResult, setLikeResult] = useState<{ isLiked: boolean; likeCount: number } | null>(null);
+  const isLiked = likeResult?.isLiked ?? guestbook.isLiked ?? false;
+  const likeCount = likeResult?.likeCount ?? guestbook.likeCount ?? 0;
 
   function handleToggleLike() {
-    const previous = { isLiked, likeCount };
-    const next = { isLiked: !isLiked, likeCount: Math.max(0, likeCount + (!isLiked ? 1 : -1)) };
-    setOptimisticLike(next);
-    toggleLike({ id: guestbook.id, guestbookType: guestbook.kind }, next.isLiked, { onError: () => setOptimisticLike(previous) });
+    toggleLike(guestbook.id, { onSuccess: setLikeResult });
   }
 
   const imageUrl = guestbook.contentImageUrls?.[0];
@@ -89,17 +89,24 @@ function GuestbookDetailCardContent({ guestbook }: { guestbook: NormalizedGuestb
           <span className="text-label-md text-warm-neutral-900 font-bold">{guestbook.userNickname ?? '익명'}</span>
           <span className="text-label-sm text-warm-neutral-400 truncate">{metaSegments.join(' · ')}</span>
         </div>
-        <button
-          type="button"
-          onClick={handleToggleLike}
-          aria-label="좋아요"
-          aria-pressed={isLiked}
-          className="border-cool-neutral-200 ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? '#FF6B6B' : 'none'} stroke={isLiked ? '#FF6B6B' : '#8a8a8a'} strokeWidth="2" strokeLinejoin="round">
-            <path d="M12 21s-6.7-4.35-9.3-8.2C.6 9.7 1.4 6 4.6 4.7 7 3.7 9.4 4.6 12 7.3c2.6-2.7 5-3.6 7.4-2.6 3.2 1.3 4 5 1.9 8.1C18.7 16.65 12 21 12 21z" />
-          </svg>
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleToggleLike}
+            aria-label="좋아요"
+            aria-pressed={isLiked}
+            aria-description={`좋아요 ${likeCount}개`}
+            disabled={isPending}
+            className="border-cool-neutral-200 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={isLiked ? '#FF6B6B' : 'none'} stroke={isLiked ? '#FF6B6B' : '#8a8a8a'} strokeWidth="2" strokeLinejoin="round">
+              <path d="M12 21s-6.7-4.35-9.3-8.2C.6 9.7 1.4 6 4.6 4.7 7 3.7 9.4 4.6 12 7.3c2.6-2.7 5-3.6 7.4-2.6 3.2 1.3 4 5 1.9 8.1C18.7 16.65 12 21 12 21z" />
+            </svg>
+          </button>
+          <span className="text-label-sm text-warm-neutral-700 tabular-nums" aria-live="polite" aria-atomic="true">
+            {likeCount}
+          </span>
+        </div>
       </div>
 
       {guestbook.contentWriting ? <p className="text-body-sm text-warm-neutral-700 whitespace-pre-wrap">{guestbook.contentWriting}</p> : null}

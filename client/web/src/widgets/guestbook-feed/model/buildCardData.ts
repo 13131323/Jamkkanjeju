@@ -17,12 +17,13 @@ function toPhotoCard(record: NormalizedGuestbook): GuestbookCardData | null {
 }
 
 function toNoteCard(record: NormalizedGuestbook): GuestbookCardData | null {
-  if (!record.contentWriting) return null;
+  const text = record.contentWriting || record.contentWeather;
+  if (!text) return null;
 
   return {
     type: 'note',
     id: record.key,
-    text: record.contentWriting,
+    text,
     ...pickNoteColorClasses(record.key),
     backgroundColor: getCardBackgroundColor(record),
   };

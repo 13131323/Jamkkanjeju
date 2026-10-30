@@ -83,4 +83,4 @@ management:
 logging:
   level:
     org.hibernate.SQL: off
-    com.jamkkanjeju.server: debug
+    com.jamkkanjeju.server: warn

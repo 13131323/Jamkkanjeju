@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GuestbookWriteButton } from '@entities/guestbook';
 import { useDisplayLocation } from '@entities/location';
-import { PlaceFilterChips, useFilterState, useMissionCounts } from '@features/place-filter';
+import { PlaceFilterChips, useFilterState } from '@features/place-filter';
 import { JEJU_CENTER, type Coordinates } from '@shared/config/geo';
 import { GuestbookDetailModal } from '@widgets/guestbook-feed';
 import { NavMenuButton } from '@widgets/nav-menu';
@@ -29,8 +29,8 @@ import { useTreasureMarkersBridge } from '../model/useTreasureMarkersBridge';
 import { useUserLocationMarker } from '../model/useUserLocationMarker';
 import { CouponModalCard } from './CouponModalCard';
 import { FilteredMissionModalCard } from './FilteredMissionModalCard';
-import { MissionModalCard } from './MissionModalCard';
 import { PlaceModalCard } from './PlaceModalCard';
+import { LocationCouponModal } from './LocationCouponModal';
 
 export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpenMenu: () => void }) {
   const router = useRouter();
@@ -61,8 +61,7 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
   const isClustered = zoomTier !== 'detail';
   const { filter, setFilter } = useFilterState();
   const bounds = useMapBounds(map);
-  const missionCounts = useMissionCounts(bounds, isClustered);
-  const { modal, openMissionModal, openPlaceModal, openFilteredMissionModal, openRoadGuestbookModal, openCouponModal, closeModal } = useMapModal();
+  const { modal, openMissionModal, openPlaceModal, openFilteredMissionModal, openRoadGuestbookModal, openCouponModal, openPlaceCouponModal, closeModal } = useMapModal();
 
   // app의 보물찾기 완료 화면에서 "사용하러 가기"로 들어온 경우 쿠폰 시트를 열어 준다.
   const couponParams = useMemo(() => parseCouponParams(entryParams), [entryParams]);
@@ -124,23 +123,17 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
   useCouponLocationMarker(map, couponCoords, couponParams?.locationImageUrl ?? null, couponMarkerHandlers);
 
   // 지도에 찍힌 쿠폰 사용처 마커(usePlaceMarkers) 탭 — app 완료 화면 진입(위 couponMarkerHandlers)과
-  // 같은 시트를 연다. 값은 그 장소 데이터에서 직접 만들어 넘긴다(별도 조회 없음).
+  // 장소·쿠폰 두 페이지 모달을 연다. 쿠폰 값은 지도 홈 응답에서 전달한다.
   const handlePlaceCouponClick = useCallback(
     (payload: PlaceCouponClickPayload) => {
-      openCouponModal(payload);
+      openPlaceCouponModal(payload);
       setIsCouponSheetCollapsed(false);
     },
-    [openCouponModal],
+    [openPlaceCouponModal],
   );
 
   // app의 완료 화면 "근처에서 할 수 있는 보물 찾기 > 더보기"가 `/map?missions=treasure`로 들어온다.
-  // 필터 칩 클릭 경로(handleFilterChange)와 **같은 상태**를 쓴다 — 칩도 함께 선택되고, 시트도 같은
-  // FilteredMissionModalCard다.
-  //
-  // 칩 클릭과 다른 점 하나: 개수가 0이어도 연다. 칩 클릭은 배지에 0이 이미 보이므로 열지 않는 게
-  // 맞지만, URL 진입은 "더보기를 눌렀는데 아무 일도 안 일어난" 화면이 된다. 0개일 때는 시트가
-  // "근처 보물 0개"로 뜨는 것이 사용자에게 유일한 답이다. (개수는 bounds가 잡힌 뒤에야 알 수 있어
-  // 진입 시점에 세는 것 자체가 불가능하기도 하다)
+  // URL로 미션 목록에 진입하는 흐름은 유지하며, 지도 필터 탭에서는 목록 모달을 열지 않는다.
   const missionListParam = useMemo(() => parseMissionListParam(entryParams), [entryParams]);
   useEffect(() => {
     if (!missionListParam) return;
@@ -203,13 +196,10 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
     }
   }
 
-  // 보물찾기/협동미션 필터 칩 클릭 시 해당 필터로 전환하면서 FilteredMissionModalCard를 함께 연다.
-  // 칩에 표시되는 개수(bounds 기준)가 0이면 보여줄 게 없으니 모달은 열지 않는다.
+  // 필터 탭은 지도에 표시할 장소만 바꾸고 열려 있던 모달은 닫는다.
   function handleFilterChange(next: typeof filter) {
     setFilter(next);
-    if ((next === 'treasure' || next === 'coop') && missionCounts[next] > 0) {
-      openFilteredMissionModal(next);
-    }
+    closeModal();
   }
 
   function handleMapControlClick() {
@@ -277,8 +267,9 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
         </>
       )}
 
-      {modal?.type === 'mission' && <MissionModalCard locationId={modal.locationId} markerImageUrl={modal.representativeImageUrl} coords={coords} onClose={closeModal} />}
+      {modal?.type === 'mission' && <LocationCouponModal key={modal.locationId} locationId={modal.locationId} hasMission markerImageUrl={modal.representativeImageUrl} coords={coords} onClose={closeModal} />}
       {modal?.type === 'place' && <PlaceModalCard locationId={modal.locationId} markerImageUrl={modal.representativeImageUrl} coords={coords} onClose={closeModal} />}
+      {modal?.type === 'placeCoupon' && <LocationCouponModal key={modal.locationId} locationId={modal.locationId} hasMission={modal.hasMission} coupon={modal} coords={coords} onClose={closeModal} />}
       {modal?.type === 'filteredMission' && <FilteredMissionModalCard missionType={modal.missionType} bounds={bounds} coords={coords} onClose={closeModal} />}
       {modal?.type === 'roadGuestbook' && <RoadGuestbookDetailModal guestbookId={modal.guestbookId} coords={coords} onClose={closeModal} />}
       {modal?.type === 'coupon' && (
@@ -290,6 +281,7 @@ export function MapView({ isMenuOpen, onOpenMenu }: { isMenuOpen: boolean; onOpe
           isCollapsed={isCouponSheetCollapsed}
           onCollapse={() => setIsCouponSheetCollapsed(true)}
           onExpand={() => setIsCouponSheetCollapsed(false)}
+          onUsed={closeModal}
         />
       )}
     </div>

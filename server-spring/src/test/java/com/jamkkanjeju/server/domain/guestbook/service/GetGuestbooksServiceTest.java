@@ -44,7 +44,7 @@ class GetGuestbooksServiceTest {
     private void user() { when(users.findById(15L)).thenReturn(Optional.of(User.builder().build())); }
 
     @Test void 사용자없으면_후속조회하지않는다() {
-        assertThatThrownBy(() -> service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null)))
+        assertThatThrownBy(() -> service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null, null, null)))
                 .extracting("errorCode").isEqualTo(CommonErrorCode.UNAUTHORIZED);
         verifyNoInteractions(visits, general, road, likes, books, storage);
     }
@@ -56,15 +56,15 @@ class GetGuestbooksServiceTest {
         ReflectionTestUtils.setField(g, "guestbookId", 101L);
         RoadGuestbook r = RoadGuestbook.builder().guestbook(Guestbook.builder().id(102L).build()).locationAlias("길").build();
         ReflectionTestUtils.setField(r, "guestbookId", 102L);
-        when(general.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(2, 1)))
+        when(general.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(2, 1)))
                 .thenReturn(new SliceImpl<>(List.of(g), PageRequest.of(2, 1), true));
-        when(road.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(3, 2)))
+        when(road.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(3, 2)))
                 .thenReturn(new SliceImpl<>(List.of(r), PageRequest.of(3, 2), false));
         when(likes.findGuestbookIdsByUserIdAndGuestbookIds(15L, List.of(101L, 102L))).thenReturn(List.of(102L));
         LikeCount count = mock(LikeCount.class);
         when(count.getGuestbookId()).thenReturn(102L); when(count.getLikeCount()).thenReturn(3L);
         when(likes.countByGuestbookIds(List.of(101L, 102L))).thenReturn(List.of(count));
-        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(2, 1, 3, 2));
+        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(2, 1, 3, 2, null, null));
         assertThat(response.generalGuestbooks().getFirst().likeCount()).isZero();
         assertThat(response.generalGuestbooks().getFirst().isLiked()).isFalse();
         assertThat(response.roadGuestbooks().getFirst().likeCount()).isEqualTo(3);
@@ -78,9 +78,9 @@ class GetGuestbooksServiceTest {
     @Test void 두목록이_비면_좋아요조회를_생략하고_방문장소를_유지한다() {
         user();
         when(visits.findAllByUserId(15L)).thenReturn(List.of(VisitedLocation.builder().location(MapModalFixtures.location(39L, 900L)).build()));
-        when(general.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
-        when(road.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
-        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null));
+        when(general.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
+        when(road.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
+        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null, null, null));
         assertThat(response.visitedLocations()).extracting("id").containsExactly(39L);
         assertThat(response.generalGuestbooks()).isEmpty(); assertThat(response.roadGuestbooks()).isEmpty();
         assertThat(response.generalGuestbooksPage().size()).isEqualTo(10);
@@ -91,11 +91,33 @@ class GetGuestbooksServiceTest {
         user();
         RoadGuestbook r = RoadGuestbook.builder().guestbook(Guestbook.builder().id(103L).build()).build();
         ReflectionTestUtils.setField(r, "guestbookId", 103L);
-        when(general.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
-        when(road.findSliceByStatus(GuestbookStatus.ACTIVE, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of(r)));
-        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null));
+        when(general.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of()));
+        when(road.findSliceByFilters(GuestbookStatus.ACTIVE, "LATEST", 15L, PageRequest.of(0, 10))).thenReturn(new SliceImpl<>(List.of(r)));
+        GetGuestbooksResponse response = service.getGuestbooks(15L, new GetGuestbooksRequest(null, null, null, null, null, null));
         assertThat(response.generalGuestbooks()).isEmpty(); assertThat(response.roadGuestbooks()).hasSize(1);
         verify(likes).findGuestbookIdsByUserIdAndGuestbookIds(15L, List.of(103L));
         verify(likes).countByGuestbookIds(List.of(103L)); verifyNoInteractions(books, storage);
+    }
+
+    @Test void 장소만_선택하면_길바닥조회는_생략하고_필터를전달한다() {
+        user();
+        when(general.findSliceByFilters(GuestbookStatus.ACTIVE, "LIKED", 15L, PageRequest.of(1, 10)))
+                .thenReturn(new SliceImpl<>(List.of()));
+        GetGuestbooksResponse response = service.getGuestbooks(15L,
+                new GetGuestbooksRequest(1, 10, 2, 5, "GENERAL", "LIKED"));
+        assertThat(response.roadGuestbooks()).isEmpty();
+        assertThat(response.roadGuestbooksPage()).isEqualTo(new GetGuestbooksResponse.GuestbooksPage(2, 5, false));
+        verifyNoInteractions(road, likes);
+    }
+
+    @Test void 자유만_선택하면_장소조회는_생략한다() {
+        user();
+        when(road.findSliceByFilters(GuestbookStatus.ACTIVE, "MINE", 15L, PageRequest.of(0, 10)))
+                .thenReturn(new SliceImpl<>(List.of()));
+        GetGuestbooksResponse response = service.getGuestbooks(15L,
+                new GetGuestbooksRequest(0, 10, 0, 10, "ROAD", "MINE"));
+        assertThat(response.generalGuestbooks()).isEmpty();
+        assertThat(response.generalGuestbooksPage().hasNext()).isFalse();
+        verifyNoInteractions(general, likes);
     }
 }

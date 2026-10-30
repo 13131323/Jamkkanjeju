@@ -1,12 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toCouponUsageConditions } from '@packages/shared';
-import { isCouponUsed, markCouponUsed, subscribeUsedCoupons, usedCouponServerSnapshot } from '@entities/coupon';
+import { markAcquiredCouponUsed } from '@shared/api/coupons';
+import { UseCouponConfirmModal } from './UseCouponConfirmModal';
 import { toHttpsImageUrl } from '@shared/lib/imageUrl';
 import { SHEET_BOTTOM_PADDING } from '../model/sheetLayout';
 
 export type CouponModalPayload = {
+  /** 구형 앱 URL에는 식별자·서버 사용 상태가 없어 해당 경우 사용 버튼을 활성화하지 않는다. */
+  couponId?: number;
+  usedAt?: string | null;
   /** 쿠폰 사용처. 서버의 couponLocation */
   couponLocation: string;
   couponPrice: number;
@@ -17,8 +22,10 @@ export type CouponModalPayload = {
 };
 
 type CouponModalCardProps = CouponModalPayload & {
+  onUsed: () => void;
   /** 시트가 내려가 있는 상태인지. 상태는 MapView가 들고 있다(마커 탭도 같은 값을 바꾼다) */
   isCollapsed: boolean;
+  embedded?: boolean;
   /** 아래로 끌어 내렸을 때. 닫지 않고 손잡이만 남긴다 */
   onCollapse: () => void;
   /** 손잡이를 위로 끌어 올렸을 때. 마커 탭과 같은 결과다 */
@@ -52,7 +59,7 @@ const COLLAPSED_PEEK_PX = 28;
  * 쿠폰 정보는 app이 쿼리 파라미터로 넘긴다 — completion API가 이미 준 값이라
  * web에서 다시 조회하지 않는다.
  */
-export function CouponModalCard({ couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand }: CouponModalCardProps) {
+export function CouponModalCard({ couponId, usedAt, couponLocation, couponPrice, locationAddress, locationImageUrl, isCollapsed, onCollapse, onExpand, onUsed, embedded = false }: CouponModalCardProps) {
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartYRef = useRef<number | null>(null);
@@ -61,10 +68,18 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
   // 실패하면 이미지가 아예 없을 때와 같은 회색 판으로 되돌린다.
   const [hasImageError, setHasImageError] = useState(false);
 
-  // localStorage는 React 밖의 상태다. effect에서 setState로 읽으면 cascading render가 되고
-  // 서버 렌더에는 저장소가 없어 hydration이 어긋난다 — 외부 저장소 구독으로 읽는다.
-  const getSnapshot = useCallback(() => isCouponUsed(couponLocation, couponPrice), [couponLocation, couponPrice]);
-  const isUsed = useSyncExternalStore(subscribeUsedCoupons, getSnapshot, usedCouponServerSnapshot);
+  const isUsed = usedAt != null;
+  const canUse = couponId !== undefined && usedAt === null;
+  const [showConfirm, setShowConfirm] = useState(false);
+  const queryClient = useQueryClient();
+  const useCoupon = useMutation({
+    mutationFn: markAcquiredCouponUsed,
+    onSuccess: () => {
+      setShowConfirm(false);
+      void queryClient.invalidateQueries({ queryKey: ['/api/v2/map/contents'] });
+      onUsed();
+    },
+  });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => setIsVisible(true));
@@ -95,11 +110,6 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
     dragStartYRef.current = null;
   }
 
-  function handleUseCoupon() {
-    // 저장이 구독자에게 알리므로 여기서 따로 상태를 바꾸지 않는다
-    markCouponUsed(couponLocation, couponPrice);
-  }
-
   // translateY의 100%는 **시트 자기 높이** 기준이라, 높이를 측정하지 않고도 "손잡이만 남기고 내리기"를
   // calc으로 그대로 쓸 수 있다(내용 길이에 따라 시트 높이가 달라지는 화면이라 측정은 리사이즈 관찰까지 끌고 온다).
   const sheetTransform = !isVisible ? 'translateY(100%)' : isCollapsed ? `translateY(calc(100% - ${COLLAPSED_PEEK_PX}px + ${dragY}px))` : `translateY(${dragY}px)`;
@@ -110,23 +120,23 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           없었다. 지금은 지도 탭이 내리는 신호다(MapView의 useDismissOnMapGesture). 닫지 않고 내리는
           이유는 그대로다 — 닫으면 되돌아올 길이 없고, 마커 탭이 되올리는 유일한 경로다. */}
       <div
-        className={`bg-cool-neutral-white absolute inset-x-0 bottom-0 z-20 flex max-h-[70%] flex-col rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)] ${
+        className={`bg-cool-neutral-white flex flex-col ${embedded ? 'relative h-full min-h-0' : 'absolute inset-x-0 bottom-0 z-20 max-h-[70%] rounded-t-xl shadow-[4px_4px_14px_rgba(0,0,0,0.12)]'} ${
           isDragging ? '' : 'transition-transform duration-300 ease-out'
         }`}
-        style={{ transform: sheetTransform }}
+        style={{ transform: embedded ? undefined : sheetTransform }}
       >
         {/* 손잡이 줄만 드래그 영역이면 잡을 곳이 28px뿐이라 끌기가 잘 인식되지 않았다 —
             제목까지 드래그 영역에 넣는다. 그래서 제목은 스크롤 밖 고정이고 스크롤은 사진부터 시작한다.
             드래그 중 제목 글자가 선택되지 않게 select-none을 건다 */}
         <div
           className="shrink-0 px-4 pt-3 select-none"
-          style={{ touchAction: 'none' }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          style={{ touchAction: embedded ? 'pan-y' : 'none' }}
+          onPointerDown={embedded ? undefined : handlePointerDown}
+          onPointerMove={embedded ? undefined : handlePointerMove}
+          onPointerUp={embedded ? undefined : handlePointerUp}
+          onPointerCancel={embedded ? undefined : handlePointerUp}
         >
-          <div className="flex justify-center">
+          <div hidden={embedded} style={{ display: embedded ? 'none' : undefined }} className="flex justify-center">
             <div className="bg-warm-neutral-100 h-1 w-10 rounded-full" />
           </div>
 
@@ -137,7 +147,7 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
           </div>
         </div>
 
-        <div className="flex grow flex-col gap-4 overflow-y-auto px-4 pt-4">
+        <div className="flex min-h-0 grow flex-col gap-4 overflow-y-auto px-4 pt-4">
           {/* TourAPI 대표 이미지라 없을 수 있다. 빈 자리를 남기지 않고 회색 판으로 둔다 */}
           {locationImageUrl && !hasImageError ? (
             // 외부 이미지 도메인을 next.config에 등록하지 않아도 되도록 img를 그대로 쓴다
@@ -175,14 +185,17 @@ export function CouponModalCard({ couponLocation, couponPrice, locationAddress, 
               누르면 되돌릴 수 없으므로 disabled로 바꿔 두 번 눌리지 않게 한다 */}
           <button
             type="button"
-            onClick={handleUseCoupon}
-            disabled={isUsed}
-            className={`text-label-md text-cool-neutral-white flex h-12 w-full items-center justify-center rounded-full font-medium ${isUsed ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
+            onClick={() => setShowConfirm(true)}
+            disabled={!canUse || useCoupon.isPending}
+            className={`text-label-md text-cool-neutral-white flex h-12 w-full items-center justify-center rounded-full font-medium ${!canUse ? 'bg-warm-neutral-300' : 'bg-tertiary-800'}`}
           >
             {isUsed ? '쿠폰 사용 완료' : '쿠폰 사용하기'}
           </button>
         </div>
       </div>
+      {showConfirm && <UseCouponConfirmModal pending={useCoupon.isPending} onCancel={() => setShowConfirm(false)} onConfirm={() => {
+        if (couponId !== undefined && usedAt === null && !useCoupon.isPending) useCoupon.mutate(couponId);
+      }} />}
     </>
   );
 }

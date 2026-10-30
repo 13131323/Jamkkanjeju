@@ -94,6 +94,8 @@ Status Code : `200 OK`
 | `locations[].guestbooksCount` | integer | 해당 장소의 ACTIVE 방명록 수. 없으면 0 |
 | `locations[].representativeImageUrl` | string \| null | TourAPI 장소 대표 이미지 URL. 제공하지 못하면 null |
 | `locations[].receivedCoupons` | object[] \| null | 현재 사용자가 실제 지급받은 쿠폰 중 해당 장소의 쿠폰 목록. 없으면 null |
+| `locations[].receivedCoupons[].couponId` | integer | 획득한 쿠폰의 ID. 로그인 사용자와 함께 획득 쿠폰을 식별하는 값 |
+| `locations[].receivedCoupons[].usedAt` | string \| null | 쿠폰 사용 시각. `YYYY-MM-DDTHH:mm:ss` 형식이며 미사용이면 null |
 | `locations[].receivedCoupons[].couponPrice` | integer | 쿠폰 금액 |
 | `locations[].receivedCoupons[].locationAddress` | string | 쿠폰 사용 장소의 주소 |
 | `roadGuestbooks` | object[] | 같은 확장 범위 안의 길바닥 방명록 목록. 없으면 빈 배열 |
@@ -124,6 +126,8 @@ Status Code : `200 OK`
       "representativeImageUrl": "https://example.com/locations/101.jpg",
       "receivedCoupons": [
         {
+          "couponId": 1,
+          "usedAt": null,
           "couponPrice": 1000,
           "locationAddress": "제주특별자치도 제주시 예시로 44"
         }
@@ -407,6 +411,7 @@ Status Code : `200 OK`
 | --- | --- | --- |
 | `id` | integer | 길바닥 방명록 ID |
 | `userNickname` | string \| null | 작성자 닉네임. 작성자 또는 닉네임이 없으면 null |
+| `characterImgUrl` | string \| null | 작성자의 캐릭터 프로필 이미지 URL. 작성자 또는 프로필 이미지가 없으면 null |
 | `locationAlias` | string | 작성자가 지정한 위치 별칭 |
 | `distanceMeter` | integer | 현재 사용자 위치에서 길바닥 방명록까지의 거리(m) |
 | `durationMinutes` | integer | 현재 사용자 위치에서 길바닥 방명록까지의 예상 이동 시간(분) |
@@ -421,6 +426,7 @@ Status Code : `200 OK`
 {
   "id": 100,
   "userNickname": "제주 여행자",
+  "characterImgUrl": "https://example.com/profile.png",
   "locationAlias": "성산 바다 앞",
   "distanceMeter": 850,
   "durationMinutes": 11,
@@ -434,7 +440,7 @@ Status Code : `200 OK`
 ```
 
 - `contentImageUrl`과 `contentAudioUrl`은 배열이 아닌 단일 URL이다.
-- 작성자가 없어도 ACTIVE 길바닥 방명록은 조회할 수 있으며 `userNickname`만 null로 반환한다.
+- 작성자가 없어도 ACTIVE 길바닥 방명록은 조회할 수 있으며 `userNickname`과 `characterImgUrl`을 null로 반환한다.
 - nullable 필드는 값이 없어도 키를 생략하지 않고 null로 반환한다. 두 응답 유형에만 있는 필드들을 하나의 객체에 합쳐 나열하지 않는다.
 
 ---

@@ -347,9 +347,9 @@ Status Code : `409 Conflict`
 
 ### API 설명
 
-작성자와 관계없이 활성 일반 방명록과 길바닥 방명록을 조회한다. `scope`로 조회 범위를 구분하지 않는다.
+활성 방명록을 유형·조회 기준에 맞춰 조회한다. 두 필터를 함께 적용한 전체 결과에서 일반·길바닥 방명록을 각각 페이징한다. `scope`는 사용하지 않으며 글·사진·음악·날씨 종류로 조회 대상을 제한하지 않는다.
 
-일반 방명록은 `generalGuestbooks`, 길바닥 방명록은 `roadGuestbooks` 배열로 구분한다. 두 목록의 페이지와 크기를 따로 지정하며 기본값은 각각 첫 페이지·10개다. 각 배열은 저장 시각 내림차순, 같은 시각이면 방명록 ID 내림차순으로 정렬한다.
+일반 방명록은 `generalGuestbooks`, 길바닥 방명록은 `roadGuestbooks` 배열로 구분한다. 두 목록의 페이지와 크기를 따로 지정하며 기본값은 각각 첫 페이지·10개다. 각 배열의 정렬은 `sort`를 따른다. 인기순은 전체 좋아요 수 내림차순이며 동률이면 저장 시각·방명록 ID 내림차순이다. 나머지는 저장 시각·방명록 ID 내림차순이다.
 
 일반 방명록 중 장소 연결이 없어진 기록은 조회에서 제외한다. 작성자가 없어진 방명록은 유지하고 작성자 정보만 `null`로 반환한다.
 
@@ -371,18 +371,24 @@ Status Code : `409 Conflict`
 
 | 필드 | 타입 | 필수 여부 | 설명 |
 | --- | --- | --- | --- |
+| `guestbookType` | string | 선택 | `ALL`: 전체, `GENERAL`: 장소 방명록, `ROAD`: 자유(길바닥 방명록). 생략하면 `ALL` |
+| `sort` | string | 선택 | `LATEST`: 최신순, `POPULAR`: 인기순, `MINE`: 내 방명록, `LIKED`: 좋아요한 방명록. 생략하면 `LATEST` |
 | `generalPage` | integer | 선택 | 일반 방명록 페이지 번호. 0 이상의 정수. 생략하면 0 |
-| `generalSize` | integer | 선택 | 일반 방명록 페이지 크기. 1 이상의 정수. 생략하면 10 |
+| `generalSize` | integer | 선택 | 일반 방명록 페이지 크기. 1~10의 정수. 생략하면 10 |
 | `roadPage` | integer | 선택 | 길바닥 방명록 페이지 번호. 0 이상의 정수. 생략하면 0 |
-| `roadSize` | integer | 선택 | 길바닥 방명록 페이지 크기. 1 이상의 정수. 생략하면 10 |
+| `roadSize` | integer | 선택 | 길바닥 방명록 페이지 크기. 1~10의 정수. 생략하면 10 |
 
+- `MINE`은 현재 사용자 작성분, `LIKED`는 현재 사용자가 좋아요한 기록만 조회하며 두 경우 모두 최신순이다. 본인 작성분에 누른 좋아요도 포함한다.
+- `GENERAL`은 길바닥 목록을, `ROAD`는 일반 목록을 빈 배열과 `hasNext=false`로 반환한다. 해당 유형의 요청 페이지·크기는 응답에 유지한다.
+- 필터 값은 표의 대문자 값만 허용한다. 잘못된 값·빈 문자열·범위를 벗어난 페이지 크기는 공통 400 오류다.
+- 필터 변경 시 클라이언트는 두 페이지 번호를 0으로 초기화한다.
 - 두 유형을 합쳐서 10개로 제한하지 않는다. 기본 요청에서는 일반 최대 10개·길바닥 최대 10개를 반환한다.
 - 한 유형의 페이지나 크기를 변경해도 다른 유형의 페이지 조건은 바뀌지 않는다.
 
 요청 예시:
 
 ```http
-GET /api/v2/guestbooks?generalPage=0&generalSize=10&roadPage=1&roadSize=10
+GET /api/v2/guestbooks?guestbookType=ALL&sort=POPULAR&generalPage=0&generalSize=10&roadPage=0&roadSize=10
 Authorization: Bearer {accessToken}
 ```
 

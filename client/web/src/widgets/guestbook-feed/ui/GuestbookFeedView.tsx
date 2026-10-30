@@ -1,34 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { GuestbookSort, GuestbookTypeFilter } from '@shared/api/guestbooks';
 import { pickScatterTransform } from '../model/decorativeStyle';
-import type { FeedFilterValue, LocationFilterValue } from '../model/filters';
-import { SORT_OPTION_LABEL, type SortOption } from '../model/sort';
+import { SORT_OPTION_LABEL } from '../model/sort';
 import { useGuestbookFeed } from '../model/useGuestbookFeed';
 import { GuestbookCard } from './GuestbookCard';
 import { GuestbookDetailModal } from './GuestbookDetailModal';
 import { GuestbookFeedSkeleton } from './GuestbookFeedSkeleton';
+import { GuestbookPagination } from './GuestbookPagination';
 
 const FEED_TITLE = '방명록';
 const FEED_SUBTITLE = '여행자들이 남긴 흔적을 발견하세요';
 
-// 엽서는 탭에서 제거(카드 자체가 없어짐).
-// 날씨는 카드 디자인은 없어졌지만 탭은 유지 — 클릭 시 날씨 데이터가 붙은 카드 전부를 보여준다(filters.ts 참고).
-const CATEGORY_TABS: { value: FeedFilterValue; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: 'note', label: '✏️ 글' },
-  { value: 'photo', label: '📷 사진' },
-  { value: 'audio', label: '🎵 음악' },
-  { value: 'weather', label: '🌤 날씨' },
-];
-
-const SORT_OPTIONS: SortOption[] = ['latest', 'popular', 'mine', 'liked'];
-
-function isSameLocationFilter(a: LocationFilterValue, b: LocationFilterValue): boolean {
-  if (a.type !== b.type) return false;
-  if (a.type === 'location' && b.type === 'location') return a.locationTitle === b.locationTitle;
-  return true;
-}
+const SORT_OPTIONS: GuestbookSort[] = ['LATEST', 'POPULAR', 'MINE', 'LIKED'];
 
 function GuestbookHeader() {
   return (
@@ -39,26 +24,22 @@ function GuestbookHeader() {
   );
 }
 
-function FilterChips({ locationOptions, locationFilter, onChange }: { locationOptions: string[]; locationFilter: LocationFilterValue; onChange: (value: LocationFilterValue) => void }) {
-  const chips: { key: string; value: LocationFilterValue; label: string }[] = [
-    { key: 'all', value: { type: 'all' }, label: '전체' },
-    { key: 'road', value: { type: 'road' }, label: '자유' },
-    ...locationOptions.map((locationTitle) => ({ key: `location-${locationTitle}`, value: { type: 'location' as const, locationTitle }, label: locationTitle })),
+function FilterChips({ guestbookType, onChange }: { guestbookType: GuestbookTypeFilter; onChange: (value: GuestbookTypeFilter) => void }) {
+  const chips: { value: GuestbookTypeFilter; label: string }[] = [
+    { value: 'ALL', label: '전체' },
+    { value: 'GENERAL', label: '장소' },
+    { value: 'ROAD', label: '자유' },
   ];
 
   return (
-    <div className="flex w-full scrollbar-none gap-2 overflow-x-auto px-4 pb-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="flex w-full gap-2 px-4 pb-2">
       {chips.map((chip) => {
-        const active = isSameLocationFilter(chip.value, locationFilter);
+        const active = chip.value === guestbookType;
         return (
-          <button
-            key={chip.key}
-            type="button"
-            onClick={() => onChange(chip.value)}
+          <button key={chip.value} type="button" onClick={() => onChange(chip.value)} aria-pressed={active}
             className={`text-label-md shrink-0 rounded-full border px-4 py-1.5 font-medium ${
               active ? 'border-cool-neutral-white bg-cool-neutral-white text-cool-neutral-900' : 'border-cool-neutral-800 bg-cool-neutral-800 text-cool-neutral-white'
-            }`}
-          >
+            }`}>
             {chip.label}
           </button>
         );
@@ -67,40 +48,67 @@ function FilterChips({ locationOptions, locationFilter, onChange }: { locationOp
   );
 }
 
-function CategoryTabs({ cardTypeFilter, onChange }: { cardTypeFilter: FeedFilterValue; onChange: (value: FeedFilterValue) => void }) {
-  return (
-    <div
-      className="border-cool-neutral-800 bg-cool-neutral-900 sticky z-10 flex w-full scrollbar-none gap-6 overflow-x-auto border-b px-4 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-      style={{ top: `var(--safe-area-top)` }}
-    >
-      {CATEGORY_TABS.map((tab) => (
-        <button
-          key={tab.value}
-          type="button"
-          onClick={() => onChange(tab.value)}
-          className={`text-label-md text-cool-neutral-white shrink-0 border-b-2 py-2.5 ${tab.value === cardTypeFilter ? 'border-cool-neutral-white font-semibold' : 'border-transparent font-normal'}`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+function SortBar({ sortOption, onChange }: { sortOption: GuestbookSort; onChange: (value: GuestbookSort) => void }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-function SortBar({ sortOption, onChange }: { sortOption: SortOption; onChange: (value: SortOption) => void }) {
-  function handleClick() {
-    const currentIndex = SORT_OPTIONS.indexOf(sortOption);
-    onChange(SORT_OPTIONS[(currentIndex + 1) % SORT_OPTIONS.length]);
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    function closeOutside(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [open]);
+
+  function closeMenu() {
+    setOpen(false);
+    triggerRef.current?.focus();
   }
 
   return (
-    <div className="flex w-full items-center justify-end gap-1 px-4 py-2">
-      <button type="button" onClick={handleClick} className="text-label-sm text-cool-neutral-white flex items-center gap-1">
-        {SORT_OPTION_LABEL[sortOption]}
-        <svg className="h-[5px] w-2" viewBox="0 0 8 5" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <path d="M1 1L4 4L7 1" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+    <div className="relative z-20 flex w-full items-center justify-end px-4 py-2">
+      <div ref={containerRef} onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }} onKeyDown={(event) => {
+        if (event.key === 'Escape') { event.preventDefault(); closeMenu(); }
+      }}>
+        <button ref={triggerRef} type="button" onClick={() => setOpen((old) => !old)}
+          aria-haspopup="menu" aria-expanded={open} aria-controls="guestbook-sort-menu"
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); }
+          }} className="text-label-sm text-cool-neutral-white flex items-center gap-1">
+          {SORT_OPTION_LABEL[sortOption]}
+          <svg className={`h-[5px] w-2 ${open ? 'rotate-180' : ''}`} viewBox="0 0 8 5" fill="none" aria-hidden="true">
+            <path d="M1 1L4 4L7 1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        {open ? (
+          <div ref={menuRef} id="guestbook-sort-menu" role="menu" aria-label="방명록 정렬 및 조회 기준"
+            className="bg-cool-neutral-white border-cool-neutral-200 absolute top-full right-4 mt-1 w-44 rounded-xl border p-1.5 shadow-lg"
+            onKeyDown={(event) => {
+              if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const options = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button'));
+              const index = options.indexOf(document.activeElement as HTMLButtonElement);
+              const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+                : (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+              options[next]?.focus();
+            }}>
+            {SORT_OPTIONS.map((option) => (
+              <button key={option} type="button" role="menuitemradio" aria-checked={sortOption === option}
+                className={`text-label-md text-cool-neutral-900 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-warm-neutral-100 focus-visible:bg-warm-neutral-100 ${sortOption === option ? 'bg-warm-neutral-100 font-bold' : ''}`}
+                onClick={() => { onChange(option); closeMenu(); }}>
+                <span className="w-3" aria-hidden="true">{sortOption === option ? '✓' : ''}</span>
+                {SORT_OPTION_LABEL[option]}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -134,17 +142,17 @@ function GuestbookFeed({ cards, onSelect }: { cards: ReturnType<typeof useGuestb
   );
 }
 
-export function GuestbookFeedView({ seedLocationTitle = null }: { seedLocationTitle?: string | null }) {
-  const { isLoading, isError, cards, orderedGuestbooks, locationOptions, locationFilter, setLocationFilter, cardTypeFilter, setCardTypeFilter, sortOption, setSortOption } =
-    useGuestbookFeed(seedLocationTitle);
+export function GuestbookFeedView({ initialGuestbookType = 'ALL' }: { initialGuestbookType?: GuestbookTypeFilter }) {
+  const { isLoading, isError, cards, orderedGuestbooks, filters, changeFilters, page, maxKnownPage, setPage, hasNextPage, isFetching } =
+    useGuestbookFeed(initialGuestbookType);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const feedRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="bg-cool-neutral-900 flex w-full flex-col">
+    <div ref={feedRef} className="bg-cool-neutral-900 flex w-full flex-col">
       <GuestbookHeader />
-      <FilterChips locationOptions={locationOptions} locationFilter={locationFilter} onChange={setLocationFilter} />
-      <CategoryTabs cardTypeFilter={cardTypeFilter} onChange={setCardTypeFilter} />
-      <SortBar sortOption={sortOption} onChange={setSortOption} />
+      <FilterChips guestbookType={filters.guestbookType} onChange={(guestbookType) => { setSelectedId(null); changeFilters({ guestbookType }); }} />
+      <SortBar sortOption={filters.sort} onChange={(sort) => { setSelectedId(null); changeFilters({ sort }); }} />
       {isLoading ? (
         <GuestbookFeedSkeleton />
       ) : isError ? (
@@ -152,7 +160,12 @@ export function GuestbookFeedView({ seedLocationTitle = null }: { seedLocationTi
       ) : (
         <GuestbookFeed cards={cards} onSelect={setSelectedId} />
       )}
-      {selectedId ? <GuestbookDetailModal guestbooks={orderedGuestbooks} initialId={selectedId} onClose={() => setSelectedId(null)} /> : null}
+      <GuestbookPagination page={page} maxKnownPage={maxKnownPage} hasNextPage={hasNextPage} pending={isFetching} onChange={(next) => {
+        setSelectedId(null);
+        setPage(next);
+        feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }} />
+      {selectedId && orderedGuestbooks.some((record) => record.key === selectedId) ? <GuestbookDetailModal guestbooks={orderedGuestbooks} initialId={selectedId} onClose={() => setSelectedId(null)} /> : null}
     </div>
   );
 }
