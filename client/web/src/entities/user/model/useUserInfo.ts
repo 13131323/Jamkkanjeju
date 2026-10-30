@@ -1,12 +1,13 @@
 'use client';
 
-import { useGetUserInfoApiV1UsersMeGet } from '@/services/api/mypage/mypage';
+import { useQuery } from '@tanstack/react-query';
+import { getUserInfo, USER_INFO_QUERY_KEY } from '@shared/api/userInfo';
 
-// GET /api/v1/users/me — 프로필 수정 화면(MyPageEditView) 진입 시 현재 값을 채우는 데 쓴다.
+// GET /api/v2/users/me — 프로필 수정 화면 진입 시 현재 저장값을 채운다.
 export function useUserInfo() {
-  return useGetUserInfoApiV1UsersMeGet({
-    query: {
-      throwOnError: false,
-    },
+  return useQuery({
+    queryKey: USER_INFO_QUERY_KEY,
+    queryFn: ({ signal }) => getUserInfo(signal),
+    throwOnError: false,
   });
 }

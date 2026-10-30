@@ -7,9 +7,12 @@ import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.onboarding.dto.CompleteOnboardingRequest;
 import com.jamkkanjeju.server.domain.onboarding.dto.CompleteOnboardingResponse;
 import com.jamkkanjeju.server.domain.onboarding.entity.Expectation;
+import com.jamkkanjeju.server.domain.onboarding.entity.ExpectationType;
 import com.jamkkanjeju.server.domain.onboarding.entity.OnboardingResult;
 import com.jamkkanjeju.server.domain.onboarding.entity.Transportation;
+import com.jamkkanjeju.server.domain.onboarding.entity.TransportationType;
 import com.jamkkanjeju.server.domain.onboarding.entity.TravelStyle;
+import com.jamkkanjeju.server.domain.onboarding.entity.TravelStyleType;
 import com.jamkkanjeju.server.domain.onboarding.entity.UserExpectation;
 import com.jamkkanjeju.server.domain.onboarding.entity.UserTransportation;
 import com.jamkkanjeju.server.domain.onboarding.entity.UserTravelStyle;
@@ -69,27 +72,52 @@ public class OnboardingService {
 
     /** 사용자의 온보딩 선택값을 요청한 값으로 교체한다. */
     private void replaceSelections(User user, CompleteOnboardingRequest request) {
+        replaceSelections(user, request.expectations(), request.transportation(), request.travelStyle());
+    }
+
+    /** 프로필에서 변경된 최종 선택값을 저장하고 온보딩과 같은 규칙으로 결과를 배정한다. */
+    @Transactional
+    public void updateSelectionsAndAssignResult(User user, List<ExpectationType> expectations,
+                                               TransportationType transportation, TravelStyleType travelStyle) {
+        replaceSelections(user, expectations, transportation, travelStyle);
+        boolean skipped = expectations.isEmpty() && transportation == null && travelStyle == null;
+        user.assignOnboardingResult(skipped ? findDefaultResult() : pickRandomResult());
+    }
+
+    /** 기준 항목을 모두 확인한 뒤 최종 선택을 교체하며 단일 선택의 해제도 반영한다. */
+    private void replaceSelections(User user, List<ExpectationType> expectationTypes,
+                                   TransportationType transportationType, TravelStyleType travelStyleType) {
         // 기준 데이터가 모두 존재하는지 먼저 확인한 뒤 변경한다.
-        List<Expectation> expectations = expectationRepository.findAllByExpectationTypeIn(request.expectations());
-        if (expectations.size() != request.expectations().size()) {
-            throw new IllegalStateException("여행 기대 항목 기준 데이터가 없습니다: " + request.expectations());
+        List<Expectation> expectations = expectationRepository.findAllByExpectationTypeIn(expectationTypes);
+        if (expectations.size() != expectationTypes.size()) {
+            throw new IllegalStateException("여행 기대 항목 기준 데이터가 없습니다: " + expectationTypes);
         }
-        Transportation transportation = transportationRepository.findByTransportationType(request.transportation())
-                .orElseThrow(() -> new IllegalStateException("이동 수단 기준 데이터가 없습니다: " + request.transportation()));
-        TravelStyle travelStyle = travelStyleRepository.findByTravelStyleType(request.travelStyle())
-                .orElseThrow(() -> new IllegalStateException("여행 방식 기준 데이터가 없습니다: " + request.travelStyle()));
+        Transportation transportation = transportationType == null ? null
+                : transportationRepository.findByTransportationType(transportationType)
+                        .orElseThrow(() -> new IllegalStateException("이동 수단 기준 데이터가 없습니다: " + transportationType));
+        TravelStyle travelStyle = travelStyleType == null ? null
+                : travelStyleRepository.findByTravelStyleType(travelStyleType)
+                        .orElseThrow(() -> new IllegalStateException("여행 방식 기준 데이터가 없습니다: " + travelStyleType));
 
         replaceExpectations(user, expectations);
 
-        userTransportationRepository.findById(user.getId()).ifPresentOrElse(
+        if (transportation == null) {
+            userTransportationRepository.deleteById(user.getId());
+        } else {
+            userTransportationRepository.findById(user.getId()).ifPresentOrElse(
                 saved -> saved.changeTransportation(transportation),
                 () -> userTransportationRepository.save(
                         UserTransportation.builder().user(user).transportation(transportation).build()));
+        }
 
-        userTravelStyleRepository.findById(user.getId()).ifPresentOrElse(
+        if (travelStyle == null) {
+            userTravelStyleRepository.deleteById(user.getId());
+        } else {
+            userTravelStyleRepository.findById(user.getId()).ifPresentOrElse(
                 saved -> saved.changeTravelStyle(travelStyle),
                 () -> userTravelStyleRepository.save(
                         UserTravelStyle.builder().user(user).travelStyle(travelStyle).build()));
+        }
     }
 
     /** 사용자의 여행 기대 항목 선택 내역을 요청한 항목으로 교체한다. */

@@ -498,11 +498,7 @@ function CardFront({ character, theme }: { character: ArCharacterDetail; theme: 
             <CheckIcon />
           </span>
         </div>
-        {/* 빈 값이면 아예 그리지 않는다. 미획득 캐릭터는 이 라벨이 ''인데, 그냥 두면 글자는 안 보여도
-            span 한 줄만큼의 자리가 남아 앞면 아래에 어색한 여백이 생긴다.
-            text-center: 문구가 길면 줄바꿈되는데, 정렬을 안 주면 기본 좌측 정렬이라 줄마다 시작 x가
-            제각각이라 가로 패딩이 있어도 시각적으로 왼쪽에 쏠려 보인다. */}
-        {character.acquiredPlaceLabel !== '' && <span className="text-body-md text-warm-neutral-600 text-center">{character.acquiredPlaceLabel}</span>}
+
       </div>
     </div>
   );
@@ -542,12 +538,7 @@ function CardBack({ character, theme }: { character: ArCharacterDetail; theme: (
         <div className="flex flex-col gap-2.5">
           {/* 크기는 상단 캐치프레이즈(text-body-md)에 맞춘다(사용자 지시) — 굵기로만 구분한다 */}
           <p className="text-body-md text-cool-neutral-950 font-bold">획득 조건</p>
-          {/* 예전에는 acquiredMissions[]를 줄 목록으로 폈다. 그 배열은 **이미 깬 미션**이라 조건 설명이
-              아니고, 미획득 캐릭터에서는 비어서 제목만 덩그러니 남았다. API가 조건을 한 줄 문자열로
-              따로 주므로 그것만 쓴다(사용자 지시).
-
-              흰 줄 상자와 체크 표시는 목록이던 시절 그대로 둔다 — 위 해시태그가 "테두리만 있는 칩"인 건
-              이 흰 덩어리와 무게를 구분하기 위해서라(위 주석), 상자를 없애면 두 묶음이 붙어 보인다. */}
+          {/* 캐릭터 카드 뒷면에는 응답의 획득 조건 설명을 표시한다. */}
           <div className="bg-cool-neutral-white flex items-center gap-2.5 rounded-xl px-4 py-3">
             <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${theme.badge}`}>
               <CheckIcon />

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { MISSION_ROUTE_BY_TYPE } from '@packages/shared';
 import type { GeneratedApi } from '@packages/shared';
 import { sendToApp } from '@shared/lib/bridge/utils';
-import { useGetMypageApiV1UsersMeMypageGet } from '@/services/api/mypage/mypage';
+import { useMyPage } from '@entities/user';
 import TreasureChestOpen from '@shared/lib/images/treasure-chest-open.png';
 import JejuCelebrationImage3 from '@shared/lib/images/JejuCelebrationImage3.png';
 import JejuCelebrationImage4 from '@shared/lib/images/JejuCelebrationImage4.png';
@@ -16,7 +16,7 @@ import JejuCelebrationImage4 from '@shared/lib/images/JejuCelebrationImage4.png'
  * 화면은 이 형태만 알면 되고, 서버가 이미지 URL을 주기 시작하면 이 파일만 고치면 된다.
  */
 export interface MissionProgressCardData {
-  /** 유형별 세부 미션 id. 앱이 어떤 미션을 이어할지 정하는 데 쓴다 */
+  /** 공통 미션 ID. 앱이 어떤 미션을 이어할지 정하는 데 쓴다 */
   missionId: number;
   missionType: GeneratedApi.AppMissionModelsMissionType;
   title: string;
@@ -63,11 +63,11 @@ export function resumeMission(mission: MissionProgressCardData): void {
 /**
  * 마이페이지 조회에서 진행중인 미션만 꺼낸다.
  *
- * 같은 `GET /api/v1/users/me/mypage`를 프로필·통계 등 다른 조각도 쓰게 되면 queryKey가 같아
+ * 같은 `GET /api/v2/users/me/mypage`를 프로필·통계 등 다른 조각도 쓰게 되면 queryKey가 같아
  * TanStack Query가 캐시를 공유한다(홈의 useHomeData와 같은 구조).
  */
 export function useMissionProgress(): { missions: MissionProgressCardData[]; isPending: boolean } {
-  const { data, isPending } = useGetMypageApiV1UsersMeMypageGet();
+  const { data, isPending } = useMyPage();
 
   const missions = useMemo(
     () =>

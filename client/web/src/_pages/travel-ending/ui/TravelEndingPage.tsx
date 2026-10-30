@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import * as Sentry from '@sentry/nextjs';
 import { wasApiErrorNotified, type GeneratedApi } from '@packages/shared';
 import { useCreateTravelEndingContent, useTravelEndingElements } from '@entities/user';
+import type { TravelEndingCompletedMission, TravelEndingElementsResponse, TravelEndingVisitedLocation } from '@shared/api/travelEndingElements';
 import { isAppWebView, sendToApp } from '@shared/lib/bridge/utils';
 import { formatVisitedAt } from '@shared/lib/formatVisitedAt';
 import { Toast } from '@shared/ui/Toast';
@@ -91,7 +92,7 @@ function SectionCard({ title, count, isOpen, onToggle, children }: { title: stri
   );
 }
 
-function LocationRow({ location, checked, onToggle, onViewDetail }: { location: GeneratedApi.TravelEndingVisitedLocationResponse; checked: boolean; onToggle: () => void; onViewDetail: () => void }) {
+function LocationRow({ location, checked, onToggle, onViewDetail }: { location: TravelEndingVisitedLocation; checked: boolean; onToggle: () => void; onViewDetail: () => void }) {
   return (
     <div className="flex items-center gap-3">
       <button type="button" onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 text-left">
@@ -105,7 +106,7 @@ function LocationRow({ location, checked, onToggle, onViewDetail }: { location: 
   );
 }
 
-function MissionRow({ mission, checked, onToggle }: { mission: GeneratedApi.TravelEndingCompletedMissionResponse; checked: boolean; onToggle: () => void }) {
+function MissionRow({ mission, checked, onToggle }: { mission: TravelEndingCompletedMission; checked: boolean; onToggle: () => void }) {
   const point = mission.rewardDetail.point;
   const subtitleParts = [mission.completedLocation, formatVisitedAt(mission.completedAt)].filter((part): part is string => Boolean(part));
 
@@ -125,6 +126,7 @@ function PhotoGrid({
   photos,
   canAddMore,
   onToggle,
+  onRemove,
   onAddClick,
   inputRef,
   onFilesChange,
@@ -132,6 +134,7 @@ function PhotoGrid({
   photos: PhotoItem[];
   canAddMore: boolean;
   onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
   onAddClick: () => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onFilesChange: (e: ChangeEvent<HTMLInputElement>) => void;
@@ -140,15 +143,27 @@ function PhotoGrid({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
         {photos.map((photo) => (
-          <button key={photo.id} type="button" onClick={() => onToggle(photo.id)} className="relative h-[104px] w-[104px] shrink-0 overflow-hidden rounded-lg">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={photo.url} alt="" className={`h-full w-full object-cover ${photo.selected ? '' : 'opacity-40'}`} />
-            {photo.selected && (
-              <span className="bg-tertiary-600 absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white">
-                <CheckMark />
-              </span>
-            )}
-          </button>
+          <div key={photo.id} className="relative h-[104px] w-[104px] shrink-0">
+            <button type="button" aria-label={`${photo.file.name} 선택`} aria-pressed={photo.selected} onClick={() => onToggle(photo.id)} className="h-full w-full overflow-hidden rounded-lg">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={photo.url} alt="" className={`h-full w-full object-cover ${photo.selected ? '' : 'opacity-40'}`} />
+              {photo.selected && (
+                <span className="bg-tertiary-600 pointer-events-none absolute top-1.5 left-1.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white">
+                  <CheckMark />
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label={`${photo.file.name} 사진 삭제`}
+              onClick={() => onRemove(photo.id)}
+              className="bg-warm-neutral-900/75 text-cool-neutral-white absolute top-1 right-1 flex h-7 w-7 items-center justify-center rounded-full"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="m3.5 3.5 7 7m0-7-7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
         ))}
         {canAddMore && (
           <button type="button" onClick={onAddClick} className="border-cool-neutral-200 flex h-[104px] w-[104px] shrink-0 flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed">
@@ -246,8 +261,8 @@ function ResultScreen({
   );
 }
 
-// mission_id는 유형별로 채번돼(travelEndingCompletedMissionResponse.ts 문서 참고) 타입이 다른 미션끼리 번호가 겹칠 수 있다.
-function missionKey(mission: Pick<GeneratedApi.TravelEndingCompletedMissionResponse, 'missionId' | 'missionType'>): string {
+// v2의 공통 미션 ID를 그대로 유지하고 유형과 함께 선택 상태의 키로 사용한다.
+function missionKey(mission: Pick<TravelEndingCompletedMission, 'missionId' | 'missionType'>): string {
   return `${mission.missionType}-${mission.missionId}`;
 }
 
@@ -258,7 +273,7 @@ function FormScreen({
   isSubmitting,
   onShowToast,
 }: {
-  data: GeneratedApi.TravelEndingElementsResponse;
+  data: TravelEndingElementsResponse;
   onBack: () => void;
   onSubmit: (input: { locationIds: number[]; missions: GeneratedApi.TravelEndingMissionRequest[]; photoFiles: File[]; note: string }) => void;
   isSubmitting: boolean;
@@ -364,6 +379,14 @@ function FormScreen({
     if (accepted.length > 0) setPhotos((prev) => [...prev, ...accepted]);
   }
 
+  function removePhoto(id: string) {
+    const photo = photos.find((item) => item.id === id);
+    if (!photo) return;
+    setPhotos((current) => current.filter((item) => item.id !== id));
+    URL.revokeObjectURL(photo.url);
+    createdUrlsRef.current = createdUrlsRef.current.filter((url) => url !== photo.url);
+  }
+
   const selectedPhotoCount = photos.filter((photo) => photo.selected).length;
   const hasEnoughPoint = data.point >= CREATE_COST_POINT;
   const canSubmit = !isSubmitting && hasEnoughPoint && selectedLocationIds.size >= MIN_SELECT && selectedMissionIds.size >= MIN_SELECT && selectedPhotoCount >= MIN_SELECT;
@@ -391,7 +414,7 @@ function FormScreen({
           <PointBadge point={data.point} />
         </div>
 
-        <SectionCard title="방문한 곳" count={data.visitedLocations.length} isOpen={openSections.locations} onToggle={() => toggleSection('locations')}>
+        <SectionCard title="방문한 곳" count={data.visitedLocationCount} isOpen={openSections.locations} onToggle={() => toggleSection('locations')}>
           {data.visitedLocations.length === 0 ? (
             <p className="text-label-md text-warm-neutral-400">아직 방문한 곳이 없어요</p>
           ) : (
@@ -407,7 +430,7 @@ function FormScreen({
           )}
         </SectionCard>
 
-        <SectionCard title="미션" count={data.completedMissions.length} isOpen={openSections.missions} onToggle={() => toggleSection('missions')}>
+        <SectionCard title="미션" count={data.completedMissionCount} isOpen={openSections.missions} onToggle={() => toggleSection('missions')}>
           {data.completedMissions.length === 0 ? (
             <p className="text-label-md text-warm-neutral-400">아직 완료한 미션이 없어요</p>
           ) : (
@@ -422,6 +445,7 @@ function FormScreen({
             photos={photos}
             canAddMore={photos.length < MAX_SELECT}
             onToggle={togglePhoto}
+            onRemove={removePhoto}
             onAddClick={() => fileInputRef.current?.click()}
             inputRef={fileInputRef}
             onFilesChange={handleFilesChange}

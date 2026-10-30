@@ -377,6 +377,7 @@ AR_CHARACTER {
 	varchar_500 img_url "NOT NULL"
 	varchar_20 representative_color "NOT NULL"
 	json hashtags "NOT NULL, CHECK: string[]"
+	int required_fragment_count "NOT NULL, 캐릭터 획득에 필요한 조각 수"
 	datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 	datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
 }

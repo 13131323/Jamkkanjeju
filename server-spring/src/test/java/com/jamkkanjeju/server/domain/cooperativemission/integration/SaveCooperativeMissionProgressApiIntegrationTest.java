@@ -219,7 +219,7 @@ class SaveCooperativeMissionProgressApiIntegrationTest extends CooperativeMissio
 
     /** 세 가지 보상을 갖는 장소 없는 미션을 트랜잭션 안에 준비한다. */
     private CooperativeMission fullRewardMission() {
-        var character=ArCharacter.builder().name("감귤").description("설명").storyTitle("이야기").acquireCondition("완료")
+        var character=ArCharacter.builder().requiredFragmentCount(10).name("감귤").description("설명").storyTitle("이야기").acquireCondition("완료")
                 .imgUrl("character.png").representativeColor("#FFA500").hashtags(List.of()).build(); em.persist(character);
         var coupon=Coupon.builder().couponPrice(5000).build(); em.persist(coupon);
         var mission=CooperativeMission.builder().mission(commonMission(MissionTypeCode.COOPERATIVE)).status(MissionActivationStatus.ACTIVE)

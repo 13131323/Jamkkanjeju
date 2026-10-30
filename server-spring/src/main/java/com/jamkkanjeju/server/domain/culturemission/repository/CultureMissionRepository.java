@@ -2,6 +2,7 @@ package com.jamkkanjeju.server.domain.culturemission.repository;
 
 import com.jamkkanjeju.server.domain.culturemission.entity.CultureMission;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -34,5 +35,15 @@ public interface CultureMissionRepository extends JpaRepository<CultureMission, 
      */
     @EntityGraph(attributePaths = "mission.missionType")
     List<CultureMission> findAllByStatus(MissionActivationStatus status);
+
+
+    /**
+     * 결과: 상태와 보상 캐릭터 ID 목록이 일치하는 미션 전체이며 결과가 없으면 빈 목록이다.
+     * {@code mission.missionType}과 {@code arCharacter}를 함께 로딩한다. 장소 유무는 제한하지 않는다.
+     * 사용: 마이페이지 조회({@code GET /api/v2/users/me/mypage})에서 미완성 캐릭터의 활성 후보를
+     * 일괄 조회하고 서비스가 사용자 완료·기지급 기록을 제외하여 {@code availableMissions}를 구성한다.
+     */
+    @EntityGraph(attributePaths = {"mission.missionType", "arCharacter"})
+    List<CultureMission> findAllByStatusAndArCharacterIdIn(MissionActivationStatus status, Collection<Long> characterIds);
 
 }

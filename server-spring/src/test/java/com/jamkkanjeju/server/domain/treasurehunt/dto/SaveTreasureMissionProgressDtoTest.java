@@ -63,7 +63,7 @@ class SaveTreasureMissionProgressDtoTest {
         progress.complete(COMPLETED_AT);
         var nextMission = SaveTreasureMissionProgressResponse.NextMission.from(mission(31L, MissionTypeCode.TREASURE));
         var nextLocation = SaveTreasureMissionProgressResponse.NextLocation.of(location(8L, "다음", 33, 126), null, 42, nextMission);
-        var character = ArCharacter.builder().id(9L).name("캐릭터").imgUrl("character.png").build();
+        var character = ArCharacter.builder().requiredFragmentCount(10).id(9L).name("캐릭터").imgUrl("character.png").build();
         var coupon = Coupon.builder().couponPrice(3000).build();
         var reward = SaveTreasureMissionProgressResponse.Reward.of(character, 0, coupon);
         var response = SaveTreasureMissionProgressResponse.completed(progress, 1, List.of(1), nextLocation, reward);

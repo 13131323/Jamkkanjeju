@@ -92,7 +92,7 @@ class GetMissionHomeApiIntegrationTest extends MySqlIntegrationTestSupport {
         ArCharacter character = null;
         Coupon coupon = null;
         if (withRewards) {
-            character = ArCharacter.builder().name("돌담이").description("설명").storyTitle("이야기")
+            character = ArCharacter.builder().requiredFragmentCount(10).name("돌담이").description("설명").storyTitle("이야기")
                     .acquireCondition("미션").imgUrl("https://example.com/character.png")
                     .representativeColor("blue").hashtags(List.of("테스트")).build();
             entityManager.persist(character);

@@ -51,4 +51,8 @@ public class ArCharacter extends BaseTimeEntity {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "hashtags", nullable = false)
     private List<String> hashtags;
+
+    /** 캐릭터 획득에 필요한 조각 수이며 10개를 넘는 설정도 허용한다. */
+    @Column(name = "required_fragment_count", nullable = false)
+    private int requiredFragmentCount;
 }

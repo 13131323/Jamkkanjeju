@@ -57,7 +57,9 @@ INSERT INTO `coupon` (`id`, `location_id`, `coupon_price`)
 VALUES
     (1, 1, 1000),
     (2, 2, 2000),
-    (3, 3, 3000);
+    (3, 3, 3000),
+    (4, 2, 2000), -- 협동 미션 보상: 블루메베이글 2,000원
+    (5, 1, 1000); -- 보물찾기 보상: 라토커피제주 1,000원
 
 INSERT INTO `acquired_coupon` (`coupon_id`, `user_id`, `acquired_at`)
 VALUES
@@ -71,14 +73,14 @@ VALUES
 INSERT INTO `mission` (`mission_type_id`)
 SELECT `id` FROM `mission_type` WHERE `type` = 'COOPERATIVE';
 
-INSERT INTO `cooperative_mission` (`mission_id`, `location_id`, `status`)
-VALUES (LAST_INSERT_ID(), 2, 'ACTIVE');
+INSERT INTO `cooperative_mission` (`mission_id`, `location_id`, `status`, `ar_character_id`, `point`, `coupon_id`)
+VALUES (LAST_INSERT_ID(), 2, 'ACTIVE', 5, 200, 4);
 
 INSERT INTO `mission` (`mission_type_id`)
 SELECT `id` FROM `mission_type` WHERE `type` = 'TREASURE';
 
-INSERT INTO `treasure_mission` (`mission_id`, `location_id`, `item_total_count`, `status`)
-VALUES (LAST_INSERT_ID(), 1, 3, 'ACTIVE');
+INSERT INTO `treasure_mission` (`mission_id`, `location_id`, `item_total_count`, `status`, `ar_character_id`, `point`, `coupon_id`)
+VALUES (LAST_INSERT_ID(), 1, 3, 'ACTIVE', 6, 100, 5);
 
 INSERT INTO `visited_location`
     (`id`, `user_id`, `location_id`, `last_visited_at`)
@@ -91,12 +93,27 @@ VALUES
 -- 문화 미션 진행
 -- ---------------------------------------------------------------------
 
--- 1번 사용자: 문화 1번 진행 중(2번째 퀴즈), 문화 2번 완료
+-- 1번 사용자: 문화 1~10번을 각각 3문제 중 1개만 맞히고 완료한 기록.
 INSERT INTO `culture_mission_progress`
     (`id`, `culture_mission_id`, `user_id`, `mission_status`, `current_quiz_index`, `correct_count`, `last_completed_at`)
-VALUES
-    (1, 1, 1, 'IN_PROGRESS', 2, 1, NULL),
-    (2, 2, 1, 'COMPLETED', 3, 3, '2026-09-30 18:00:00');
+SELECT cm.`mission_id`, cm.`mission_id`, 1, 'COMPLETED', MAX(q.`quiz_index`), 1, CURRENT_TIMESTAMP
+FROM `culture_mission` cm
+JOIN `culture_mission_quiz` q ON q.`culture_mission_id` = cm.`mission_id`
+WHERE cm.`mission_id` BETWEEN 1 AND 10
+GROUP BY cm.`mission_id`;
+
+-- 현재 보상 지급 방식과 동일하게 미션별 캐릭터 획득 기록을 남긴다.
+INSERT INTO `acquired_ar_character` (`ar_character_id`, `user_id`, `mission_id`)
+SELECT `ar_character_id`, 1, `mission_id`
+FROM `culture_mission`
+WHERE `mission_id` BETWEEN 1 AND 10 AND `ar_character_id` IS NOT NULL;
+
+-- 정답 1개에 해당하는 첫 번째 보상(AR 캐릭터)만 지급한 상태다.
+INSERT INTO `mission_reward_status`
+    (`mission_id`, `user_id`, `ar_character_reward_granted`, `point_reward_granted`, `coupon_reward_granted`)
+SELECT `mission_id`, 1, TRUE, FALSE, FALSE
+FROM `culture_mission`
+WHERE `mission_id` BETWEEN 1 AND 10;
 
 -- ---------------------------------------------------------------------
 -- 방명록 (장소 방명록 3건, 길바닥 방명록 2건)

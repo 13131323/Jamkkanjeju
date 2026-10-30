@@ -16,6 +16,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface CultureMissionProgressRepository extends JpaRepository<CultureMissionProgress, Long> {
 
     /**
+     * 결과: 사용자와 요청한 진행 상태가 일치하는 문화 진행도 전체이며 없으면 빈 목록이다.
+     * 공통 미션·유형·보상 캐릭터·쿠폰·쿠폰 사용처를 함께 로딩한다. 활성 여부는 제한하지 않는다.
+     * 사용: 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서 완료 상태로 조회하고,
+     * 서비스가 활성 여부·완료 시각을 확인하여 {@code completedMissions}와 전체 보상을 구성한다.
+     */
+    @EntityGraph(attributePaths = {"cultureMission.mission.missionType", "cultureMission.arCharacter", "cultureMission.coupon.location"})
+    List<CultureMissionProgress> findAllWithRewardsByUserIdAndMissionStatus(Long userId, MissionProgressStatus missionStatus);
+
+    /**
      * 결과: 사용자({@code userId})의 문화 미션 진행도 중 진행 상태가 {@code missionStatus}인 목록.
      * 각 원소는 {@code cultureMission.mission.missionType}(유형·이름)이 함께 로딩되어 있고, 없으면 빈 목록이다.
      * 사용: 홈 조회({@code GET /api/v2/users/me/home}) 응답의 {@code progressMission} 중 CULTURE 항목.
@@ -46,4 +55,14 @@ public interface CultureMissionProgressRepository extends JpaRepository<CultureM
     @EntityGraph(attributePaths = {"cultureMission.arCharacter", "cultureMission.coupon.location"})
     Optional<CultureMissionProgress> findByIdAndUserIdAndMissionStatus(Long id, Long userId,
                                                                       MissionProgressStatus missionStatus);
+
+    /**
+     * 결과: 사용자의 문화 미션 진행도 전체이며 {@code cultureMission.mission.missionType}을 함께 로딩한다.
+     * 진행 상태와 무관하게 반환하고 없으면 빈 목록이다.
+     * 사용: 마이페이지 조회({@code GET /api/v2/users/me/mypage})에서 완료 수·진행 중 목록과
+     * 캐릭터 획득 가능 미션의 완료 제외 집합을 같은 조회 결과로 구성한다.
+     */
+    @EntityGraph(attributePaths = "cultureMission.mission.missionType")
+    List<CultureMissionProgress> findAllByUserId(Long userId);
+
 }

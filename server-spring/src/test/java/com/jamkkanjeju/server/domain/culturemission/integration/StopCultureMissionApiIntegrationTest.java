@@ -79,7 +79,7 @@ class StopCultureMissionApiIntegrationTest extends MySqlIntegrationTestSupport {
         em.persist(location);
         var coupon = Coupon.builder().location(location).couponPrice(3000).build();
         em.persist(coupon);
-        var character = ArCharacter.builder().name("중단테스트 캐릭터").description("설명").storyTitle("이야기")
+        var character = ArCharacter.builder().requiredFragmentCount(10).name("중단테스트 캐릭터").description("설명").storyTitle("이야기")
                 .acquireCondition("문화미션").imgUrl("https://example.com/character.jpg")
                 .representativeColor("blue").hashtags(List.of("테스트")).build();
         em.persist(character);

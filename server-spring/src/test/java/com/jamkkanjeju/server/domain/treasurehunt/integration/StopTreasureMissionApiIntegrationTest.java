@@ -238,7 +238,7 @@ class StopTreasureMissionApiIntegrationTest extends MySqlIntegrationTestSupport 
         var location = Location.builder().contentId(sequence).title("추천 장소").address("주소").category("관광지")
                 .radius(50).latitude(10).longitude(10).build();
         em.persist(location);
-        var character = ArCharacter.builder().name("테스트 캐릭터").description("설명").storyTitle("이야기")
+        var character = ArCharacter.builder().requiredFragmentCount(10).name("테스트 캐릭터").description("설명").storyTitle("이야기")
                 .acquireCondition("미션").imgUrl("character.png").representativeColor("blue").hashtags(List.of()).build();
         em.persist(character);
         var coupon = Coupon.builder().location(location).couponPrice(3000).build();

@@ -17,6 +17,7 @@ public interface VisitedLocationRepository extends JpaRepository<VisitedLocation
      * 사용자·장소 조합이 유일하므로 같은 장소는 한 번만 포함한다.
      * 사용: 방명록 조회({@code GET /api/v2/guestbooks})에서 현재 사용자의 {@code visitedLocations}를 구성한다.
      * 서비스는 방명록 페이지와 관계없이 각 장소의 ID·이름을 반환한다.
+     * 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서도 같은 정렬의 방문 장소 목록을 구성한다.
      */
     @EntityGraph(attributePaths = "location")
     @Query("""
@@ -43,4 +44,13 @@ public interface VisitedLocationRepository extends JpaRepository<VisitedLocation
      * 미션 완료나 방명록 작성 여부와 별개로 실제 방문 기록의 존재만 확인한다.
      */
     boolean existsByUserIdAndLocationId(Long userId, Long locationId);
+
+    /**
+     * 결과: 현재 사용자와 연결되고 실제 장소가 존재하는 고유 방문 장소 수이며 없으면 0이다.
+     * 개수만 집계하며 연관 엔티티는 로딩하지 않는다.
+     * 사용: 마이페이지 조회({@code GET /api/v2/users/me/mypage})의 {@code summary.visitedLocationCount}이다.
+     */
+    @Query("select count(distinct l.id) from VisitedLocation v join v.location l where v.user.id = :userId")
+    long countDistinctLocationsByUserId(@Param("userId") Long userId);
+
 }

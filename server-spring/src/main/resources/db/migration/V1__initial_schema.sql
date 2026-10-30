@@ -276,6 +276,7 @@ CREATE TABLE `ar_character` (
     `img_url`              VARCHAR(500) NOT NULL,
     `representative_color` VARCHAR(20)  NOT NULL,
     `hashtags`             JSON         NOT NULL COMMENT 'string[]',
+    `required_fragment_count` INT        NOT NULL COMMENT '캐릭터 획득에 필요한 조각 수',
     `created_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),

@@ -17,7 +17,7 @@ public final class CooperativeMissionStatusFixtures {
     public static CooperativeMission rewardedMission() {
         var result = CooperativeMission.builder().mission(mission(31L, MissionTypeCode.COOPERATIVE))
                 .status(MissionActivationStatus.ACTIVE).point(200)
-                .arCharacter(ArCharacter.builder().id(1L).name("감귤").imgUrl("character.png").build())
+                .arCharacter(ArCharacter.builder().requiredFragmentCount(10).id(1L).name("감귤").imgUrl("character.png").build())
                 .coupon(Coupon.builder().id(1L).couponPrice(5000).build()).build();
         ReflectionTestUtils.setField(result, "missionId", 31L);
         return result;

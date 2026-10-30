@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import type { GeneratedApi } from '@packages/shared';
+import type { MyPageArCharacter, MyPageProfile, MyPageSummary } from '@shared/api/myPage';
 import { resolveArCharacterColorFamily, type ArCharacterColorFamily } from '@entities/ar-character';
 import { useMyPage } from '@entities/user';
 import { useStepCount } from '@features/app-bridge';
@@ -18,12 +18,12 @@ const POSTCARD_COPY = {
   ctaLabel: '여행 엽서 만들기',
 };
 
-function ProfileCard({ profile, stepsGoal }: { profile: GeneratedApi.ProfileResponse; stepsGoal: number }) {
+function ProfileCard({ profile, stepsGoal }: { profile: MyPageProfile; stepsGoal: number }) {
   const router = useRouter();
   const liveSteps = useStepCount();
   const nickname = profile.nickname ?? '';
   const badges = profile.travelStyle?.hashtags ?? [];
-  const avatarUrl = profile.selectedArCharacter?.imageUrl;
+  const avatarUrl = profile.characterImgUrl;
 
   return (
     <div className="bg-cool-neutral-white flex flex-col gap-5 rounded-2xl p-5 shadow-[4px_4px_14px_rgba(0,0,0,0.12)]">
@@ -68,7 +68,7 @@ function ProfileCard({ profile, stepsGoal }: { profile: GeneratedApi.ProfileResp
   );
 }
 
-function StatsRow({ summary }: { summary: GeneratedApi.SummaryResponse }) {
+function StatsRow({ summary }: { summary: MyPageSummary }) {
   const stats = [
     { id: 'visited', label: '방문한 장소', value: summary.visitedLocationCount ?? 0, unit: '곳' },
     { id: 'missions', label: '완료한 미션', value: summary.completedMissionCount ?? 0, unit: '개' },
@@ -216,7 +216,7 @@ const CHARACTER_TILE_BACKGROUND: Record<ArCharacterColorFamily, string> = {
   vibrantOrange: 'bg-vibrant-orange-100',
 };
 
-function CharacterEntryThumbnail({ character, onSelect }: { character: GeneratedApi.ArCharacterCollectionResponse; onSelect: () => void }) {
+function CharacterEntryThumbnail({ character, onSelect }: { character: MyPageArCharacter; onSelect: () => void }) {
   const unlocked = character.isAcquired ?? false;
   const tileBackground = unlocked ? CHARACTER_TILE_BACKGROUND[resolveArCharacterColorFamily(character.characterColor)] : 'bg-cool-neutral-100';
 
@@ -232,21 +232,21 @@ function CharacterEntryThumbnail({ character, onSelect }: { character: Generated
           <span className="text-heading-h4 text-cool-neutral-400 font-bold">?</span>
         )}
       </span>
-      <span className="text-label-sm text-warm-neutral-600 w-full truncate text-center font-medium">{unlocked ? character.name : ''}</span>
+      <span className="text-label-sm text-warm-neutral-600 w-full truncate text-center font-medium">{unlocked ? character.name : `${character.acquiredFragmentCount}/${character.requiredFragmentCount}`}</span>
     </button>
   );
 }
 
-function CharacterCollectionSection({ arCharacters }: { arCharacters: GeneratedApi.ArCharacterCollectionResponse[] }) {
+function CharacterCollectionSection({ arCharacters }: { arCharacters: MyPageArCharacter[] }) {
   const router = useRouter();
-  const [guideCharacter, setGuideCharacter] = useState<GeneratedApi.ArCharacterCollectionResponse | null>(null);
+  const [guideCharacter, setGuideCharacter] = useState<MyPageArCharacter | null>(null);
 
   if (arCharacters.length === 0) return null;
 
   // 얻은 캐릭터를 먼저 보여준다(기획 요청) — 그룹 안에서의 순서(서버가 내려준 순서)는 그대로 둔다.
   const sortedCharacters = [...arCharacters].sort((a, b) => Number(b.isAcquired ?? false) - Number(a.isAcquired ?? false));
 
-  function handleSelect(character: GeneratedApi.ArCharacterCollectionResponse, unlocked: boolean) {
+  function handleSelect(character: MyPageArCharacter, unlocked: boolean) {
     if (unlocked) {
       router.push(`/ar/${character.id}`);
     } else {
@@ -282,7 +282,7 @@ function CharacterCollectionSection({ arCharacters }: { arCharacters: GeneratedA
 }
 
 // 미획득 캐릭터 클릭 시 뜨는 안내 모달. HomePage의 TodoListModal(중앙 정렬 카드형)과 동일한 톤으로 만듦.
-function CharacterAcquireGuideModal({ character, onClose }: { character: GeneratedApi.ArCharacterCollectionResponse; onClose: () => void }) {
+function CharacterAcquireGuideModal({ character, onClose }: { character: MyPageArCharacter; onClose: () => void }) {
   const router = useRouter();
   const [isVisible, setIsVisible] = useState(false);
 
@@ -315,10 +315,10 @@ function CharacterAcquireGuideModal({ character, onClose }: { character: Generat
           <p className="text-body-md text-warm-neutral-700 text-center">{character.acquireCondition}</p>
         </div>
 
-        {character.acquiredMissions.length > 0 && (
+        {character.availableMissions.length > 0 && (
           <div className="flex flex-col gap-2">
-            {character.acquiredMissions.map((mission) => (
-              <div key={mission.id} className="bg-warm-neutral-50 rounded-xl px-4 py-3">
+            {character.availableMissions.map((mission) => (
+              <div key={mission.missionId} className="bg-warm-neutral-50 rounded-xl px-4 py-3">
                 <span className="text-body-md text-warm-neutral-800">{mission.missionTitle}</span>
               </div>
             ))}

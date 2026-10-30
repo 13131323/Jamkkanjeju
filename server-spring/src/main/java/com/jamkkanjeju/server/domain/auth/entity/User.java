@@ -102,6 +102,16 @@ public class User extends BaseTimeEntity {
         this.onboardingResult = onboardingResult;
     }
 
+    /** 검증된 닉네임을 변경한다. */
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    /** 사용자가 설정한 하루 목표 걸음 수를 변경한다. */
+    public void changeTargetStep(int targetStep) {
+        this.targetStep = targetStep;
+    }
+
     /** 보상으로 받은 포인트를 사용자 포인트에 누적한다. */
     public void addPoint(int point) {
         this.point += point;

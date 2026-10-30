@@ -249,7 +249,7 @@ class GetCooperativeMissionStatusApiIntegrationTest extends CooperativeMissionIn
     }
     /** 필수 속성을 모두 채운 실제 보상 설정을 준비한다. */
     private CooperativeMission rewardedMission(Location location) {
-        var character=ArCharacter.builder().name("감귤").description("설명").storyTitle("이야기")
+        var character=ArCharacter.builder().requiredFragmentCount(10).name("감귤").description("설명").storyTitle("이야기")
                 .acquireCondition("완료").imgUrl("character.png").representativeColor("#FFA500").hashtags(List.of()).build();
         em.persist(character);
         var coupon=Coupon.builder().couponPrice(5000).location(location).build(); em.persist(coupon);

@@ -104,7 +104,7 @@ class GetMapLocationDetailApiIntegrationTest extends MySqlIntegrationTestSupport
         ArCharacter character = null;
         Coupon coupon = null;
         if (withRewards) {
-            character = persist(ArCharacter.builder().name("돌담이").description("설명").storyTitle("이야기")
+            character = persist(ArCharacter.builder().requiredFragmentCount(10).name("돌담이").description("설명").storyTitle("이야기")
                     .acquireCondition("미션").imgUrl("character.png").representativeColor("blue").hashtags(List.of("여행")).build());
             coupon = persist(Coupon.builder().location(null).couponPrice(3000).build());
         }

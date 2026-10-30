@@ -90,4 +90,14 @@ public interface TreasureMissionRepository extends JpaRepository<TreasureMission
      */
     @EntityGraph(attributePaths = "mission.missionType")
     List<TreasureMission> findAllByLocationIdAndStatus(Long locationId, MissionActivationStatus status);
+
+    /**
+     * 결과: 상태와 보상 캐릭터 ID 목록이 일치하는 미션 전체이며 결과가 없으면 빈 목록이다.
+     * {@code mission.missionType}과 {@code arCharacter}를 함께 로딩한다. 장소 유무는 제한하지 않는다.
+     * 사용: 마이페이지 조회({@code GET /api/v2/users/me/mypage})에서 미완성 캐릭터의 활성 후보를
+     * 일괄 조회하고 서비스가 사용자 완료·기지급 기록을 제외하여 {@code availableMissions}를 구성한다.
+     */
+    @EntityGraph(attributePaths = {"mission.missionType", "arCharacter"})
+    List<TreasureMission> findAllByStatusAndArCharacterIdIn(MissionActivationStatus status, Collection<Long> characterIds);
+
 }

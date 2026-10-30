@@ -23,6 +23,18 @@ import org.springframework.data.repository.query.Param;
 public interface CooperativeMissionParticipantRepository extends JpaRepository<CooperativeMissionParticipant, Long> {
 
     /**
+     * 결과: 사용자의 참가 기록 전체이며 상태·역할·팀 상태를 제한하지 않고 없으면 빈 목록이다.
+     * 팀 진행도와 세부 미션의 공통 미션·유형·장소·보상 캐릭터·쿠폰·쿠폰 사용처를 함께 로딩한다.
+     * 사용: 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서 공통 완료 판정으로
+     * 수락된 완료 팀을 고르고 활성 여부·장소·완료 시각을 확인한다. 동일 미션은 서비스가 최근 완료 한 건으로 합친다.
+     */
+    @EntityGraph(attributePaths = {"cooperativeMissionProgress.cooperativeMission.mission.missionType",
+            "cooperativeMissionProgress.cooperativeMission.location",
+            "cooperativeMissionProgress.cooperativeMission.arCharacter",
+            "cooperativeMissionProgress.cooperativeMission.coupon.location"})
+    List<CooperativeMissionParticipant> findAllWithRewardsByUserId(Long userId);
+
+    /**
      * 결과: 사용자({@code userId})와 공통 미션 ID 목록이 일치하는 협동 참가 기록 전체 목록이다.
      * 참가 상태·역할·팀 진행 상태를 제한하지 않고, 기록이 없으면 빈 목록이다.
      * {@code cooperativeMissionProgress.cooperativeMission}을 함께 로딩하며 그 외 연관은 함께 로딩하지 않는다.

@@ -25,7 +25,7 @@ public final class MissionFixtures {
 
     /** 공개 보상 정보가 채워진 캐릭터를 만든다. */
     public static ArCharacter character() {
-        return ArCharacter.builder().id(9L).name("돌담이").imgUrl("https://example.com/character.png").build();
+        return ArCharacter.builder().requiredFragmentCount(10).id(9L).name("돌담이").imgUrl("https://example.com/character.png").build();
     }
 
     /** 장소 유무를 선택할 수 있는 보상 쿠폰을 만든다. */

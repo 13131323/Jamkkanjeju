@@ -11,6 +11,16 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface TreasureMissionProgressRepository extends JpaRepository<TreasureMissionProgress, Long> {
 
     /**
+     * 결과: 사용자와 요청한 진행 상태가 일치하는 보물찾기 진행도 전체이며 없으면 빈 목록이다.
+     * 공통 미션·유형·장소·보상 캐릭터·쿠폰·쿠폰 사용처를 함께 로딩한다. 활성 여부는 제한하지 않는다.
+     * 사용: 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서 완료 상태로 조회하고,
+     * 서비스가 활성 여부·완료 시각·장소 존재를 확인하여 {@code completedMissions}와 전체 보상을 구성한다.
+     */
+    @EntityGraph(attributePaths = {"treasureMission.mission.missionType", "treasureMission.location",
+            "treasureMission.arCharacter", "treasureMission.coupon.location"})
+    List<TreasureMissionProgress> findAllWithRewardsByUserIdAndMissionStatus(Long userId, MissionProgressStatus missionStatus);
+
+    /**
      * 결과: 사용자({@code userId})와 공통 미션 ID 목록이 일치하는 보물찾기 진행도 전체 목록이다.
      * 진행 상태를 제한하지 않고 {@code treasureMission}을 함께 로딩하며 결과가 없으면 빈 목록이다.
      * 다른 연관 엔티티는 함께 로딩하지 않는다.

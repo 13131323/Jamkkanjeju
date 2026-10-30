@@ -39,7 +39,7 @@ class CultureMissionRewardGranterTest {
     @BeforeEach void setup() {
         granter=new CultureMissionRewardGranter(new MissionRewardGranter(statuses,characters,coupons,clock));
         user=activeUser(15L);mission=cultureMission(31L,MissionActivationStatus.ACTIVE);
-        character=ArCharacter.builder().id(9L).name("돌담이").imgUrl("character.png").build();
+        character=ArCharacter.builder().requiredFragmentCount(10).id(9L).name("돌담이").imgUrl("character.png").build();
         coupon=Coupon.builder().id(10L).couponPrice(3000).build();
         ReflectionTestUtils.setField(mission,"arCharacter",character);
         ReflectionTestUtils.setField(mission,"point",100);

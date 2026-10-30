@@ -29,6 +29,7 @@ public interface MissionRewardStatusRepository extends JpaRepository<MissionRewa
      * 사용: 지도 장소 상세 조회({@code GET /api/v2/map/locations/{locationId}})에서 현재 장소 미션과
      * 추천 미션의 지급 상태를 묶어 조회하여 각 {@code rewardDetail}의 항목별 {@code isReceived}를 구성한다.
      * 서비스가 미션 ID별로 연결하고 상태가 없는 미션은 미수령으로 처리하며 조회 중 새 기록을 만들지 않는다.
+     * 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서도 최종 완료 미션들의 전체 보상 수령 여부를 구성한다.
      */
     List<MissionRewardStatus> findAllByIdUserIdAndIdMissionIdIn(Long userId, Collection<Long> missionIds);
 }

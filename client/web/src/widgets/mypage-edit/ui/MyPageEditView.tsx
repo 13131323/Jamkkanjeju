@@ -7,21 +7,23 @@ import {
   CATEGORY_BY_INTEREST,
   INTEREST_BY_CATEGORY,
   MAX_TRAVEL_INTEREST_SELECT,
+  SPARE_TIME_STYLE_OPTIONS,
   TRANSPORTATION_BY_ID,
   TRANSPORTATION_ID_BY_TRANSPORTATION,
   TRANSPORTATION_OPTIONS,
   TRAVEL_INTEREST_OPTIONS,
-  type GeneratedApi,
+  TRAVEL_STYLE_BY_ID,
   type TransportationId,
   type TravelInterestId,
 } from '@packages/shared';
 import { useUpdateUserProfile, useUserInfo } from '@entities/user';
+import type { UpdateUserInfoRequest, UserInfoResponse } from '@shared/api/userInfo';
 import charactorImage from '@shared/lib/images/mypage/charactor02.png';
 import { MIN_STEP_GOAL, STEP_GOAL_POINT_REWARD, STEP_GOAL_PRESETS } from '../model/constants';
 import { MyPageEditSkeleton } from './MyPageEditSkeleton';
 
 const PAGE_TITLE = '프로필 수정';
-const NICKNAME_MAX_LENGTH = 12;
+const NICKNAME_MAX_LENGTH = 20;
 
 const CARD_CLASSNAME = 'bg-cool-neutral-white flex flex-col gap-6 rounded-2xl py-6 px-4 shadow-[4px_4px_14px_rgba(0,0,0,0.12)]';
 
@@ -148,6 +150,27 @@ function TransportSection({ selected, onSelect }: { selected: TransportationId |
   );
 }
 
+function SpareTimeSection({ selected, onSelect }: {
+  selected: UserInfoResponse['travelStyle'];
+  onSelect: (value: NonNullable<UserInfoResponse['travelStyle']>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <span className="text-label-sm text-warm-neutral-700 font-bold">자투리시간 이용</span>
+      <div className="flex flex-wrap gap-2">
+        {SPARE_TIME_STYLE_OPTIONS.map((option) => (
+          <ChipButton
+            key={option.id}
+            label={option.id === 'wander' ? '발길 닿는대로' : option.title}
+            selected={selected === TRAVEL_STYLE_BY_ID[option.id]}
+            onClick={() => onSelect(TRAVEL_STYLE_BY_ID[option.id])}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function StepGoalSection({
   stepsGoal,
   selectedPreset,
@@ -202,40 +225,54 @@ function StepGoalSection({
   );
 }
 
-// 서버 카테고리 배열 → 화면 id 배열. 화면이 모르는 값(향후 추가된 enum 등)은 조용히 버린다.
-function toTravelInterests(categories: string[] | null | undefined): TravelInterestId[] {
-  if (!categories) return [];
-  return categories.flatMap((category) => {
-    const id = INTEREST_BY_CATEGORY[category as GeneratedApi.Category];
+// 서버 기대 항목 배열을 화면 선택값으로 변환한다.
+function toTravelInterests(expectations: UserInfoResponse['expectations']): TravelInterestId[] {
+  return expectations.flatMap((expectation) => {
+    const id = INTEREST_BY_CATEGORY[expectation];
     return id ? [id] : [];
   });
 }
 
-// 서버는 배열이지만 화면은 단일 선택이라 첫 값만 쓴다(온보딩 저장 때도 배열의 첫 값만 보냈다 — request.ts 참고).
-function toTransportationId(transportation: string[] | null | undefined): TransportationId | null {
-  const first = transportation?.[0];
-  if (!first) return null;
-  return TRANSPORTATION_ID_BY_TRANSPORTATION[first as GeneratedApi.Transportation] ?? null;
+// v2의 단일 이동 수단 코드를 화면 선택값으로 변환한다.
+function toTransportationId(transportation: UserInfoResponse['transportation']): TransportationId | null {
+  if (!transportation) return null;
+  return TRANSPORTATION_ID_BY_TRANSPORTATION[transportation] ?? null;
 }
 
 type MyPageEditFormProps = {
-  userInfo: GeneratedApi.UserInfoResponse;
+  userInfo: UserInfoResponse;
 };
 
 function MyPageEditForm({ userInfo }: MyPageEditFormProps) {
   const router = useRouter();
   const { mutate: updateProfile, isPending } = useUpdateUserProfile();
 
+  // 편집 중 조회 캐시가 갱신돼도 최초 폼 값과 비교해 사용자가 변경한 항목만 보낸다.
+  const [initialUserInfo] = useState(userInfo);
+
   const [nickname, setNickname] = useState(userInfo.nickname ?? '');
-  const [travelInterests, setTravelInterests] = useState<TravelInterestId[]>(() => toTravelInterests(userInfo.categories));
+  const [travelInterests, setTravelInterests] = useState<TravelInterestId[]>(() => toTravelInterests(userInfo.expectations));
   const [transportation, setTransportation] = useState<TransportationId | null>(() => toTransportationId(userInfo.transportation));
+  const [travelStyle, setTravelStyle] = useState<UserInfoResponse['travelStyle']>(userInfo.travelStyle);
   const initialPreset = STEP_GOAL_PRESETS.includes(userInfo.targetStepCount as (typeof STEP_GOAL_PRESETS)[number]) ? userInfo.targetStepCount : null;
   const [stepGoalPreset, setStepGoalPreset] = useState<number | null>(initialPreset);
   // 직접 입력의 최소값이자 기본값은 1000이다(사용자 요청) — 서버 값이 그 밑이어도 방어적으로 올린다.
   const [customStepGoal, setCustomStepGoal] = useState(initialPreset === null ? String(Math.max(MIN_STEP_GOAL, userInfo.targetStepCount)) : '');
 
   const stepsGoal = stepGoalPreset ?? Math.max(MIN_STEP_GOAL, Number(customStepGoal) || 0);
-  const canSave = nickname.trim().length > 0 && travelInterests.length > 0 && !isPending;
+  const changes: UpdateUserInfoRequest = {};
+  const expectations = travelInterests.map((id) => CATEGORY_BY_INTEREST[id]);
+  const selectedTransportation = transportation ? TRANSPORTATION_BY_ID[transportation] : null;
+  if (nickname.trim() !== (initialUserInfo.nickname ?? '')) changes.nickname = nickname.trim();
+  if (expectations.length !== initialUserInfo.expectations.length
+      || expectations.some((value) => !initialUserInfo.expectations.includes(value))) {
+    changes.expectations = expectations;
+  }
+  if (selectedTransportation !== initialUserInfo.transportation) changes.transportation = selectedTransportation;
+  if (travelStyle !== initialUserInfo.travelStyle) changes.travelStyle = travelStyle;
+  // 화면에서 최소값으로 보정해 표시한 것만으로 서버의 저장값을 변경하지 않는다.
+  if (stepsGoal !== Math.max(MIN_STEP_GOAL, initialUserInfo.targetStepCount)) changes.targetStepCount = stepsGoal;
+  const canSave = Object.keys(changes).length > 0 && (changes.nickname === undefined || changes.nickname.length > 0) && !isPending;
 
   function handleToggleInterest(id: TravelInterestId) {
     setTravelInterests((prev) => {
@@ -248,19 +285,8 @@ function MyPageEditForm({ userInfo }: MyPageEditFormProps) {
   function handleSave() {
     if (!canSave) return;
 
-    // PUT /api/v1/users/me/profile은 부분 갱신이 아니라 프로필 전체를 교체한다.
-    // travelStyle(자투리 시간 여행 방식)은 이 화면에 수정 UI가 없어, 불러온 값을 그대로 되돌려보내
-    // 저장하지 않은 값이 지워지지 않게 한다.
     updateProfile(
-      {
-        data: {
-          nickname: nickname.trim(),
-          categories: travelInterests.map((id) => CATEGORY_BY_INTEREST[id]),
-          transportation: transportation ? [TRANSPORTATION_BY_ID[transportation]] : [],
-          travelStyle: (userInfo.travelStyle ?? []) as GeneratedApi.TravelStyle[],
-          targetStepCount: stepsGoal,
-        },
-      },
+      changes,
       { onSuccess: () => router.push('/mypage') },
     );
   }
@@ -269,11 +295,12 @@ function MyPageEditForm({ userInfo }: MyPageEditFormProps) {
     <div className="bg-warm-neutral-50 flex min-h-dvh w-full flex-col">
       <Header canSave={canSave} onBack={() => router.push('/mypage')} onSave={handleSave} />
       <div className="flex flex-1 flex-col gap-4 px-4 pt-2 pb-8">
-        <ProfileCard characterName={userInfo.userType ?? ''} characterImageUrl={userInfo.arCharacterImageUrl ?? null} nickname={nickname} onChangeNickname={setNickname} />
+        <ProfileCard characterName={userInfo.userType ?? ''} characterImageUrl={userInfo.characterImgUrl} nickname={nickname} onChangeNickname={setNickname} />
 
         <div className={CARD_CLASSNAME}>
           <TravelStyleSection selected={travelInterests} onToggle={handleToggleInterest} />
-          <TransportSection selected={transportation} onSelect={setTransportation} />
+          <TransportSection selected={transportation} onSelect={(id) => setTransportation((current) => current === id ? null : id)} />
+          <SpareTimeSection selected={travelStyle} onSelect={(value) => setTravelStyle((current) => current === value ? null : value)} />
         </div>
 
         <StepGoalSection

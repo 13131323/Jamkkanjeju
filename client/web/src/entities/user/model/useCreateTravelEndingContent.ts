@@ -3,7 +3,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { GeneratedApi } from '@packages/shared';
 import { orvalClient } from '@shared/api/axios/instance';
-import { getGetMypageApiV1UsersMeMypageGetQueryKey, getGetTravelEndingElementsApiV1UsersMeTravelEndingElementsGetQueryKey } from '@/services/api/mypage/mypage';
+import { MY_PAGE_QUERY_KEY } from '@shared/api/myPage';
+import { TRAVEL_ENDING_ELEMENTS_QUERY_KEY } from '@shared/api/travelEndingElements';
 
 // POST /api/v1/users/me/travel-ending-contents — orval이 생성한
 // createTravelEndingContentApiV1UsersMeTravelEndingContentsPost(services/api/mypage/mypage.ts)는
@@ -37,8 +38,8 @@ export function useCreateTravelEndingContent() {
   return useMutation({
     mutationFn: createTravelEndingContent,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: getGetTravelEndingElementsApiV1UsersMeTravelEndingElementsGetQueryKey() });
-      queryClient.invalidateQueries({ queryKey: getGetMypageApiV1UsersMeMypageGetQueryKey() });
+      queryClient.invalidateQueries({ queryKey: TRAVEL_ENDING_ELEMENTS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: MY_PAGE_QUERY_KEY });
     },
   });
 }

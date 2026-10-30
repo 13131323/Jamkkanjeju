@@ -13,6 +13,7 @@ public interface OnboardingResultRepository extends JpaRepository<OnboardingResu
      * 첫 번째 행을 쓴다. 연관 엔티티는 없고, 없으면 {@code Optional.empty()}이다.
      * 사용: 온보딩 완료({@code PATCH /api/v2/users/me})의 "나중에 할게요" 요청에서 기본 결과("여행자")를 찾는 데 쓴다.
      * 서비스는 결과를 사용자에게 배정해 응답 {@code user.onboardingResult}로 내보내고, 없으면 서버 오류로 처리한다.
+     * 사용자 정보 변경({@code PATCH /api/v2/users/me/profile})에서 최종 선택값이 모두 해제된 경우에도 같은 기본 결과를 배정한다.
      */
     Optional<OnboardingResult> findFirstByUserTypeOrderByIdAsc(String userType);
 
@@ -21,6 +22,7 @@ public interface OnboardingResultRepository extends JpaRepository<OnboardingResu
      * 사용: 온보딩 완료({@code PATCH /api/v2/users/me})에서 선택값을 보낸 요청에 결과를 배정하는 데 쓴다.
      * 서비스는 기본 결과("여행자")를 제외한 이 후보 중 하나를 무작위로 골라 응답 {@code user.onboardingResult}로 내보내고,
      * 후보가 없으면 서버 오류로 처리한다.
+     * 사용자 정보 변경({@code PATCH /api/v2/users/me/profile})에서 실제 선택이 바뀌고 최종 선택이 남아 있을 때도 사용한다.
      */
     List<OnboardingResult> findAllByUserTypeNot(String userType);
 }
