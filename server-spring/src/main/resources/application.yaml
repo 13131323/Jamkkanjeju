@@ -39,6 +39,14 @@ spring:
       mode: never
 
 app:
+  openai:
+    enabled: ${OPENAI_ENABLED:false}
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    image-model: ${OPENAI_IMAGE_GENERATION_MODEL:gpt-image-2}
+    connect-timeout: 5s
+    read-timeout: 120s
+
   audio:
     ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
 

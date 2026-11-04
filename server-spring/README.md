@@ -15,6 +15,23 @@ JWT_SECRET_KEY=생성한_Base64_문자열
 ```
 
 
+## OpenAI 클라이언트 설정
+
+백엔드 `.env`의 `OPENAI_ENABLED=true`로 기능을 켜고 `false`로 끕니다. 키가 있어도 false이면 외부 호출을 차단합니다. Compose에 전달되는 설정이므로 변경 후 app 컨테이너를 다시 생성해야 반영됩니다.
+
+```dotenv
+OPENAI_ENABLED=true
+OPENAI_API_KEY=직접_설정한_키
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_IMAGE_GENERATION_MODEL=gpt-image-2
+```
+
+`OpenAiClient.isEnabled()`로 AI 처리와 추후 대체 동작을 분기할 수 있습니다. `editImage(prompt, images)`는 검증된 참조 이미지들을 FastAPI와 같은 이미지 편집 API로 보내고 세로형 PNG 한 장을 반환합니다. 프롬프트 구성·엽서 저장 API·비활성 대체 화면은 별도 작업입니다. 키는 Git에 포함되지 않는 `.env`에만 넣고 프론트 환경변수에 넣지 않습니다.
+
+연결 대기는 5초, 응답 대기는 120초로 `application.yaml`에 고정되어 있습니다.
+
+요청 형식은 [OpenAI 이미지 편집 API 문서](https://developers.openai.com/api/reference/resources/images/methods/edit)를 따릅니다.
+
 ## 1. Docker 실행 방법
 프로젝트 루트 디렉터리에서 아래 명령어를 실행합니다.
 (docker desktop 설치를 추천합니다.)
