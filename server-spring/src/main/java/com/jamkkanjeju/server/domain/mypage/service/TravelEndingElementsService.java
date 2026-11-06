@@ -1,6 +1,7 @@
 package com.jamkkanjeju.server.domain.mypage.service;
 
 import com.jamkkanjeju.server.common.exception.BusinessException;
+import com.jamkkanjeju.server.common.client.OpenAiClient;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
@@ -43,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class TravelEndingElementsService {
+    private final OpenAiClient openAiClient;
     private final UserRepository userRepository;
     private final VisitedLocationRepository visitedLocationRepository;
     private final CultureMissionProgressRepository cultureMissionProgressRepository;
@@ -83,7 +85,7 @@ public class TravelEndingElementsService {
                 .toList();
 
         // 6. 최종 목록 길이와 저장된 포인트를 사용하며 별도 상태 갱신은 하지 않는다.
-        return GetTravelEndingElementsResponse.of(user.getPoint(), locations, missions);
+        return GetTravelEndingElementsResponse.of(openAiClient.isEnabled(), user.getPoint(), locations, missions);
     }
 
     /** 문화 미션은 장소 없이 실제 마지막 완료 시각과 활성 상태를 확인한다. */

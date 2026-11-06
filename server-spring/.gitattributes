@@ -1,2 +1,4 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+# 프롬프트 원문의 줄바꿈을 운영체제와 관계없이 유지한다.
+/src/main/resources/prompts/*.txt text eol=lf

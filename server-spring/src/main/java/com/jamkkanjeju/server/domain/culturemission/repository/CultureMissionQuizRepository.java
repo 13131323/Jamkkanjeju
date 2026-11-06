@@ -18,6 +18,12 @@ import org.springframework.data.repository.query.Param;
 public interface CultureMissionQuizRepository extends JpaRepository<CultureMissionQuiz, CultureMissionQuizId> {
 
     /**
+     * 결과: 요청한 문화 미션들의 문제 전체이며 미션 ID·문제 번호 오름차순이다. 연관 로딩 없이 없으면 빈 목록이다.
+     * 사용: 엽서 저장({@code POST /api/v2/users/me/travel-ending-contents})에서 각 문화 미션의 첫 유효 이미지 URL을 고른다.
+     */
+    List<CultureMissionQuiz> findAllByIdCultureMissionIdInOrderByIdCultureMissionIdAscIdQuizIndexAsc(Collection<Long> missionIds);
+
+    /**
      * 결과: 전달한 문화 미션 ID별 (미션 ID, 퀴즈 개수) 목록. 예: [(3, 5), (7, 4)].
      * 퀴즈가 하나도 없는 미션은 결과에 포함되지 않는다.
      * 사용: 홈 조회({@code GET /api/v2/users/me/home}) 응답의 {@code progressMission[].totalStep} 중 CULTURE 항목.

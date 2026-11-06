@@ -35,7 +35,13 @@ public class ImageValidator {
         if (file.getSize() > MAX_IMAGE_SIZE_BYTES) {
             throw new BusinessException(sizeExceeded);
         }
-        byte[] data = read(file, sizeExceeded);
+        return validateBytes(read(file, sizeExceeded), invalidFormat, sizeExceeded, invalidImage);
+    }
+
+    /** 내려받은 참조 이미지에도 업로드와 동일한 크기·형식·디코딩 검증을 적용한다. */
+    public ValidatedImage validateBytes(byte[] data, ErrorCode invalidFormat, ErrorCode sizeExceeded, ErrorCode invalidImage) {
+        if (data == null || data.length == 0) throw new BusinessException(invalidImage);
+        if (data.length > MAX_IMAGE_SIZE_BYTES) throw new BusinessException(sizeExceeded);
         ImageFormat format = detect(data);
         if (format == null) {
             throw new BusinessException(invalidFormat);

@@ -2,6 +2,12 @@ package com.jamkkanjeju.server.domain.mypage.controller;
 
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
 import com.jamkkanjeju.server.domain.mypage.dto.GetMyPageResponse;
+import com.jamkkanjeju.server.domain.mypage.dto.CreateTravelEndingContentRequest;
+import com.jamkkanjeju.server.domain.mypage.dto.CreateTravelEndingContentResponse;
+import com.jamkkanjeju.server.domain.mypage.service.TravelEndingContentService;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
 import com.jamkkanjeju.server.domain.mypage.dto.GetUserInfoResponse;
 import com.jamkkanjeju.server.domain.mypage.dto.GetTravelEndingElementsResponse;
 import com.jamkkanjeju.server.domain.mypage.service.TravelEndingElementsService;
@@ -28,6 +34,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class MyPageController {
     private final MyPageService myPageService;
     private final TravelEndingElementsService travelEndingElementsService;
+    private final TravelEndingContentService travelEndingContentService;
+
+    /** 방문 장소·완료 미션·사진으로 엽서를 생성하고 저장한 결과와 잔액을 반환한다. */
+    @Operation(summary = "여행 마무리 엽서 저장")
+    @PostMapping(value = "/me/travel-ending-contents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateTravelEndingContentResponse createTravelEndingContent(@AuthenticationPrincipal AuthUser authUser,
+                                                                       @Valid @ModelAttribute CreateTravelEndingContentRequest request) {
+        return travelEndingContentService.create(authUser.userId(), request);
+    }
 
     /** 엽서에서 선택할 방문 장소·활성 완료 미션과 보유 포인트를 조회한다. */
     @Operation(summary = "여행 마무리 엽서 요소 조회")

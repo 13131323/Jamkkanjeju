@@ -4,6 +4,7 @@
     import jakarta.servlet.http.HttpServletRequest;
     import com.jamkkanjeju.server.domain.treasurehunt.exception.TreasureHuntErrorCode;
     import com.jamkkanjeju.server.domain.cooperativemission.exception.CooperativeMissionErrorCode;
+    import com.jamkkanjeju.server.domain.mypage.exception.MyPageErrorCode;
     import java.util.regex.Pattern;
     import lombok.extern.slf4j.Slf4j;
     import org.springframework.http.HttpStatus;
@@ -51,6 +52,9 @@
         @ExceptionHandler(MaxUploadSizeExceededException.class)
         public ResponseEntity<ErrorResponse> handleUploadSizeExceeded(
                 MaxUploadSizeExceededException exception, HttpServletRequest request) {
+            if (isTravelEndingUpload(request)) {
+                return toResponse(MyPageErrorCode.IMAGE_SIZE_EXCEEDED);
+            }
             if (isPictureUpload(request)) {
                 return toResponse(TreasureHuntErrorCode.IMAGE_SIZE_EXCEEDED);
             }
@@ -64,7 +68,7 @@
         @ExceptionHandler(MultipartException.class)
         public ResponseEntity<ErrorResponse> handleMultipartException(
                 MultipartException exception, HttpServletRequest request) {
-            if (isPictureUpload(request) || isCooperativeRoleVerification(request) || isGuestbookCreation(request)) {
+            if (isPictureUpload(request) || isCooperativeRoleVerification(request) || isGuestbookCreation(request) || isTravelEndingUpload(request)) {
                 return toResponse(CommonErrorCode.INVALID_REQUEST);
             }
             return handleException(exception);
@@ -74,6 +78,12 @@
         private boolean isGuestbookCreation(HttpServletRequest request) {
             return "POST".equals(request.getMethod())
                     && request.getRequestURI().equals(request.getContextPath() + "/api/v2/guestbooks");
+        }
+
+        /** 엽서 사진의 multipart 파싱 실패를 기존 업로드와 같은 오류 형식으로 반환한다. */
+        private boolean isTravelEndingUpload(HttpServletRequest request) {
+            return "POST".equals(request.getMethod())
+                    && request.getRequestURI().equals(request.getContextPath() + "/api/v2/users/me/travel-ending-contents");
         }
 
         /** multipart 파싱은 핸들러 선택 전 실패할 수 있으므로 사진 업로드 경로를 직접 확인한다. */

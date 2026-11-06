@@ -30,6 +30,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * URL로 참여 요청({@code POST /api/v2/cooperative-missions/join-requests})에서 참가 기록 조회와 생성 전에
      * 사용자를 잠가 같은 사용자·같은 미션의 진행 중인 팀에 중복 참가하는 것을 막는다.
      * 신규 팀의 방장 또는 URL로 참여 요청하는 팀원으로 연결하고 각 응답의 진행도·참가자 정보를 구성한다.
+     * 엽서 저장({@code POST /api/v2/users/me/travel-ending-contents})에서는 잔액 재검사·차감·엽서 저장 중 사용자 잠금을 유지한다.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.id = :id")

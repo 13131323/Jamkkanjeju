@@ -531,6 +531,7 @@ Status Code : `200 OK`
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
+| `travelEndingEnabled` | boolean | 엽서 생성 기능 활성화 여부. false이면 생성 버튼을 비활성화하고 `엽서 기능 준비중`으로 표시 |
 | `point` | integer | 현재 사용자의 보유 포인트 |
 | `visitedLocationCount` | integer | 중복을 제외한 방문 장소 수. `visitedLocations` 배열 길이와 동일 |
 | `visitedLocations` | object[] | 방문 장소 목록. 없으면 빈 배열 |
@@ -562,6 +563,7 @@ Status Code : `200 OK`
 
 ```json
 {
+  "travelEndingEnabled": true,
   "point": 2000,
   "visitedLocationCount": 1,
   "visitedLocations": [
@@ -601,6 +603,7 @@ Status Code : `200 OK`
 
 ```json
 {
+  "travelEndingEnabled": false,
   "point": 0,
   "visitedLocationCount": 0,
   "visitedLocations": [],
@@ -614,3 +617,166 @@ Status Code : `200 OK`
 ### 오류 응답 데이터
 
 공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다. 이 API 전용 도메인 오류는 정의하지 않는다.
+
+---
+
+# 여행 마무리 엽서 저장 API
+
+| 구분 | 내용 |
+| --- | --- |
+| API 이름 | 여행 마무리 엽서 저장 |
+| HTTP 메서드 | `POST` |
+| 도메인 | `MYPAGE` |
+| 엔드포인트 | `/api/v2/users/me/travel-ending-contents` |
+
+### API 설명
+
+본인이 방문한 장소와 완료한 활성 미션, 첨부 사진으로 여행 마무리 엽서 한 장을 생성하고 저장한다. 성공 시 100포인트를 차감한다. 동일한 입력으로 다시 요청해도 새 엽서를 생성하고 비용을 다시 차감한다. 기능 비활성화 시 503을 반환하며 생성·저장·차감하지 않는다.
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `Authorization` | 필수 | `Bearer {accessToken}` |
+| `Content-Type` | 필수 | `multipart/form-data` |
+
+### 요청 Query
+
+없음
+
+### 요청 Path
+
+없음
+
+### 요청 Body
+
+| 필드 | 타입 | 필수 여부 | 설명 |
+| --- | --- | --- | --- |
+| `visitedLocationIds` | string(JSON integer[]) | 필수 | 장소 ID 배열 전체를 JSON 문자열 한 필드로 전송. 양의 정수 1~3개, 중복 불가 |
+| `missionIds` | string(JSON integer[]) | 필수 | 공통 미션 ID 배열 전체를 JSON 문자열 한 필드로 전송. 양의 정수 1~3개, 중복 불가. 유형은 서버에서 식별 |
+| `photos` | file[] | 필수 | 동일한 필드명으로 사진 1~3장 전송. JPEG·PNG·WebP, 파일당 최대 10MB(10,000,000바이트) |
+| `travelNote` | string | 선택 | 여행 한 줄. 생략·공백 입력 가능하며 글자 수 제한 없음 |
+
+```text
+visitedLocationIds: [1,2]
+missionIds: [1,32]
+photos: trip.jpg
+photos: memory.png
+travelNote: 잠깐 머문, 오래 남는 순간.
+```
+
+- 장소·미션은 여행 마무리 엽서 요소 조회에서 본인에게 반환될 수 있는 항목이어야 한다. 비활성·미완료·타 사용자 항목은 사용할 수 없다.
+- 필드 누락이나 빈 배열은 해당 목록의 최소 개수 미달로 처리한다. 사진 개수 위반·중복 ID·잘못된 JSON/ID·유효하지 않은 선택은 공통 요청 오류다.
+
+### 정상 응답 데이터
+
+Status Code : `201 Created`
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | integer | 저장된 엽서 ID |
+| `imageUrl` | string | 생성된 PNG의 Blob URL |
+| `remainingPoint` | integer | 생성 비용 100포인트를 차감한 사용자 잔액 |
+
+```json
+{
+  "id": 12,
+  "imageUrl": "https://example.blob.core.windows.net/media/travel-ending/1/postcard.png",
+  "remainingPoint": 1900
+}
+```
+
+### 오류 응답 데이터
+
+공통 오류(400/401/403/500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다. 외부 이미지 생성·저장 실패는 공통 서버 오류로 처리한다.
+
+#### 최소 선택 개수 미달
+
+Status Code : `400 Bad Request`
+
+방문 장소 또는 미션 목록 중 하나라도 없거나 빈 경우
+
+```json
+{
+  "code": "TRAVEL_ENDING_SELECTION_TOO_FEW",
+  "message": "방문한 곳과 미션은 각각 최소 1개씩 선택해야 합니다."
+}
+```
+
+#### 최대 선택 개수 초과
+
+Status Code : `400 Bad Request`
+
+방문 장소 또는 미션 목록 중 하나라도 3개를 초과한 경우
+
+```json
+{
+  "code": "TRAVEL_ENDING_SELECTION_TOO_MANY",
+  "message": "방문한 곳과 미션은 각각 최대 3개 선택할 수 있습니다."
+}
+```
+
+#### 지원하지 않는 이미지 형식
+
+Status Code : `400 Bad Request`
+
+첨부한 사진의 실제 형식이 JPEG·PNG·WebP가 아닌 경우
+
+```json
+{
+  "code": "INVALID_IMAGE_FORMAT",
+  "message": "지원하지 않는 이미지 형식입니다."
+}
+```
+
+#### 이미지 용량 초과
+
+Status Code : `400 Bad Request`
+
+사진 한 장이 10,000,000바이트를 초과한 경우
+
+```json
+{
+  "code": "IMAGE_SIZE_EXCEEDED",
+  "message": "이미지 파일은 10MB를 초과할 수 없습니다."
+}
+```
+
+#### 손상된 이미지
+
+Status Code : `400 Bad Request`
+
+사진이 손상되었거나 실제로 디코딩할 수 없는 경우
+
+```json
+{
+  "code": "INVALID_IMAGE",
+  "message": "손상되었거나 올바르지 않은 이미지 파일입니다."
+}
+```
+
+#### 포인트 부족
+
+Status Code : `409 Conflict`
+
+생성 전 또는 저장 직전 보유 포인트가 100 미만인 경우
+
+```json
+{
+  "code": "INSUFFICIENT_POINT",
+  "message": "엽서 생성에 필요한 포인트가 부족합니다."
+}
+```
+
+#### 기능 비활성화
+
+Status Code : `503 Service Unavailable`
+
+서버의 OPENAI_ENABLED가 false인 경우
+
+```json
+{
+  "code": "TRAVEL_ENDING_DISABLED",
+  "message": "기능이 활성화되지 않았습니다."
+}
+```

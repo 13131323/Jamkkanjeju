@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import * as Sentry from '@sentry/nextjs';
-import { wasApiErrorNotified, type GeneratedApi } from '@packages/shared';
+import { wasApiErrorNotified } from '@packages/shared';
 import { useCreateTravelEndingContent, useTravelEndingElements } from '@entities/user';
 import type { TravelEndingCompletedMission, TravelEndingElementsResponse, TravelEndingVisitedLocation } from '@shared/api/travelEndingElements';
 import { isAppWebView, sendToApp } from '@shared/lib/bridge/utils';
@@ -17,11 +17,12 @@ const MAX_SELECT = 3;
 const CREATE_COST_POINT = 100;
 const MIN_LOADING_MS = 3000;
 const ACCEPTED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_PHOTO_SIZE_BYTES = 10_000_000;
 
 type Step = 'form' | 'loading' | 'result';
 type PhotoItem = { id: string; url: string; file: File; selected: boolean };
 type ToastState = { id: number; message: string };
+type TravelEndingFormInput = { locationIds: number[]; missionIds: number[]; photoFiles: File[]; note: string };
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -275,7 +276,7 @@ function FormScreen({
 }: {
   data: TravelEndingElementsResponse;
   onBack: () => void;
-  onSubmit: (input: { locationIds: number[]; missions: GeneratedApi.TravelEndingMissionRequest[]; photoFiles: File[]; note: string }) => void;
+  onSubmit: (input: TravelEndingFormInput) => void;
   isSubmitting: boolean;
   onShowToast: (message: string) => void;
 }) {
@@ -389,13 +390,13 @@ function FormScreen({
 
   const selectedPhotoCount = photos.filter((photo) => photo.selected).length;
   const hasEnoughPoint = data.point >= CREATE_COST_POINT;
-  const canSubmit = !isSubmitting && hasEnoughPoint && selectedLocationIds.size >= MIN_SELECT && selectedMissionIds.size >= MIN_SELECT && selectedPhotoCount >= MIN_SELECT;
+  const canSubmit = data.travelEndingEnabled === true && !isSubmitting && hasEnoughPoint && selectedLocationIds.size >= MIN_SELECT && selectedMissionIds.size >= MIN_SELECT && selectedPhotoCount >= MIN_SELECT;
 
   function handleSubmit() {
     if (!canSubmit) return;
     onSubmit({
       locationIds: Array.from(selectedLocationIds),
-      missions: data.completedMissions.filter((mission) => selectedMissionIds.has(missionKey(mission))).map((mission) => ({ missionId: mission.missionId, missionType: mission.missionType })),
+      missionIds: data.completedMissions.filter((mission) => selectedMissionIds.has(missionKey(mission))).map((mission) => mission.missionId),
       photoFiles: photos.filter((photo) => photo.selected).map((photo) => photo.file),
       note,
     });
@@ -466,7 +467,7 @@ function FormScreen({
 
       <div className="bg-warm-neutral-50 absolute inset-x-0 bottom-0 px-4 pt-3" style={{ paddingBottom: `calc(16px + var(--safe-area-bottom))` }}>
         <button type="button" disabled={!canSubmit} onClick={handleSubmit} className="bg-cool-neutral-900 text-label-lg text-cool-neutral-white w-full rounded-full py-4 font-bold disabled:opacity-40">
-          AI 엽서 만들기
+          {data.travelEndingEnabled === true ? 'AI 엽서 만들기' : '엽서 기능 준비중'}
         </button>
       </div>
     </div>
@@ -482,19 +483,22 @@ export function TravelEndingPage() {
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
+  const submissionRef = useRef(false);
 
   function showToast(message: string) {
     setToast({ id: Date.now(), message });
   }
 
-  async function handleSubmit(input: { locationIds: number[]; missions: GeneratedApi.TravelEndingMissionRequest[]; photoFiles: File[]; note: string }) {
+  async function handleSubmit(input: TravelEndingFormInput) {
+    if (submissionRef.current) return;
+    submissionRef.current = true;
     setStep('loading');
     const startedAt = Date.now();
 
     try {
       const result = await createTravelEndingContent({
         visitedLocationIds: input.locationIds,
-        missions: input.missions,
+        missionIds: input.missionIds,
         photos: input.photoFiles,
         travelNote: input.note.trim() || null,
       });
@@ -511,6 +515,8 @@ export function TravelEndingPage() {
       Sentry.captureException(error instanceof Error ? error : new Error(`travel ending content create failed: ${String(error)}`));
       setStep('form');
       if (!wasApiErrorNotified(error)) showToast('엽서를 만들지 못했어요. 다시 시도해주세요');
+    } finally {
+      submissionRef.current = false;
     }
   }
 

@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 실제 JWT·임시 MySQL로 엽서 요소의 필터·정렬·보상·읽기 전용 계약을 검증한다. */
-@SpringBootTest
+@SpringBootTest(properties = "app.openai.enabled=false")
 @AutoConfigureMockMvc
 @Transactional
 class GetTravelEndingElementsApiIntegrationTest extends MySqlIntegrationTestSupport {
@@ -51,7 +51,8 @@ class GetTravelEndingElementsApiIntegrationTest extends MySqlIntegrationTestSupp
     void 내역이없으면실제포인트와빈배열을반환하고_사진필드는없다() throws Exception {
         User user = user();
         Map<String, Object> response = response(user);
-        assertThat(response).containsOnlyKeys("point", "visitedLocationCount", "visitedLocations", "completedMissionCount", "completedMissions");
+        assertThat(response).containsOnlyKeys("travelEndingEnabled", "point", "visitedLocationCount", "visitedLocations", "completedMissionCount", "completedMissions");
+        assertThat(response).containsEntry("travelEndingEnabled", false);
         assertThat(response).containsEntry("point", 321).containsEntry("visitedLocationCount", 0).containsEntry("completedMissionCount", 0);
         assertThat((List<?>) response.get("visitedLocations")).isEmpty();
         assertThat((List<?>) response.get("completedMissions")).isEmpty();
@@ -207,7 +208,7 @@ class GetTravelEndingElementsApiIntegrationTest extends MySqlIntegrationTestSupp
         String json = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
         Map<String, Object> fields = JsonPath.read(json, "$.components.schemas.GetTravelEndingElementsResponse.properties");
-        assertThat(fields).containsOnlyKeys("point", "visitedLocationCount", "visitedLocations", "completedMissionCount", "completedMissions");
+        assertThat(fields).containsOnlyKeys("travelEndingEnabled", "point", "visitedLocationCount", "visitedLocations", "completedMissionCount", "completedMissions");
         mvc.perform(get("/v3/api-docs")).andExpect(jsonPath("$.paths['" + URL + "'].get.responses['200']").exists())
                 .andExpect(jsonPath("$.components.schemas.TravelEndingCompletedMissionInfo.properties.rewardDetail").exists())
                 .andExpect(jsonPath("$.components.schemas.TravelEndingVisitedLocationInfo.properties.locationTitle").exists());

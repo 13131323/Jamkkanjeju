@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
+import com.jamkkanjeju.server.common.client.OpenAiClient;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
 import com.jamkkanjeju.server.domain.cooperativemission.repository.CooperativeMissionParticipantRepository;
@@ -20,6 +21,8 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -27,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 /** 필수 사용자 확인과 보상 조회의 생략·일괄 호출을 검증한다. */
 @ExtendWith(MockitoExtension.class)
 class TravelEndingElementsServiceTest {
+    @Mock OpenAiClient ai;
     @Mock UserRepository users;
     @Mock VisitedLocationRepository visits;
     @Mock CultureMissionProgressRepository culture;
@@ -51,6 +55,15 @@ class TravelEndingElementsServiceTest {
         assertThat(response.visitedLocations()).isEmpty();
         assertThat(response.completedMissions()).isEmpty();
         verifyNoInteractions(rewards);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void 활성화설정을조회응답으로그대로전달한다(boolean enabled) {
+        when(users.findById(15L)).thenReturn(Optional.of(User.builder().build()));
+        when(ai.isEnabled()).thenReturn(enabled);
+        assertThat(service.getTravelEndingElements(15L).travelEndingEnabled()).isEqualTo(enabled);
+        verify(ai, never()).editImage(anyString(), anyList());
     }
 
     @Test

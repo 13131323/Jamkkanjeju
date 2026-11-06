@@ -4,6 +4,11 @@ import path from 'node:path';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  experimental: {
+    // 이미지 생성 대기와 최대 10MB 사진 3장이 로컬 API 프록시 제한에 걸리지 않게 한다.
+    proxyTimeout: 240_000,
+    proxyClientMaxBodySize: '64mb',
+  },
   // @packages/shared는 빌드 산출물 없이 TS 소스를 그대로 내보내므로 Next가 직접 트랜스파일해야 한다.
   transpilePackages: ['@packages/shared'],
   outputFileTracingRoot: path.join(__dirname, '..'),

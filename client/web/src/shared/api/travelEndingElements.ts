@@ -11,6 +11,7 @@ export type TravelEndingCompletedMission = {
   rewardDetail: Required<MapModalRewardDetail>;
 };
 export type TravelEndingElementsResponse = {
+  travelEndingEnabled: boolean;
   point: number;
   visitedLocationCount: number;
   visitedLocations: TravelEndingVisitedLocation[];

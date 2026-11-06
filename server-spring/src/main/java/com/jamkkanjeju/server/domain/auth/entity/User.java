@@ -116,4 +116,10 @@ public class User extends BaseTimeEntity {
     public void addPoint(int point) {
         this.point += point;
     }
+
+    /** 잠금·잔액 확인을 마친 서비스에서 사용한 포인트를 차감한다. */
+    public void spendPoint(int amount) {
+        if (amount < 0 || point < amount) throw new IllegalArgumentException("사용할 포인트가 올바르지 않습니다.");
+        this.point -= amount;
+    }
 }
