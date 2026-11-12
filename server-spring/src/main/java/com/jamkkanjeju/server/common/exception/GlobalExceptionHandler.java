@@ -43,8 +43,16 @@
                 MissingServletRequestParameterException.class,
                 MethodArgumentTypeMismatchException.class
         })
-        public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception exception) {
-            log.debug("Invalid request: {}", exception.getMessage());
+        public ResponseEntity<ErrorResponse> handleInvalidRequest(Exception exception, HttpServletRequest request) {
+            if (request.getRequestURI().equals(request.getContextPath() + "/api/v2/auth/refresh")
+                    || request.getRequestURI().equals(request.getContextPath() + "/api/v2/auth/logout")) {
+                // JSON 변환·검증 예외의 메시지에는 요청 토큰 일부가 포함될 수 있어 종류만 기록한다.
+                log.debug("Invalid {} request: {}",
+                        request.getRequestURI().endsWith("/logout") ? "logout" : "refresh",
+                        exception.getClass().getSimpleName());
+            } else {
+                log.debug("Invalid request: {}", exception.getMessage());
+            }
             return toResponse(CommonErrorCode.INVALID_REQUEST);
         }
 

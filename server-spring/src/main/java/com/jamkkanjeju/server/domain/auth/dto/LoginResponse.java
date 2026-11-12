@@ -4,7 +4,7 @@ import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.jwt.IssuedToken;
 import java.time.Duration;
 
-/** 로그인 API의 응답 본문으로, 발급된 토큰과 로그인 사용자 정보를 담는다. */
+/** 로그인·토큰 재발급 응답으로, 발급된 토큰과 현재 사용자 정보를 담는다. */
 public record LoginResponse(
         String accessToken,
         String refreshToken,
@@ -16,7 +16,7 @@ public record LoginResponse(
 
     private static final String TOKEN_TYPE = "Bearer";
 
-    /** 발급한 토큰과 사용자로 로그인 응답을 만든다. */
+    /** 발급한 토큰과 사용자로 인증 응답을 만든다. */
     public static LoginResponse of(IssuedToken accessToken, IssuedToken refreshToken, User user) {
         return new LoginResponse(
                 accessToken.value(),

@@ -37,8 +37,9 @@ VALUES
 INSERT INTO `user`
     (`id`, `onboarding_result_id`, `nickname`, `email`, `password_hash`, `role`, `status`, `guestbook_last_checked_at`)
 VALUES
-    (1, 1, '테스트 사용자', '12345678@gmail.com',
-     '$2a$10$LpoZ46Wmj9cManptR.Vm4ORf63v6jMhsOku..H8TkD3swRmBKwacK', 'USER', 'ACTIVE', CURRENT_TIMESTAMP(6));
+    -- 관리자 로그인: admin / 12345678. V3의 일반 사용자 2·3번과 구분한다.
+    (1, 1, '관리자', 'admin',
+     '$2a$10$eNyb24hpIhLpbPcjjnQztuZ/YjBQlWtpSs9bagWM0EPIo30b5guFG', 'ADMIN', 'ACTIVE', CURRENT_TIMESTAMP(6));
 
 -- ---------------------------------------------------------------------
 -- AR_CHARACTER

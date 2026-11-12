@@ -20,6 +20,8 @@ import org.springframework.data.repository.query.Param;
  * 완료 보상으로 포인트를 지급하면 조회한 사용자의 포인트에 누적한다.
  * 보물찾기 시작/이어하기({@code POST /api/v2/treasure-missions/{missionId}/progress})도 같은 방식으로
  * 사용자를 확인하고, 최초 진행도의 사용자로 연결한다.
+ * 액세스 토큰 재발급({@code POST /api/v2/auth/refresh})에서도 현재 사용자 상태·권한을 확인하고,
+ * 새 토큰의 권한과 응답의 {@code user}를 구성한다.
  */
 public interface UserRepository extends JpaRepository<User, Long> {
 

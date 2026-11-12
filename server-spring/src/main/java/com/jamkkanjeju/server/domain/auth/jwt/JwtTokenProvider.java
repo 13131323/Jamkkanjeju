@@ -5,6 +5,8 @@ import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.entity.UserRole;
 import com.jamkkanjeju.server.domain.auth.security.AuthUser;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import java.time.Clock;
@@ -16,7 +18,7 @@ import javax.crypto.SecretKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** 액세스·리프레시 토큰을 발급하고 액세스 토큰을 검증한다. */
+/** 액세스·리프레시 토큰을 발급하고 각 용도에 맞게 검증한다. */
 @Component
 @RequiredArgsConstructor
 public class JwtTokenProvider {
@@ -71,12 +73,7 @@ public class JwtTokenProvider {
      * @throws JwtException 서명 불일치, 형식 오류, 액세스 토큰이 아닌 경우 등 그 밖의 검증 실패
      */
     public AuthUser parseAccessToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(jwtSigningKey)
-                .clock(() -> Date.from(clock.instant()))
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        Claims claims = parseSignedToken(token).getPayload();
 
         if (!TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class))) {
             throw new JwtException("액세스 토큰이 아닙니다.");
@@ -88,6 +85,58 @@ public class JwtTokenProvider {
             return new AuthUser(userId, role);
         } catch (RuntimeException exception) {
             throw new JwtException("액세스 토큰의 Claim이 올바르지 않습니다.", exception);
+        }
+    }
+
+    /**
+     * 리프레시 토큰의 서명·종류·필수 Claim·만료를 검증하고 사용자 ID를 반환한다.
+     * 저장 기록의 존재·폐기 여부는 재발급 서비스에서 별도로 확인한다.
+     *
+     * @throws ExpiredJwtException 만료된 리프레시 토큰
+     * @throws JwtException 서명·종류·필수 Claim이 올바르지 않은 토큰
+     */
+    public Long parseRefreshToken(String token) {
+        Jws<Claims> signedToken;
+        try {
+            signedToken = parseSignedToken(token);
+        } catch (ExpiredJwtException exception) {
+            // 파서가 만료를 먼저 감지해도 종류·필수 Claim이 잘못된 토큰은 INVALID_TOKEN 대상이다.
+            refreshUserId(exception.getClaims());
+            throw exception;
+        }
+
+        Claims claims = signedToken.getPayload();
+        Long userId = refreshUserId(claims);
+        // JWT 파서의 경계 처리와 관계없이 만료 시각과 현재 시각이 같으면 만료로 판정한다.
+        if (!claims.getExpiration().toInstant().isAfter(clock.instant())) {
+            throw new ExpiredJwtException(signedToken.getHeader(), claims, "만료된 리프레시 토큰입니다.");
+        }
+        return userId;
+    }
+
+    /** 같은 서명 키와 시각 기준으로 JWT를 검증한다. */
+    private Jws<Claims> parseSignedToken(String token) {
+        return Jwts.parser()
+                .verifyWith(jwtSigningKey)
+                .clock(() -> Date.from(clock.instant()))
+                .build()
+                .parseSignedClaims(token);
+    }
+
+    /** 리프레시 토큰의 필수 Claim을 검증한다. 토큰 값은 예외 메시지에 포함하지 않는다. */
+    private Long refreshUserId(Claims claims) {
+        try {
+            if (!TYPE_REFRESH.equals(claims.get(CLAIM_TYPE, String.class)) || claims.getExpiration() == null) {
+                throw new IllegalArgumentException();
+            }
+            Long userId = Long.valueOf(claims.getSubject());
+            String tokenId = claims.getId();
+            if (userId <= 0 || tokenId == null || !UUID.fromString(tokenId).toString().equals(tokenId)) {
+                throw new IllegalArgumentException();
+            }
+            return userId;
+        } catch (RuntimeException exception) {
+            throw new JwtException("리프레시 토큰의 Claim이 올바르지 않습니다.");
         }
     }
 

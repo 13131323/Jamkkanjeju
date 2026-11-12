@@ -126,4 +126,15 @@ class LoginRequestValidationTest {
 
         assertThat(validator.validateProperty(request, "deviceInfo")).isNotEmpty();
     }
+    @Test
+    void 관리자_아이디는_정규화한_뒤_허용한다() {
+        LoginRequest request = new LoginRequest(" ADMIN ", "12345678", null);
+        assertThat(request.email()).isEqualTo("admin");
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void 관리자_이외의_이메일이_아닌_아이디는_거부한다() {
+        assertThat(validator.validate(new LoginRequest("other", "12345678", null))).isNotEmpty();
+    }
 }
