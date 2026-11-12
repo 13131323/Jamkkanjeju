@@ -31,6 +31,8 @@ export const WEB_AUTH_READY_EVENT = 'tamnalog:auth-ready';
 export interface WebViewAuth {
   accessToken: string;
   tokenType: string;
+  loginUser?: import('@packages/shared').LoginUser;
+  expiresAt?: number;
 }
 
 export interface WebViewAppInfo {
@@ -42,7 +44,7 @@ export interface WebViewAppInfo {
 export function buildAuthTokenScript(auth: WebViewAuth | null, appInfo: WebViewAppInfo): string {
   // JSON.stringify로 직렬화해야 토큰 안의 따옴표·백슬래시가 스크립트를 깨지 않는다.
   // 토큰은 서버가 만든 값이지만 문자열을 그대로 코드에 이어붙이는 습관은 두지 않는다.
-  const payload = auth === null ? 'null' : JSON.stringify(auth);
+  const payload = auth === null ? 'null' : JSON.stringify({ accessToken: auth.accessToken, tokenType: auth.tokenType, loginUser: auth.loginUser, expiresAt: auth.expiresAt });
 
   // 앱 정보를 토큰보다 **먼저** 심는다. tamnalog:auth-ready를 듣고 깨어나는 쪽이
   // 이미 앱 정보를 볼 수 있어야 "토큰은 왔는데 앱 정보는 아직"이라는 상태가 생기지 않는다.

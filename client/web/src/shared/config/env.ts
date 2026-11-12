@@ -20,16 +20,6 @@ const envSchema = z.object({
     .string()
     .regex(/^\/[A-Za-z0-9._~\-/]*$/, '슬래시로 시작하는 경로여야 합니다(예: /dev-api)')
     .optional(),
-  /**
-   * 심사위원용 모드 진입 코드(6자). 홈의 열쇠 아이콘 → 모달에서 이 값과 대조한다.
-   *
-   * **optional이다.** 필수로 두면 이 값을 설정하지 않은 기존 배포가 env 검증에서 통째로 죽는다.
-   * 비어 있으면 어떤 코드로도 통과하지 않는다(features/judge-mode의 verifyJudgeCode).
-   *
-   * `NEXT_PUBLIC_`은 빌드 시점에 번들로 인라인되므로 **번들을 열어보면 보인다.** 심사 진입을
-   * 막는 문턱일 뿐 비밀이 아니다 — 진짜로 가려야 하면 서버 라우트에서 비공개 env로 대조해야 한다.
-   */
-  NEXT_PUBLIC_JUDGE_MODE_CODE: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({
@@ -37,7 +27,6 @@ const parsed = envSchema.safeParse({
   NEXT_PUBLIC_KAKAO_MAP_KEY: process.env.NEXT_PUBLIC_KAKAO_MAP_KEY,
   // 빈 문자열은 "설정하지 않음"으로 본다 — .env에 키만 남겨 둔 경우가 정상 경로다
   NEXT_PUBLIC_API_PROXY_PATH: process.env.NEXT_PUBLIC_API_PROXY_PATH || undefined,
-  NEXT_PUBLIC_JUDGE_MODE_CODE: process.env.NEXT_PUBLIC_JUDGE_MODE_CODE || undefined,
 });
 
 if (!parsed.success) {

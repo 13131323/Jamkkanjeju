@@ -67,7 +67,7 @@ export function CoopInviteEntry() {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
 
-    const entry = resolveCoopInviteEntry(readInviteToken(rawToken), getCachedSession()?.user != null);
+    const entry = resolveCoopInviteEntry(readInviteToken(rawToken), getCachedSession()?.loginUser?.onboardingCompleted === true || getCachedSession()?.user != null);
     coopTrace('초대링크:진입', { kind: entry.kind });
 
     if (entry.kind === 'invalid') {

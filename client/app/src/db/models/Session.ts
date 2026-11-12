@@ -1,6 +1,7 @@
+import type { LoginUser } from '@packages/shared';
 import type { GeneratedApi } from '@packages/shared';
 
-/** Session 테이블의 한 행. 익명 사용자는 기기당 하나라 id는 항상 1이다. */
+/** Session 테이블의 한 행. 로그인 세션은 기기당 하나라 id는 항상 1이다. */
 export interface SessionRow {
   id: 1;
   accessToken: string;
@@ -14,6 +15,8 @@ export interface SessionRow {
 
 /** 서비스·화면이 다루는 형태 */
 export interface StoredSession {
+  loginUser?: LoginUser;
+  expiresAt?: number;
   accessToken: string;
   /** 서버가 준 값을 그대로 쓴다(현재 "Bearer") */
   tokenType: string;

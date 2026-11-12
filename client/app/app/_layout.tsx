@@ -17,6 +17,7 @@ import { initialWindowMetrics, SafeAreaProvider, useSafeAreaInsets } from 'react
 import { NetworkErrorScreen } from '@/components/NetworkErrorScreen/NetworkErrorScreen';
 import { ToastProvider } from '@/components/Toast/Toast';
 import { useAppBootstrap } from '@/hooks/useAppBootstrap';
+import { useSessionStore } from '@/services/sessionCache';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { registerStepSyncTask } from '@/services/backgroundTask';
 import { registerGpsReportTask } from '@/services/gpsBackgroundTask';
@@ -121,19 +122,20 @@ function RootLayout() {
 
   const { status: networkStatus, refresh: refreshNetworkStatus } = useNetworkStatus();
   const bootstrap = useAppBootstrap();
+  const session = useSessionStore((state) => state.session);
   const fontsReady = fontsLoaded || Boolean(fontError);
   // 부트스트랩까지 끝나야 index가 온보딩 여부를 판단할 수 있다.
   const appReady = fontsReady && networkStatus !== 'checking' && bootstrap.status !== 'checking';
 
   // 백그라운드 태스크 등록 + 포그라운드 동기화 fallback
   useEffect(() => {
-    if (!appReady) return;
+    if (!appReady || !session) return;
     void registerStepSyncTask();
     // 백그라운드에서도 좌표를 계속 저장한다. 주기는 OS가 정하므로 10분은 요청값이다
     // (services/gpsBackgroundTask.ts 주석에 플랫폼별 실제 주기를 적어 뒀다).
     void registerGpsReportTask();
     void syncUnsentRecords(sendStepRecord);
-  }, [appReady]);
+  }, [appReady, session]);
   const handleSplashLayout = useCallback(() => {
     SplashScreen.hide();
   }, []);
@@ -195,13 +197,21 @@ function RootLayout() {
                 전환 중(≈350ms)에도 새 화면이 입력을 받아 두 번째 탭이 그쪽 버튼에 꽂힌다.
                 (그 연타 자체는 utils/navigate.ts의 전역 게이트가 막는다) */}
             <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="onboarding" />
-              <Stack.Screen name="home" />
-              <Stack.Screen name="mission" />
-              <Stack.Screen name="place" />
-              {/* 마이페이지 도감의 "함께 사진 찍기"가 브릿지로 여는 촬영 화면 */}
-              <Stack.Screen name="character-photo" />
+              <Stack.Protected guard={!session}>
+                <Stack.Screen name="login" />
+              </Stack.Protected>
+              <Stack.Protected guard={!!session}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="onboarding" />
+                <Stack.Screen name="home" />
+                <Stack.Screen name="mission" />
+                <Stack.Screen name="place" />
+                <Stack.Screen name="guestbook" />
+                <Stack.Screen name="coupon" />
+                <Stack.Screen name="cooperative-missions/invite" />
+                {/* 마이페이지 도감의 "함께 사진 찍기"가 브릿지로 여는 촬영 화면 */}
+                <Stack.Screen name="character-photo" />
+              </Stack.Protected>
             </Stack>
           </SafeAreaPadding>
         </ToastProvider>

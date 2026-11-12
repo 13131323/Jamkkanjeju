@@ -1,76 +1,69 @@
-import * as Sentry from '@sentry/nextjs';
+import { loginSessionFrom } from '@packages/shared';
 import { isAppWebView, sendToApp } from '@shared/lib/bridge/utils';
-
-/**
- * 401을 만났을 때 앱에 토큰을 다시 심어 달라고 요청하고, 심긴 것을 확인해 준다.
- *
- * web은 토큰을 발급할 수 없다 — 스스로 `/auth/anonymous`를 부르면 앱과 **다른 사용자**가 된다
- * (api/auth/webViewToken.ts). 그래서 401은 화면이 비는 것으로 끝났고(마이페이지에서 확인),
- * 앱에 부탁하는 것이 유일한 복구 경로다. 앱이 주입 스크립트로 심으면 아래 이벤트가 온다.
- */
-
-/**
- * 앱의 주입 스크립트가 토큰을 심은 뒤 쏘는 이벤트.
- * **app/src/components/HomeWebView/authTokenScript.ts의 `WEB_AUTH_READY_EVENT`와 같아야 한다.**
- */
-const AUTH_READY_EVENT = 'tamnalog:auth-ready';
-
-/**
- * 앱의 응답을 이만큼 기다린다(ms).
- *
- * 앱이 그 사이 POST /auth/anonymous를 왕복해야 하므로 넉넉해야 하고, 길면 401을 맞은 화면이
- * 그만큼 빈 채로 멈춘다. 타임아웃은 "복구 못 했다"로 끝나 원래 401이 호출부로 전달된다.
- */
-const AUTH_REISSUE_TIMEOUT_MS = 5000;
-
-/**
- * 진행 중인 재발급 요청.
- *
- * 401은 여러 요청에서 동시에 터진다(마이페이지는 진입 시 요약·도감·미션을 함께 부른다).
- * 그때마다 부탁하면 익명 사용자가 그만큼 만들어지고 마지막 것만 살아남아 앞선 재시도가 다시
- * 401이 된다 — **한 번만 보내고 모두가 같은 약속을 기다린다.**
- */
+import { authRequest, withBrowserAuthLock } from './browserAuth';
+import { beginLogout, isLogoutInProgress, clearLoginSession, readLoginSession, saveLoginSession } from './session';
 let pendingReissue: Promise<boolean> | null = null;
-
-/**
- * 앱에 토큰 재발급을 요청하고 심길 때까지 기다린다.
- *
- * @returns 새 토큰이 심겼으면 true. WebView 밖이거나 시간 안에 오지 않으면 false.
- */
-export function requestAuthReissue(): Promise<boolean> {
-  // WebView 밖(일반 브라우저)에서는 부탁할 앱이 없다. 여기서 끊지 않으면 모든 401이
-  // 타임아웃만큼 지연된 뒤 실패한다.
-  if (!isAppWebView()) return Promise.resolve(false);
-
+/** 진행 중인 회전이 끝난 최신 쿠키로 로그아웃하고 추가 회전은 차단한다. */
+export async function prepareLogout(): Promise<void> {
+  beginLogout();
+  await pendingReissue?.catch(() => undefined);
+}
+function failure(status: number, code: string, message: string) {
+  return { response: { status, data: { code, message } } };
+}
+/** 앱은 SecureStore, 일반 웹은 HttpOnly 쿠키로 재발급한다. 여러 만료 요청은 같은 결과를 기다린다. */
+export function requestAuthReissue(failedAccessToken?: string): Promise<boolean> {
+  if (isLogoutInProgress()) return Promise.resolve(false);
+  const previous = readLoginSession();
+  if (failedAccessToken && previous && previous.accessToken !== failedAccessToken && previous.expiresAt > Date.now()) return Promise.resolve(true);
   if (pendingReissue) return pendingReissue;
-
-  pendingReissue = new Promise<boolean>((resolve) => {
-    // 두 함수는 아래 timer보다 먼저 선언되지만 호출은 그 뒤에만 일어난다(함수 선언이라 호이스팅된다)
-    function settle(didReissue: boolean) {
+  const promise = isAppWebView()
+    ? requestFromApp(failedAccessToken ?? previous?.accessToken)
+    : withBrowserAuthLock(async () => {
+        const current = readLoginSession();
+        if (previous && current && (current.accessToken !== previous.accessToken || current.expiresAt !== previous.expiresAt) && current.expiresAt > Date.now()) return true;
+        try {
+          const data = await authRequest('refresh', {});
+          if (isLogoutInProgress()) return false;
+          const latest = readLoginSession();
+          if (previous && latest && latest.loginUser.id !== previous.loginUser.id) return false;
+          saveLoginSession(loginSessionFrom(data));
+          return true;
+        } catch (error) {
+          const status = (error as { response?: { status?: number } }).response?.status;
+          if ((status === 401 || status === 403) && readLoginSession()?.accessToken === previous?.accessToken) clearLoginSession();
+          throw error;
+        }
+      });
+  pendingReissue = promise;
+  void promise
+    .finally(() => {
+      if (pendingReissue === promise) pendingReissue = null;
+    })
+    .catch(() => undefined);
+  return promise;
+}
+function requestFromApp(accessToken?: string): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    function finish() {
       clearTimeout(timer);
-      window.removeEventListener(AUTH_READY_EVENT, onAuthReady);
-      // 다음 401이 다시 요청할 수 있도록 자리를 비운다 — 같은 약속을 계속 재사용하면
-      // 새 토큰으로도 거절당한 401을 조용히 성공으로 처리하게 된다
-      pendingReissue = null;
-      resolve(didReissue);
+      window.removeEventListener('tamnalog:auth-refresh-result', onResult);
     }
-
-    function onAuthReady() {
-      settle(true);
+    function onResult(event: Event) {
+      const detail = (event as CustomEvent<{ ok: boolean; status: number; code?: string; message?: string }>).detail;
+      if (!detail) return;
+      finish();
+      if (detail.ok && readLoginSession()) resolve(true);
+      else {
+        if (detail.status === 401 || detail.status === 403) clearLoginSession();
+        reject(failure(detail.status, detail.code ?? 'AUTH_REFRESH_FAILED', detail.message ?? '인증 정보를 갱신하지 못했습니다.'));
+      }
     }
-
-    // 리스너를 **보내기 전에** 건다. 앱의 injectJavaScript가 먼저 도착하면 신호를 놓친다.
-    window.addEventListener(AUTH_READY_EVENT, onAuthReady);
+    window.addEventListener('tamnalog:auth-refresh-result', onResult);
     const timer = setTimeout(() => {
-      // 침묵하면 안 된다. 이 경로가 실패하면 화면은 그냥 비고(홈 배너·마이페이지), 원인이
-      // 401인지 서버가 빈 응답을 준 것인지 구별할 단서가 아무것도 남지 않는다.
-      // 앱이 낡아 AUTH_TOKEN_REQUEST를 모르면 조용히 버리므로 여기가 유일한 관측 지점이다.
-      Sentry.captureMessage('auth reissue timeout — 앱이 응답하지 않았다', 'warning');
-      settle(false);
-    }, AUTH_REISSUE_TIMEOUT_MS);
-
-    sendToApp({ type: 'AUTH_TOKEN_REQUEST', payload: {} });
+      finish();
+      reject(failure(0, 'AUTH_REFRESH_TIMEOUT', '인증 정보 갱신이 지연되고 있습니다. 다시 시도해 주세요.'));
+    }, 20000);
+    sendToApp({ type: 'AUTH_TOKEN_REQUEST', payload: { accessToken } });
   });
-
-  return pendingReissue;
 }

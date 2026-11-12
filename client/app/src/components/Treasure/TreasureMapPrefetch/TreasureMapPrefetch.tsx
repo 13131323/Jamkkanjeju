@@ -47,7 +47,7 @@ export function TreasureMapPrefetch() {
     listenFromWeb((message) => {
       // 토큰이 거절당하면 여기서도 다시 심어 준다. 이 WebView가 워밍하는 것이 401 응답이면
       // 목적("시작하기 대기 시간 단축")과 반대로 step0이 빈 지도에서 출발한다.
-      if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef);
+      if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef, message.payload.accessToken);
       // 그 밖의 메시지는 무시한다 — PING에 답하지 않는 것이 이 컴포넌트의 설계다
     })(event);
   }, []);

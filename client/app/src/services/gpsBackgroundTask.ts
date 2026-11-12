@@ -1,7 +1,7 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import { applyJudgeModePosition, isJudgeModeEnabled } from '@/store/judgeMode';
+import { applyAdminPosition } from '@/store/adminLocation';
 import { hasUsableAuthorization, hydrateSessionCache } from './auth';
 import { GPS_REPORT_INTERVAL_MINUTES } from './gpsReport';
 import { reportGpsAsync } from './gpsSender';
@@ -47,8 +47,6 @@ TaskManager.defineTask(GPS_REPORT_TASK, async () => {
     // hydrateSessionCache는 저장된 세션을 캐시로 올리기만 한다(발급하지 않는다 — auth.ts 주석).
     await hydrateSessionCache();
 
-    // 심사위원용 모드가 켜져 있으면 앱 토큰이 없어도 심사위원 토큰이 붙는다(authHeader.ts).
-    // 다만 그 모드는 메모리 전용이고 주인이 web이라(store/judgeMode.ts) OS가 프로세스를 새로
     // 띄운 **헤드리스 회차에서는 언제나 false**다 — 즉 그 경우 필요한 것은 앱 토큰이다.
     // 프로세스가 살아 있는 채로 태스크만 깨는 경우에만 이 갈래가 true가 될 수 있다.
     //
@@ -56,7 +54,7 @@ TaskManager.defineTask(GPS_REPORT_TASK, async () => {
     // Success로 돌려주는 이유는 아래 position 분기와 같다 — 태스크가 실패한 게 아니라
     // 이번 회차에 보낼 것이 없는 것이다. 다음 포그라운드 실행이 부트스트랩으로 풀어 준다.
     // (게이트는 건드리지 않는다 — reportGpsAsync를 부르지 않았으니 다음 회차가 그대로 온다.)
-    if (!hasUsableAuthorization(isJudgeModeEnabled())) return BackgroundTask.BackgroundTaskResult.Success;
+    if (!hasUsableAuthorization()) return BackgroundTask.BackgroundTaskResult.Success;
 
     // 마지막으로 알려진 위치를 먼저 본다. 백그라운드에서 새 측위를 돌리면 몇 초씩 걸리고
     // 그만큼 배터리를 쓰는데, 10분 주기의 방문 기록에는 캐시된 좌표로도 충분하다.
@@ -67,11 +65,7 @@ TaskManager.defineTask(GPS_REPORT_TASK, async () => {
     // "이번엔 보낼 게 없다"이다 — Failed로 돌려주면 OS가 이 태스크를 점점 덜 깨운다.
     if (!position) return BackgroundTask.BackgroundTaskResult.Success;
 
-    // 심사위원용 모드는 메모리에만 있다(store/judgeMode.ts). 앱이 완전히 종료된 뒤 OS가
-    // 프로세스를 새로 띄운 경우에는 기본값 false라 실측 좌표가 그대로 나간다.
-    // 모드의 주인이 web이라 앱 혼자서는 복원할 방법이 없고, 그때는 홈이 열리는 순간
-    // JUDGE_MODE_UPDATE가 다시 와서 맞춰진다.
-    const reported = applyJudgeModePosition(position.coords);
+    const reported = applyAdminPosition(position.coords);
 
     // 여기서는 **반드시 기다린다**(reportGpsAsync). 던져 놓고 반환하면 OS가 프로세스를
     // 재우면서 요청이 잘린다. 게이트가 막아 아무것도 안 보낸 회차도 정상이다 —

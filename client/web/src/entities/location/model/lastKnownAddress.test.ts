@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { setJudgeAuthEnabled } from '@shared/api/auth/judgeToken';
+const account = vi.hoisted(() => ({ id: '1' }));
+vi.mock('@shared/api/auth/session', () => ({ accountId: () => account.id }));
+function setAccount(second: boolean) {
+  account.id = second ? '2' : '1';
+}
 import { clearLastKnownAddress, getLastKnownAddress, subscribeLastKnownAddress, writeLastKnownAddress } from './lastKnownAddress';
 
 beforeEach(() => {
-  setJudgeAuthEnabled(false);
+  setAccount(false);
   clearLastKnownAddress();
 });
 
@@ -52,10 +56,10 @@ describe('lastKnownAddress', () => {
  */
 describe('계정별 분리', () => {
   it('심사위원용 모드에서 남긴 주소는 기본 모드에서 보이지 않는다', () => {
-    setJudgeAuthEnabled(true);
+    setAccount(true);
     writeLastKnownAddress('제주시 이도이동');
 
-    setJudgeAuthEnabled(false);
+    setAccount(false);
 
     expect(getLastKnownAddress()).toBeUndefined();
   });
@@ -63,7 +67,7 @@ describe('계정별 분리', () => {
   it('기본 모드에서 남긴 주소도 심사위원용 모드로 새지 않는다', () => {
     writeLastKnownAddress('서울시 강남구');
 
-    setJudgeAuthEnabled(true);
+    setAccount(true);
 
     expect(getLastKnownAddress()).toBeUndefined();
   });
@@ -71,15 +75,15 @@ describe('계정별 분리', () => {
   // 모드는 실행 중에 뒤집히고(홈의 "모드변경") 구독은 그때 다시 돌지 않는다 —
   // 읽을 때마다 계정을 확인하지 않으면 메모리 캐시에 직전 계정 값이 남는다
   it('모드를 껐다 켜도 각자의 값을 그대로 본다', () => {
-    setJudgeAuthEnabled(true);
+    setAccount(true);
     writeLastKnownAddress('제주시 이도이동');
-    setJudgeAuthEnabled(false);
+    setAccount(false);
     writeLastKnownAddress('서울시 강남구');
 
-    setJudgeAuthEnabled(true);
+    setAccount(true);
     expect(getLastKnownAddress()).toBeUndefined();
 
-    setJudgeAuthEnabled(false);
+    setAccount(false);
     expect(getLastKnownAddress()).toBeUndefined();
   });
 });

@@ -1,7 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { notifyApiError } from '@packages/shared';
+import { ConfirmModal } from '@shared/ui/ConfirmModal';
+import { requestLogout } from '@shared/api/auth/logout';
+import { isAppWebView } from '@shared/lib/bridge/utils';
 import { WithdrawConfirmModal } from '@features/account-withdraw';
 import { InquiryModal } from '@features/inquiry';
 
@@ -29,6 +34,7 @@ const mock = {
         { id: 'contact', label: '문의하기' },
         { id: 'terms', label: '이용약관' },
         { id: 'privacy', label: '개인정보처리방침' },
+        { id: 'logout', label: '로그아웃' },
         { id: 'withdraw', label: '회원탈퇴', danger: true },
       ],
     },
@@ -37,10 +43,7 @@ const mock = {
 
 function Header({ title, onBack }: { title: string; onBack: () => void }) {
   return (
-    <div
-      className="border-cool-neutral-100 flex w-full shrink-0 items-center gap-3 border-b px-4"
-      style={{ height: `calc(56px + var(--safe-area-top))`, paddingTop: `var(--safe-area-top)` }}
-    >
+    <div className="border-cool-neutral-100 flex w-full shrink-0 items-center gap-3 border-b px-4" style={{ height: `calc(56px + var(--safe-area-top))`, paddingTop: `var(--safe-area-top)` }}>
       <button type="button" aria-label="뒤로가기" onClick={onBack} className="bg-cool-neutral-100 flex h-9 w-9 items-center justify-center rounded-full">
         <ChevronLeftIcon />
       </button>
@@ -87,10 +90,34 @@ function SettingsSectionView({ section, isFirst, onItemClick }: { section: Setti
 
 export function MyPageSettingsPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const loggingOut = useRef(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isInquiryOpen, setIsInquiryOpen] = useState(false);
 
+  async function logout() {
+    if (loggingOut.current) return;
+    loggingOut.current = true;
+    setLogoutPending(true);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    try {
+      await requestLogout();
+    } catch (error) {
+      notifyApiError(error);
+    } finally {
+      queryClient.clear();
+      if (!isAppWebView()) router.replace('/login');
+    }
+  }
+
   function handleItemClick(item: SettingsItem) {
+    if (item.id === 'logout') {
+      setIsLogoutOpen(true);
+      return;
+    }
     if (item.id === 'withdraw') {
       setIsWithdrawOpen(true);
       return;
@@ -114,6 +141,9 @@ export function MyPageSettingsPage() {
 
       {isWithdrawOpen && <WithdrawConfirmModal onClose={() => setIsWithdrawOpen(false)} />}
       {isInquiryOpen && <InquiryModal onClose={() => setIsInquiryOpen(false)} />}
+      {isLogoutOpen && (
+        <ConfirmModal title="로그아웃 하시겠습니까?" cancelLabel="아니오" confirmLabel="예" pending={logoutPending} onCancel={() => setIsLogoutOpen(false)} onConfirm={() => void logout()} />
+      )}
     </div>
   );
 }

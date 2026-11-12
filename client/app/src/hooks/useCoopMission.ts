@@ -1,9 +1,7 @@
 import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { wasApiErrorNotified, COOP_STEP, type CoopMissionProgressResponse, type JoinCoopMissionResponse, type RoleCard, type RoleProgress } from '@packages/shared';
-import { useCoopSimulationEnabled } from '@/config/coopSimulation';
-import { DEV_SIM_ROLE_PHOTOS, prefetchDevSimRolePhotos } from '@/constants/coopMission';
 import {
   getGetCooperativeMissionStatusApiV1CooperativeMissionsMissionProgressIdProgressGetQueryKey as coopStatusQueryKey,
   useAcceptJoinRequestApiV1CooperativeMissionsMissionProgressIdParticipantsParticipantIdAcceptPatch as useAcceptJoinRequestMutation,
@@ -18,7 +16,6 @@ import {
 } from '@/services/api/cooperative-mission/cooperative-mission';
 import { useCurrentCoordsOnce } from '@/hooks/useCurrentCoordsOnce';
 import { useCoopPartyStore } from '@/store/coopParty';
-import { isSimulatedParticipant, realParticipants, simulateCoopStatus, simulateParticipants } from '@/utils/coopDevSimulation';
 import { describeApiError } from '@/utils/apiError';
 import { resolveCoopFailure, shouldRetryCoopStatus, type CoopFailure } from '@/utils/coopFailure';
 import { remainingRoleAssignTargets } from '@/utils/coopRole';
@@ -94,12 +91,8 @@ export function useCoopMissionRoom() {
   const previousParticipants = useCoopPartyStore((state) => state.previousParticipants);
   const storedRoleCards = useCoopPartyStore((state) => state.roleCards);
   const storedParticipants = useCoopPartyStore((state) => state.participants);
-  const acceptedSimulatedIds = useCoopPartyStore((state) => state.acceptedSimulatedIds);
-  const rejectedSimulatedIds = useCoopPartyStore((state) => state.rejectedSimulatedIds);
   const setMyParticipantId = useCoopPartyStore((state) => state.setMyParticipantId);
   const rememberParticipants = useCoopPartyStore((state) => state.rememberParticipants);
-  const acceptSimulated = useCoopPartyStore((state) => state.acceptSimulated);
-  const rejectSimulated = useCoopPartyStore((state) => state.rejectSimulated);
 
   /**
    * 상태 조회에 실어 보낼 좌표.
@@ -148,53 +141,8 @@ export function useCoopMissionRoom() {
     },
   });
 
-  const simulationEnabled = useCoopSimulationEnabled();
-  const rawStatus = statusQuery.data ?? null;
-
-  // 가짜 팀원 사진은 step3에서 한꺼번에 뜨므로 방에 들어온 시점에 미리 받아 둔다(coopMission.ts).
-  // 켜져 있을 때만 부른다 — 꺼진 빌드에서는 이 사진들을 쓸 일이 없다.
-  useEffect(() => {
-    if (simulationEnabled) prefetchDevSimRolePhotos();
-  }, [simulationEnabled]);
-
-  /**
-   * 화면이 읽는 방 상태.
-   *
-   * 시뮬레이션이 꺼져 있으면 폴링 응답 그대로다 — `simulateCoopStatus`가 같은 참조를 돌려주고
-   * 거절 목록도 비어 있어 이 useMemo는 서버 값을 손대지 않는다.
-   */
-  const status = useMemo(() => {
-    if (rawStatus === null) return null;
-
-    const simulated = simulateCoopStatus(rawStatus, {
-      acceptedSimIds: acceptedSimulatedIds,
-      rejectedSimIds: rejectedSimulatedIds,
-      fallbackRoleCards: storedRoleCards,
-      // 역할명으로 고정 배정한다(coopDevSimulation.ts) — 옆의 "이런 장소를 찾아보세요" 칩이
-      // 같은 역할 카드에서 나오므로 사진도 역할을 따라가야 둘이 어긋나지 않는다.
-      itemPhotoByRole: DEV_SIM_ROLE_PHOTOS,
-      enabled: simulationEnabled,
-    });
-    if (rejectedSimulatedIds.length === 0) return simulated;
-
-    // 거절한 가짜 팀원은 목록에서 지운다. 서버에 보낼 수 없는 거절이라 여기서만 반영된다.
-    return {
-      ...simulated,
-      participants: (simulated.participants ?? []).filter((participant) => !rejectedSimulatedIds.includes(participant.participantId)),
-      roleProgresses: (simulated.roleProgresses ?? []).filter((progress) => !rejectedSimulatedIds.includes(progress.participantId)),
-    };
-  }, [rawStatus, acceptedSimulatedIds, rejectedSimulatedIds, storedRoleCards, simulationEnabled]);
-
-  // 첫 폴링은 최대 2초 뒤에 온다. 그동안 방 생성·이어하기 응답이 준 목록으로 화면을 채운다 —
-  // 안 그러면 "시작하기" 직후 참여 멤버에 자기 자신도 보이지 않는다.
-  //
-  // 시뮬레이션을 여기서 한 번 더 태우는 이유: 위 useMemo는 폴링 응답이 있을 때만 돌아서,
-  // 응답 전(또는 폴링이 계속 실패하는 동안)에는 가짜 팀원이 아예 안 붙는다.
-  // 이미 붙어 있으면 같은 참조를 그대로 돌려주므로 폴링 경로에서 두 번 붙지 않는다.
-  const participants = useMemo(
-    () => simulateParticipants(status?.participants ?? storedParticipants, acceptedSimulatedIds, rejectedSimulatedIds, simulationEnabled),
-    [status?.participants, storedParticipants, acceptedSimulatedIds, rejectedSimulatedIds, simulationEnabled],
-  );
+  const status = statusQuery.data ?? null;
+  const participants = status?.participants ?? storedParticipants;
   /**
    * 위 목록이 **서버 응답에서 왔는지**. 부트스트랩 폴백이면 false다.
    *
@@ -279,10 +227,6 @@ export function useCoopMissionRoom() {
   const acceptParticipant = useCallback(
     async (participantId: number): Promise<CoopActionResult> => {
       // 가짜 팀원은 서버에 없다. 수락 요청을 보내면 404가 난다.
-      if (isSimulatedParticipant(participantId)) {
-        acceptSimulated(participantId);
-        return { ok: true };
-      }
       if (missionProgressId === null) return { ok: false, failure: 'retryable' };
 
       try {
@@ -297,15 +241,11 @@ export function useCoopMissionRoom() {
         return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
-    [acceptMutation, acceptSimulated, missionProgressId, refreshStatus],
+    [acceptMutation, missionProgressId, refreshStatus],
   );
 
   const rejectParticipant = useCallback(
     async (participantId: number): Promise<CoopActionResult> => {
-      if (isSimulatedParticipant(participantId)) {
-        rejectSimulated(participantId);
-        return { ok: true };
-      }
       if (missionProgressId === null) return { ok: false, failure: 'retryable' };
 
       try {
@@ -318,7 +258,7 @@ export function useCoopMissionRoom() {
         return { ok: false, failure: resolveCoopFailure(error), detail: describeApiError(error), apiErrorNotified: wasApiErrorNotified(error) };
       }
     },
-    [rejectMutation, rejectSimulated, missionProgressId, refreshStatus],
+    [rejectMutation, missionProgressId, refreshStatus],
   );
 
   /**
@@ -357,12 +297,7 @@ export function useCoopMissionRoom() {
   const assignRolesAndAdvance = useCallback(async (): Promise<CoopActionResult> => {
     if (missionProgressId === null) return { ok: false, failure: 'retryable' };
 
-    /**
-     * 이미 저장된 배정. **가짜는 뺀다** — 심사위원용 모드의 가짜 진행도는 남는 카드를 골라
-     * 붙는 것이라(coopDevSimulation.ts) 그것을 "쓰인 카드"로 세면 진짜 참여자에게 줄 카드가
-     * 실제보다 적어진다. `realParticipants`는 `participantId`만 보므로 진행도에도 그대로 쓴다.
-     */
-    const savedProgresses = realParticipants(roleProgresses);
+    const savedProgresses = roleProgresses;
 
     // **수락이 끝난 사람에게만 나눈다.** 화면의 규칙이 이미 그렇지만(party.ts의 `coopStartBlock` —
     // 대기자가 하나라도 있으면 "다음"도 "다시 역할 나누기"도 잠긴다) 그 규칙과 이 요청이 서로
@@ -373,7 +308,7 @@ export function useCoopMissionRoom() {
     // 못 받을 수 있다(시뮬레이션이 자기 몫을 따로 그린다).
     // 그다음 **이미 역할을 받은 사람과 이미 쓰인 카드를 뺀다** — 재시도가 그 배정을 옮기면
     // 한 사람이 두 역할을 갖는다(coopRole.ts의 remainingRoleAssignTargets).
-    const targets = remainingRoleAssignTargets(realParticipants(activeParticipants(participants)), roleCards, savedProgresses);
+    const targets = remainingRoleAssignTargets(activeParticipants(participants), roleCards, savedProgresses);
     const assignments = randomRoleAssignments(targets.participants, targets.roleCards);
 
     // 배정할 것이 없으면 단계를 올리지 않는다 — 역할 없는 재료 찾기 화면은 아무것도 할 수 없다.
@@ -550,31 +485,7 @@ export function useStartCoopMission() {
       enterRoom({
         missionProgressId: started.missionProgressId,
         teamToken: started.teamToken,
-        /**
-         * 첫 폴링 전까지 "나"를 그릴 값. **근거가 있을 때만 채운다.**
-         *
-         * 이 응답(`CooperativeMissionStartResponse`)에는 `currentParticipant`가 없다 —
-         * 서버가 토큰으로 나를 식별해 주는 곳은 상태 조회뿐이다. 그래서 참여자가 한 명뿐인
-         * 응답(새로 시작한 방)에서만 그 한 명이 나라고 말할 수 있다(party.ts의 soleParticipantId).
-         *
-         * 예전에는 `findHost(started.participants)`로 **방장을 곧 나라고 단정**했다. 근거로 삼은
-         * 것은 "이어하기는 내가 HOST로 참여 중인 진행도만 돌려준다"는 계약 해석이었는데,
-         * 지금 계약 문서(같은 응답의 설명)에는 그런 제한이 없다 — "기존 진행도를 이어서 하면 200"
-         * 뿐이다. 근거 없는 단정이라 두 가지가 함께 틀어졌다:
-         *   - 멤버가 이어하기로 들어오면 자기를 방장으로 오인한다(초대 칩·수락/거절·"다음"이
-         *     열리고 "나의 역할"에 방장의 역할이 그려진다).
-         *   - `myParticipantId`가 곧 방장이 되므로 승계 판정이 동어반복이 된다.
-         *
-         * 알 수 없으면 null이고, 첫 폴링의 `currentParticipant`가 곧 확정한다(아래 effect).
-         * 상태 코드로 201/200을 가르지 못하는 사정은 그대로다 — orval mutator가 `response.data`만
-         * 돌려주어 상태 코드가 남지 않는다. 가를 필요도 없다: 판정 근거가 참여자 수 하나다.
-         *
-         * **`realParticipants`를 반드시 통과시킨다.** 지금 이 응답은 서버 원본이라 가짜가 없지만,
-         * 신원 판정의 근거로 시뮬레이션이 섞인 목록이 들어오는 순간 이 규칙은 조용히 무너진다 —
-         * 심사위원용 모드는 가짜 팀원 3명을 붙이므로(coopDevSimulation.ts) 혼자 만든 방도
-         * 4명이 되어 "한 명뿐일 때만"이 언제나 거짓이 된다. 근거를 여기서 못 박아 둔다.
-         */
-        myParticipantId: soleParticipantId(realParticipants(started.participants)),
+        myParticipantId: soleParticipantId(started.participants),
         roleCards: started.roleCards,
         // 첫 폴링 전까지 초대 화면이 그릴 목록. 방장 본인이 여기 들어 있다.
         participants: started.participants,

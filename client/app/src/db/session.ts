@@ -1,11 +1,5 @@
-/**
- * 익명 세션(토큰 + 온보딩 응답) 로컬 저장소.
- *
- * userJson이 온보딩 게이트의 판정 기준이다. PATCH /users/me 응답을 실제로
- * 받았을 때만 채워지므로, 호출은 했는데 응답이 없으면 다음 실행에서
- * 온보딩이 다시 뜬다 — 별도 플래그가 필요 없다.
- */
-import type { GeneratedApi } from '@packages/shared';
+/** 액세스 토큰·사용자 정보·만료 시각의 SQLite 저장소. 리프레시 토큰은 SecureStore에서만 관리한다. */
+import type { GeneratedApi, LoginSession } from '@packages/shared';
 import type { SessionRow, StoredSession } from './models/Session';
 import { getFirstSqlAsync, runSqlAsync } from './sqlite';
 
@@ -25,10 +19,22 @@ export async function readSession(): Promise<StoredSession | null> {
   const row = await getFirstSqlAsync<SessionReadRow>('SELECT accessToken, tokenType, userJson, apiOrigin FROM Session WHERE id = 1;');
   if (!row) return null;
 
+  let login: Partial<LoginSession> = {};
+  let user = parseUser(row.userJson);
+  try {
+    const value = JSON.parse(row.userJson ?? 'null');
+    if (value?.loginUser) {
+      login = value;
+      user = value.user ?? null;
+    }
+  } catch {
+    /* 손상된 데이터는 로그인 복원에서 제외한다. */
+  }
   return {
+    ...(login.loginUser ? { loginUser: login.loginUser, expiresAt: login.expiresAt } : {}),
     accessToken: row.accessToken,
     tokenType: row.tokenType,
-    user: parseUser(row.userJson),
+    user,
     apiOrigin: row.apiOrigin ?? null,
   };
 }
@@ -51,9 +57,21 @@ export async function saveToken(accessToken: string, tokenType: string, apiOrigi
 }
 
 export async function saveUser(user: GeneratedApi.UserResponse): Promise<void> {
-  await runSqlAsync('UPDATE Session SET userJson = ?, updatedAt = ? WHERE id = 1;', [JSON.stringify(user), Date.now()]);
+  const session = await readSession();
+  const value = session?.loginUser ? { user, loginUser: { ...session.loginUser, onboardingCompleted: true }, expiresAt: session.expiresAt } : user;
+  await runSqlAsync('UPDATE Session SET userJson = ?, updatedAt = ? WHERE id = 1;', [JSON.stringify(value), Date.now()]);
 }
 
 export async function clearSession(): Promise<void> {
   await runSqlAsync('DELETE FROM Session WHERE id = 1;');
+}
+
+/** 로그인 시 이전 계정의 온보딩 데이터를 함께 교체한다. */
+export async function saveLoginSession(session: LoginSession, apiOrigin: string, user: GeneratedApi.UserResponse | null = null): Promise<void> {
+  await runSqlAsync(
+    `INSERT INTO Session (id, accessToken, tokenType, userJson, apiOrigin, updatedAt)
+    VALUES (1, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET accessToken=excluded.accessToken,
+    tokenType=excluded.tokenType, userJson=excluded.userJson, apiOrigin=excluded.apiOrigin, updatedAt=excluded.updatedAt;`,
+    [session.accessToken, session.tokenType, JSON.stringify({ loginUser: session.loginUser, expiresAt: session.expiresAt, user }), apiOrigin, Date.now()],
+  );
 }

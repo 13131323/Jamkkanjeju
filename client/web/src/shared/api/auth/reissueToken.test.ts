@@ -1,105 +1,107 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-const bridge = vi.hoisted(() => ({ isAppWebView: vi.fn(), sendToApp: vi.fn() }));
-vi.mock('@shared/lib/bridge/utils', () => bridge);
-
-const AUTH_READY_EVENT = 'tamnalog:auth-ready';
-
-/**
- * jsdom을 쓰지 않는다(설치돼 있지 않고, 이 모듈이 필요한 것은 이벤트 통로 하나뿐이다).
- * Node의 EventTarget을 window로 심으면 addEventListener/dispatchEvent가 그대로 동작한다 —
- * shared/lib/bridge/utils.test.ts가 전역을 stub하는 것과 같은 방식이다.
- */
-function stubWindow() {
-  const target = new EventTarget();
-  vi.stubGlobal('window', target);
-  return { fireAuthReady: () => target.dispatchEvent(new Event(AUTH_READY_EVENT)) };
-}
-
-/**
- * 토큰 재발급 요청.
- *
- * web은 토큰을 발급할 수 없어서(앱과 다른 사용자가 만들어진다) 401을 만나면 앱에 부탁하는 것이
- * 유일한 복구 경로다. 여기서 지켜야 하는 성질이 세 가지다:
- *   1. WebView 밖에서는 기다리지 않는다(부탁할 앱이 없다)
- *   2. 동시에 터진 401이 요청을 여러 번 보내지 않는다 — 익명 사용자가 그만큼 만들어진다
- *   3. 응답이 없으면 시간 안에 포기한다
- */
-describe('requestAuthReissue', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-    vi.resetModules();
-    bridge.isAppWebView.mockReset();
-    bridge.sendToApp.mockReset();
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+const mocks = vi.hoisted(() => ({
+  isLogoutInProgress: vi.fn(() => false),
+  beginLogout: vi.fn(),
+  isAppWebView: vi.fn(),
+  sendToApp: vi.fn(),
+  authRequest: vi.fn(),
+  readLoginSession: vi.fn(),
+  saveLoginSession: vi.fn(),
+  clearLoginSession: vi.fn(),
+}));
+vi.mock('@shared/lib/bridge/utils', () => mocks);
+vi.mock('./browserAuth', () => ({ authRequest: mocks.authRequest, withBrowserAuthLock: (work: () => Promise<unknown>) => work() }));
+vi.mock('./session', () => mocks);
+const old = { accessToken: 'old', tokenType: 'Bearer', expiresAt: 0, loginUser: { id: 4, role: 'ADMIN', nickname: null, onboardingCompleted: true } };
+const issued = { accessToken: 'new', tokenType: 'Bearer', accessTokenExpiresIn: 1800, refreshTokenExpiresIn: 1209600, user: old.loginUser };
+beforeEach(() => {
+  vi.resetModules();
+  vi.clearAllMocks();
+  mocks.isAppWebView.mockReturnValue(false);
+  mocks.isLogoutInProgress.mockReturnValue(false);
+  mocks.beginLogout.mockImplementation(() => mocks.isLogoutInProgress.mockReturnValue(true));
+  mocks.readLoginSession.mockReturnValue(old);
+  vi.stubGlobal('window', new EventTarget());
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+describe('웹 자동 재발급', () => {
+  it('동시 만료 요청은 브라우저 재발급 한 번을 공유한다', async () => {
+    let finish!: (v: typeof issued) => void;
+    mocks.authRequest.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const { requestAuthReissue } = await import('./reissueToken');
+    const all = [requestAuthReissue('old'), requestAuthReissue('old'), requestAuthReissue('old')];
+    finish(issued);
+    expect(await Promise.all(all)).toEqual([true, true, true]);
+    expect(mocks.authRequest).toHaveBeenCalledTimes(1);
+    expect(mocks.saveLoginSession.mock.calls[0][0]).not.toHaveProperty('refreshToken');
   });
-
-  /** 모듈 스코프의 진행 중 요청이 테스트 간에 남지 않도록 매번 새로 불러온다 */
-  async function loadModule() {
-    return (await import('./reissueToken')).requestAuthReissue;
-  }
-
-  it('WebView 밖에서는 곧바로 false — 부탁할 앱이 없으므로 기다리지 않는다', async () => {
-    bridge.isAppWebView.mockReturnValue(false);
-    stubWindow();
-    const requestAuthReissue = await loadModule();
-
-    await expect(requestAuthReissue()).resolves.toBe(false);
-    expect(bridge.sendToApp).not.toHaveBeenCalled();
+  it('재발급 인증 실패 시 세션을 지운다', async () => {
+    mocks.authRequest.mockRejectedValue({ response: { status: 401 } });
+    const { requestAuthReissue } = await import('./reissueToken');
+    await expect(requestAuthReissue()).rejects.toBeDefined();
+    expect(mocks.clearLoginSession).toHaveBeenCalledOnce();
   });
-
-  it('앱이 토큰을 심으면(auth-ready) true', async () => {
-    bridge.isAppWebView.mockReturnValue(true);
-    const { fireAuthReady } = stubWindow();
-    const requestAuthReissue = await loadModule();
-
+  it('통신 실패 시 세션을 유지한다', async () => {
+    mocks.authRequest.mockRejectedValue({ response: { status: 503 } });
+    const { requestAuthReissue } = await import('./reissueToken');
+    await expect(requestAuthReissue()).rejects.toBeDefined();
+    expect(mocks.clearLoginSession).not.toHaveBeenCalled();
+  });
+  it('앱에서는 재발급 API를 직접 호출하지 않고 브리지 응답을 기다린다', async () => {
+    mocks.isAppWebView.mockReturnValue(true);
+    const { requestAuthReissue } = await import('./reissueToken');
+    const pending = requestAuthReissue('old');
+    expect(mocks.sendToApp).toHaveBeenCalledWith({ type: 'AUTH_TOKEN_REQUEST', payload: { accessToken: 'old' } });
+    mocks.readLoginSession.mockReturnValue({ ...old, accessToken: 'new' });
+    const event = new Event('tamnalog:auth-refresh-result');
+    Object.defineProperty(event, 'detail', { value: { ok: true, status: 200 } });
+    window.dispatchEvent(event);
+    expect(await pending).toBe(true);
+    expect(mocks.authRequest).not.toHaveBeenCalled();
+  });
+  it('앱 응답의 일시 오류도 로그인 상태를 유지한다', async () => {
+    mocks.isAppWebView.mockReturnValue(true);
+    const { requestAuthReissue } = await import('./reissueToken');
     const pending = requestAuthReissue();
-    expect(bridge.sendToApp).toHaveBeenCalledWith({ type: 'AUTH_TOKEN_REQUEST', payload: {} });
-
-    fireAuthReady();
-
-    await expect(pending).resolves.toBe(true);
+    const expectation = expect(pending).rejects.toMatchObject({ response: { status: 503 } });
+    const event = new Event('tamnalog:auth-refresh-result');
+    Object.defineProperty(event, 'detail', { value: { ok: false, status: 503 } });
+    window.dispatchEvent(event);
+    await expectation;
+    expect(mocks.clearLoginSession).not.toHaveBeenCalled();
   });
-
-  it('동시에 여러 번 불러도 앱에는 한 번만 부탁한다', async () => {
-    bridge.isAppWebView.mockReturnValue(true);
-    const { fireAuthReady } = stubWindow();
-    const requestAuthReissue = await loadModule();
-
-    // 마이페이지는 진입 시 요약·도감·미션을 함께 부른다 — 401이 한꺼번에 터지는 모양
-    const all = [requestAuthReissue(), requestAuthReissue(), requestAuthReissue()];
-    fireAuthReady();
-
-    await expect(Promise.all(all)).resolves.toEqual([true, true, true]);
-    expect(bridge.sendToApp).toHaveBeenCalledTimes(1);
-  });
-
-  it('응답이 없으면 타임아웃으로 false — 401이 호출부에 그대로 전달된다', async () => {
+  it('앱이 응답하지 않으면 무한 대기하지 않는다', async () => {
     vi.useFakeTimers();
-    bridge.isAppWebView.mockReturnValue(true);
-    // 여기서는 앱이 응답하지 않는 상황을 보므로 auth-ready를 쏘지 않는다
-    stubWindow();
-    const requestAuthReissue = await loadModule();
-
-    const pending = requestAuthReissue();
-    await vi.advanceTimersByTimeAsync(5000);
-
-    await expect(pending).resolves.toBe(false);
+    mocks.isAppWebView.mockReturnValue(true);
+    const { requestAuthReissue } = await import('./reissueToken');
+    const promise = requestAuthReissue();
+    const expectation = expect(promise).rejects.toMatchObject({ response: { data: { code: 'AUTH_REFRESH_TIMEOUT' } } });
+    await vi.advanceTimersByTimeAsync(20000);
+    await expectation;
   });
+});
 
-  it('한 번 끝난 뒤의 요청은 앱에 다시 부탁한다 — 새 토큰으로도 401이면 같은 답을 재사용해선 안 된다', async () => {
-    bridge.isAppWebView.mockReturnValue(true);
-    const { fireAuthReady } = stubWindow();
-    const requestAuthReissue = await loadModule();
-
-    const first = requestAuthReissue();
-    fireAuthReady();
-    await expect(first).resolves.toBe(true);
-
-    const second = requestAuthReissue();
-    fireAuthReady();
-    await expect(second).resolves.toBe(true);
-
-    expect(bridge.sendToApp).toHaveBeenCalledTimes(2);
-  });
+it('로그아웃 시작 시 진행 중인 회전을 기다리고 세션 복원과 추가 회전을 막는다', async () => {
+  let finish!: (v: typeof issued) => void;
+  mocks.authRequest.mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  const { requestAuthReissue, prepareLogout } = await import('./reissueToken');
+  const refresh = requestAuthReissue();
+  const logout = prepareLogout();
+  expect(await requestAuthReissue()).toBe(false);
+  finish(issued);
+  await logout;
+  expect(await refresh).toBe(false);
+  expect(mocks.saveLoginSession).not.toHaveBeenCalled();
+  expect(mocks.authRequest).toHaveBeenCalledOnce();
 });

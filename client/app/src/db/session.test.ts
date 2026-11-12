@@ -124,3 +124,20 @@ describe('session 저장소', () => {
     expect(sql).toContain('DELETE FROM Session');
   });
 });
+
+describe('로그인 메타데이터 저장', () => {
+  const loginUser = { id: 4, nickname: '관리자', role: 'ADMIN' as const, onboardingCompleted: true };
+  it('권한과 만료 시각을 복원하고 이전 사용자의 온보딩 결과는 섞지 않는다', async () => {
+    const { readSession } = await import('./session');
+    sqlMocks.getFirstSqlAsync.mockResolvedValue({accessToken:'jwt',tokenType:'Bearer',userJson:JSON.stringify({loginUser,expiresAt:12345,user:null}),apiOrigin:'http://localhost:8080'});
+    expect(await readSession()).toEqual({accessToken:'jwt',tokenType:'Bearer',loginUser,expiresAt:12345,user:null,apiOrigin:'http://localhost:8080'});
+  });
+  it('새 로그인은 토큰과 사용자 메타데이터를 함께 교체한다', async () => {
+    vi.clearAllMocks();
+    const { saveLoginSession } = await import('./session');
+    await saveLoginSession({accessToken:'jwt',tokenType:'Bearer',expiresAt:12345,loginUser},'http://localhost:8080');
+    const [sql, params] = sqlMocks.runSqlAsync.mock.calls[0];
+    expect(sql).toContain('userJson=excluded.userJson');
+    expect(JSON.parse(params[2])).toEqual({loginUser,expiresAt:12345,user:null});
+  });
+});

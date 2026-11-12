@@ -8,22 +8,29 @@
  * 순환이 생긴다. 그래서 캐시만 따로 떼어 두 쪽이 이 모듈에만 의존하게 했다.
  */
 import type { GeneratedApi } from '@packages/shared';
+import { create } from 'zustand';
 import type { StoredSession } from '@/db/models/Session';
 
-let cached: StoredSession | null = null;
+export const useSessionStore = create<{ session: StoredSession | null }>(() => ({ session: null }));
 
 export function getCachedSession(): StoredSession | null {
-  return cached;
+  return useSessionStore.getState().session;
 }
 
+let revision = 0;
+export function getSessionRevision(): number {
+  return revision;
+}
 export function setCachedSession(session: StoredSession | null): void {
-  cached = session;
+  revision += 1;
+  useSessionStore.setState({ session });
 }
 
 /** 온보딩 응답을 받은 직후 호출한다. 토큰은 그대로 두고 user만 갱신한다 */
 export function updateCachedUser(user: GeneratedApi.UserResponse): void {
+  const cached = getCachedSession();
   if (!cached) return;
-  cached = { ...cached, user };
+  useSessionStore.setState({ session: { ...cached, user, loginUser: cached.loginUser ? { ...cached.loginUser, onboardingCompleted: true } : undefined } });
 }
 
 /** tokenType은 서버 응답값을 그대로 쓴다 — 값이 바뀌어도 따라간다 */

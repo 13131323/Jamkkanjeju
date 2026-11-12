@@ -3,6 +3,8 @@ import { notifyApiError } from '@packages/shared';
 import axios, { type AxiosRequestConfig } from 'axios';
 import { env } from '@shared/config/env';
 import { ApiServerError, ApiTimeoutError } from '@shared/lib/errors';
+import { clearLoginSession, readLoginSession, isLogoutInProgress } from '../auth/session';
+import { requestAuthReissue } from '../auth/reissueToken';
 
 const axiosInstance = axios.create({
   // 프록시 경로가 설정돼 있으면 절대주소 대신 같은 origin 경로로 부른다.
@@ -11,13 +13,39 @@ const axiosInstance = axios.create({
   baseURL: env.NEXT_PUBLIC_API_PROXY_PATH ?? env.NEXT_PUBLIC_API_BASE_URL,
 });
 
-// 현재는 백엔드 개발용 자동 로그인을 사용하므로 일반·심사위원 모드 모두 인증 헤더를 붙이지 않는다.
+axiosInstance.interceptors.request.use((config) => {
+  if (isLogoutInProgress()) throw new axios.CanceledError('로그아웃 중입니다.');
+  const session = readLoginSession();
+  (config as typeof config & { authUserId?: number }).authUserId = session?.loginUser.id;
+  if (session && config.url !== '/api/v2/auth/login') config.headers.set('Authorization', `${session.tokenType} ${session.accessToken}`);
+  return config;
+});
 axiosInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    if (isLogoutInProgress()) throw new axios.CanceledError('로그아웃 중입니다.');
+    return response;
+  },
+  async (error) => {
+    const config = error.config as (AxiosRequestConfig & { authRetried?: boolean; authUserId?: number }) | undefined;
+    const current = readLoginSession();
+    if (typeof window !== 'undefined' && error.response?.status === 401 && config && config.url !== '/api/v2/auth/login' && current?.loginUser.id === config.authUserId) {
+      if (error.response?.data?.code === 'EXPIRED_TOKEN' && !config.authRetried && current) {
+        config.authRetried = true;
+        try {
+          const sent = String((config.headers as Record<string, unknown>)?.Authorization ?? '');
+          if ((await requestAuthReissue(sent.replace(/^Bearer /, ''))) && readLoginSession()?.loginUser.id === config.authUserId) return axiosInstance.request(config);
+        } catch (refreshError) {
+          notifyApiError(refreshError);
+          return Promise.reject(refreshError);
+        }
+      } else {
+        if (!current || config.headers?.Authorization === `${current.tokenType} ${current.accessToken}`) clearLoginSession();
+      }
+    }
     if (typeof window !== 'undefined') notifyApiError(error);
     if (axios.isAxiosError(error)) {
-      const { method, url, params, data } = error.config ?? {};
+      const { method, url, params } = error.config ?? {};
+      const data = error.config?.url?.includes('/auth/') ? '[인증 정보 제외]' : error.config?.data;
       const isTimeout = error.code === 'ECONNABORTED';
       const status = error.response?.status;
 

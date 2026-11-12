@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, View } from 'react-native';
+import { AppState, View } from 'react-native';
 import WebView from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolveWebViewUrl } from '@/config/webUrl';
@@ -33,7 +33,7 @@ export function HomeWebView() {
   const canGoBackRef = useRef(false);
   // web이 지금 띄우고 있는 주소. 첫 onNavigationStateChange 전에는 모른다(홈 리셋 전략이 읽는다)
   const currentUrlRef = useRef<string | null>(null);
-  const { onMessage, isJudgeModalOpenRef, notifyHardwareBack, shareContent, closeShareSheet } = useHomeBridge(webViewRef);
+  const { onMessage, shareContent, closeShareSheet } = useHomeBridge(webViewRef);
   const insets = useSafeAreaInsets();
   // 키보드가 덮는 높이. 이 화면은 web이 그리므로 WebView를 줄여서 알린다(아래 렌더 주석)
   const keyboardInset = useKeyboardInset();
@@ -78,24 +78,6 @@ export function HomeWebView() {
     canGoBackRef.current = false;
     recovery.recreate();
   }, [homeResetToken, webEntryUrl, recovery]);
-
-  // 안드로이드 하드웨어 뒤로가기: 심사위원 코드 모달이 열려 있으면(web이 JUDGE_CODE_MODAL_STATE로
-  // 알려 준 값) 그 뒤로가기는 웹뷰 히스토리도, 앱 종료도 아니라 "모달을 닫아 달라"는 신호다 —
-  // goBack()도 부르지 않고 여기서 소비한 뒤 HARDWARE_BACK_PRESSED로 web에 되돌려 준다.
-  // 모달이 없으면 기존과 같다: 웹뷰 안에 갈 곳이 있으면 웹뷰 히스토리를 따라가고,
-  // 없으면(웹뷰 최상위 화면) 기본 동작(앱 종료)에 맡긴다.
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (isJudgeModalOpenRef.current) {
-        notifyHardwareBack();
-        return true;
-      }
-      if (!canGoBackRef.current) return false;
-      webViewRef.current?.goBack();
-      return true;
-    });
-    return () => subscription.remove();
-  }, [isJudgeModalOpenRef, notifyHardwareBack]);
 
   // bottom은 루트 레이아웃이 네이티브에서 이미 먹였다(WEBVIEW_BOTTOM_INSET 주석 참고).
   // 상단만 web이 직접 처리한다. insets.top을 그대로 쓰지 않는 이유는 webViewTopInset 주석 참고 —

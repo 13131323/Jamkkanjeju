@@ -78,7 +78,7 @@ export default function CouponScreen() {
       listenFromWeb((message) => {
         if (message.type === 'PING') initTraceId(message.traceId);
         // web이 401을 만났다 — 토큰은 앱만 발급할 수 있어 여기서 다시 심어 준다(reissueWebViewAuth 주석)
-        if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef);
+        if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef, message.payload.accessToken);
       })(event),
     [],
   );

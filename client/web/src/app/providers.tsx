@@ -9,7 +9,7 @@ import { AppCompatibilityGate, useSafeAreaFromApp } from '@features/app-bridge';
 // 카카오맵 SDK 로더 → @shared/config/env까지 끌고 오는데, env는 모듈이 평가되는 순간
 // 검증에 실패하면 던진다. 루트에서 배럴을 물면 지도와 무관한 화면(약관 등)까지
 // 그 검증에 묶여 통째로 죽는다.
-import { useJudgeModeHydration } from '@entities/location/model/judgeMode';
+import { AuthGate } from '@shared/ui/AuthGate';
 import { sendToApp } from '@shared/lib/bridge/utils';
 import { usePressFeedback } from '@shared/lib/interaction/usePressFeedback';
 import { rememberInitialPathname } from '@shared/lib/navigationHistory';
@@ -28,10 +28,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   // 클릭 피드백(눌림 효과) — CSS :active가 안 걸리는 WebView 대응, globals.css의 .is-pressed 규칙과 짝
   usePressFeedback();
 
-  // 심사위원용 모드의 효과(제주 고정)는 지도·주소 등 모든 화면에 걸리므로 되살리기는 루트가 한다.
-  // 앱에 알리는 일은 홈만 한다 — 모든 라우트에서 보내면 WebView 6개가 다 받는다(useJudgeModeAppSync)
-  useJudgeModeHydration();
-
   useEffect(() => {
     sendToApp({ type: 'PING', payload: { timestamp: Date.now() } });
   }, []);
@@ -43,9 +39,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         {/* 앱이 낡거나 API 주소가 어긋나면 모든 화면이 401이라 데이터를 채울 수 없다.
             루트에서 한 번 갈라 안내를 띄운다 — 화면마다 "불러오지 못했어요"를 내면
             사용자는 서버 장애로 읽고 재시도만 반복한다(AppCompatibilityGate) */}
-        <AppCompatibilityGate>
-          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        </AppCompatibilityGate>
+        <AuthGate>
+          <AppCompatibilityGate>
+            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+          </AppCompatibilityGate>
+        </AuthGate>
       </Sentry.ErrorBoundary>
     </>
   );

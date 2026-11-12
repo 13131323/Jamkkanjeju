@@ -39,7 +39,16 @@ export function resolveAppCompatibility(isWebView: boolean, appInfo: WebViewAppI
   // 어느 한쪽을 읽지 못했으면 대조가 성립하지 않는다. 멀쩡한 조합을 오진하는 쪽이 더 나쁘다.
   if (!appInfo.apiOrigin || !webApiOrigin) return 'ok';
 
-  return appInfo.apiOrigin === webApiOrigin ? 'ok' : 'api-origin-mismatch';
+  return comparableApiOrigin(appInfo.apiOrigin) === comparableApiOrigin(webApiOrigin) ? 'ok' : 'api-origin-mismatch';
+}
+
+/** 에뮬레이터·Docker·PC에서 같은 로컬 백엔드를 가리키는 호스트 이름을 통일한다. */
+function comparableApiOrigin(origin: string): string {
+  try {
+    const url = new URL(origin);
+    if (['localhost', '127.0.0.1', '10.0.2.2', 'host.docker.internal'].includes(url.hostname)) url.hostname = 'localhost';
+    return url.origin;
+  } catch { return origin; }
 }
 
 /**

@@ -1,4 +1,6 @@
 export * from './api';
+export * from './auth';
+export * from './loginValidation';
 export * from './types';
 export * from './bridge';
 export * from './domains/user';

@@ -37,3 +37,12 @@ describe('resolveAppCompatibility', () => {
     expect(resolveAppCompatibility(true, null, '')).toBe('app-outdated');
   });
 });
+
+it('Android 에뮬레이터와 Docker의 동일 포트 로컬 API 주소는 같은 서버로 본다', () => {
+  expect(resolveAppCompatibility(true, {version: '1', apiOrigin: 'http://10.0.2.2:8080'}, 'http://host.docker.internal:8080')).toBe('ok');
+});
+it('로컬 주소라도 다른 포트나 공개 API는 같은 서버로 보지 않는다', () => {
+  const local = {version:'1', apiOrigin:'http://10.0.2.2:8080'};
+  expect(resolveAppCompatibility(true, local, 'http://localhost:8081')).toBe('api-origin-mismatch');
+  expect(resolveAppCompatibility(true, local, 'https://api.example.com')).toBe('api-origin-mismatch');
+});

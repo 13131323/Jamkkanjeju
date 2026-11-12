@@ -2,7 +2,6 @@ import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import { hasUsableAuthorization, hydrateSessionCache } from '@/services/auth';
 import { sendStepRecord } from '@/services/stepCountSender';
-import { isJudgeModeEnabled } from '@/store/judgeMode';
 import { syncUnsentRecords } from './stepSyncService';
 
 const STEP_SYNC_TASK = 'STEP_SYNC_TASK';
@@ -21,7 +20,7 @@ TaskManager.defineTask(STEP_SYNC_TASK, async () => {
     // 그래도 깨어난 회차마다 401 왕복과 경고 로그를 쌓을 이유가 없다.
     // Failed가 아니라 Success인 이유는 GPS 태스크와 같다 — 태스크의 실패가 아니라
     // 이번 회차에 보낼 것이 없는 것이고, Failed로 돌려주면 OS가 점점 덜 깨운다.
-    if (!hasUsableAuthorization(isJudgeModeEnabled())) return BackgroundTask.BackgroundTaskResult.Success;
+    if (!hasUsableAuthorization()) return BackgroundTask.BackgroundTaskResult.Success;
 
     await syncUnsentRecords(sendStepRecord);
     return BackgroundTask.BackgroundTaskResult.Success;

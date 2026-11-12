@@ -35,7 +35,10 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "category": ["BROWSABLE", "DEFAULT"],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
           "data": [
             {
               "scheme": "https",
@@ -72,7 +75,9 @@
           "photosPermission": "찾은 보물과 찍은 사진을 앨범에서 보여드리기 위해 접근 권한이 필요해요.",
           "savePhotosPermission": "캐릭터와 함께 찍은 사진을 갤러리에 저장하려면 권한이 필요해요.",
           "isAccessMediaLocationEnabled": false,
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       [
@@ -96,7 +101,8 @@
             "imageWidth": 100
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

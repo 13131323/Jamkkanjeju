@@ -1,17 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { MISSION_ROUTE_BY_TYPE, type GeneratedApi, type HomeMissionCard, type MissionRoute } from '@packages/shared';
-import { useAddressDisplay, useDisplayLocation, useJudgeModeAppSync, useJudgeModeStore, useLocationBridge, type AddressDisplay } from '@entities/location';
+import { useAddressDisplay, useDisplayLocation, useLocationBridge, type AddressDisplay } from '@entities/location';
 import { useStepCount } from '@features/app-bridge';
-import { JudgeCodeModal, JudgeModeShortcut } from '@features/judge-mode';
 // [보류] 위치 직접 입력(AddressModal)과 함께 잠시 꺼 둔다 — 아래 AddressModal 주석 참고
 // import { useSearchPlaces, type SearchResultPlace } from '@features/map-search';
 import { sendToApp } from '@shared/lib/bridge/utils';
 import { Skeleton, SkeletonGroup } from '@shared/ui/skeleton';
-import { Toast } from '@shared/ui/Toast';
 import { useMouseDragScroll } from '@shared/lib/interaction/useMouseDragScroll';
 import { getJejuDaylightServerSnapshot, getJejuDaylightSnapshot, subscribeJejuDaylight } from '../model/jejuDaylight';
 import { useHomeData } from '../model/useHomeData';
@@ -81,17 +79,6 @@ export function HomePage() {
   // [보류] 위치 직접 입력 모달 — 아래 AddressModal 주석 참고
   // const [isAddressOpen, setIsAddressOpen] = useState(false);
 
-  // 같은 문구를 연달아 띄울 수 있어야 해서 id를 함께 들고, 그 id를 key로 Toast를 다시 마운트한다
-  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
-  const isJudgeMode = useJudgeModeStore((s) => s.enabled);
-  const enableJudgeMode = useJudgeModeStore((s) => s.enable);
-  const disableJudgeMode = useJudgeModeStore((s) => s.disable);
-  const [isJudgeCodeOpen, setIsJudgeCodeOpen] = useState(false);
-  // 심사위원 모드 전환 연출이 언제 끝나야 하는지 판단할 근거 — 같은 쿼리라 캐시를 공유한다
-  const { isPending: isHomePending } = useHomeData();
-  // Toast의 타이머가 HomePage 리렌더마다 처음부터 다시 돌지 않도록 참조를 고정한다
-  const handleToastDone = useCallback(() => setToast(null), []);
-
   // 배경을 일출~일몰이면 낮, 아니면 밤(노을)로 바꾼다. 화면을 켜둔 채 경계 시각을 넘는 경우도
   // 스토어가 1분마다 확인해 따라온다(jejuDaylight.ts).
   //
@@ -101,45 +88,12 @@ export function HomePage() {
   // 각각 한 번씩 고정해 hydration 불일치를 막는다.
   const isDaytime = useSyncExternalStore(subscribeJejuDaylight, getJejuDaylightSnapshot, getJejuDaylightServerSnapshot);
 
-  // 모드변경 코드칸에 "night"/"day"를 입력하면 임시로 배경을 바꿔 보는 개발용 우회로 —
-  // 컴포넌트 state라 다른 페이지로 이동하면(언마운트) 자동으로 초기화된다.
-  const [backgroundPreview, setBackgroundPreview] = useState<'day' | 'night' | null>(null);
-  const effectiveIsDaytime = backgroundPreview === null ? isDaytime : backgroundPreview === 'day';
-  const backgroundImage = effectiveIsDaytime ? homeBackImage : homeBackImageNight;
-  const isNight = !effectiveIsDaytime;
+  const backgroundImage = isDaytime ? homeBackImage : homeBackImageNight;
+  const isNight = !isDaytime;
 
   // Home 진입 시 앱에 위치 권한을 요청하고, 이후 들어오는 권한/좌표 갱신을 스토어에 반영한다.
   // WebView 밖(일반 브라우저)에서는 sendToApp/listenFromApp 모두 no-op이라 그대로 마운트해도 안전하다.
   useLocationBridge();
-
-  // 모드를 앱에 알리는 것은 홈만 한다(useJudgeModeAppSync 주석 — 모든 라우트에서 보내면 WebView 6개가 다 받는다)
-  useJudgeModeAppSync();
-
-  // 코드가 맞았을 때만 심사위원용 모드가 켜진다. 켜져 있는 동안 현재 위치는 제주시청으로
-  // 고정되므로 제주 밖에서도 추천 미션·지도 마커가 뜨고, API는 심사위원 토큰으로 나간다.
-  //
-  // 예전에는 하단 마스코트를 3초 꾹 누르면 토글됐다. 코드 없이 켜지는 제스처라 실수로 밟을 수
-  // 있었고 심사위원 토큰을 받을 통로도 없어서, 열쇠 아이콘 + 코드 모달로 옮겼다.
-  // 켜져 있으면 누르는 것만으로 기본 모드로 돌아간다 — 끄는 데 코드를 요구할 이유가 없다.
-  // 다시 켤 때는 꺼진 상태이므로 아래 모달을 거쳐 코드를 입력하게 된다.
-  function handleJudgeModePress() {
-    if (isJudgeMode) {
-      disableJudgeMode();
-      setToast({ id: Date.now(), message: JUDGE_MODE_OFF_MESSAGE });
-      return;
-    }
-    setIsJudgeCodeOpen(true);
-  }
-
-  /**
-   * 코드가 맞았다. **모달은 여기서 닫지 않는다** — 모드를 켜는 순간 홈이 새 계정으로 다시 조회하는데,
-   * 모달이 바로 사라지면 그 과정이 그대로 노출된다(사용자 지적: 빈 화면이 채워지는 느낌).
-   * 모달이 "입장 중"으로 남아 있다가 조회가 끝나면 스스로 onClose를 부른다(judgeTransition.ts).
-   */
-  function handleJudgeCodeSuccess() {
-    enableJudgeMode();
-    setToast({ id: Date.now(), message: JUDGE_MODE_ON_MESSAGE });
-  }
 
   return (
     <>
@@ -219,9 +173,7 @@ export function HomePage() {
             {/* 모드변경은 방명록·할 일과 같은 줄이지만 화면 **가장 왼쪽**에 선다(디자인 home_3 > Frame 628: boardX 18, boardY 157).
                 top 106은 디자인 그대로가 아니라, 미션 카드(바닥 82) ↔ 방명록·AI엽서 원(top 102) 간격을 20px로 맞추면서
                 형제(원 47)와의 4px 간격(아이콘 슬롯 40 vs 원 47, 중심을 맞추기 위한 오프셋)을 그대로 유지한 값이다. */}
-            <div className="pointer-events-auto absolute" style={{ left: 18, top: `calc(var(--safe-area-top) + 106px)` }}>
-              <JudgeModeShortcut onClick={handleJudgeModePress} isNight={isNight} />
-            </div>
+            <div className="pointer-events-auto absolute" style={{ left: 18, top: `calc(var(--safe-area-top) + 106px)` }}></div>
 
             {/* 미션 카드 바닥(82)에서 20px 떨어지도록 top을 112→102로 조정했다(사용자 요청).
                 할 일 숏컷은 원격 커밋(qa: 홈 할 일 숏컷 AI엽서 교체)에서 AI엽서 바로가기로 교체됨 —
@@ -248,18 +200,13 @@ export function HomePage() {
 
       {/* isReady: 모드를 켠 뒤 홈 재조회가 끝났는지. 모달이 직접 useHomeData를 부르면
           features가 _pages를 import하게 되어 FSD가 깨지므로 여기서 내려준다 */}
-      {isJudgeCodeOpen && <JudgeCodeModal onClose={() => setIsJudgeCodeOpen(false)} onSuccess={handleJudgeCodeSuccess} isReady={!isHomePending} onBackgroundPreview={setBackgroundPreview} />}
 
       {/* [보류] 상단 주소 텍스트 탭 시 하단에서 올라오는 home_ModalBg 모달 — home_1/2/3 세 초안에 동일하게 등장함(각자 파일에 동일 내용으로 중복 구현). 최종 초안 확정 후 공용 컴포넌트로 추출 고려 대상 */}
       {/* {isAddressOpen && <AddressModal onClose={() => setIsAddressOpen(false)} />} */}
 
-      {toast && <Toast key={toast.id} message={toast.message} onDone={handleToastDone} />}
     </>
   );
 }
-
-const JUDGE_MODE_ON_MESSAGE = '심사위원용 모드입니다';
-const JUDGE_MODE_OFF_MESSAGE = '기본 모드로 돌아왔습니다';
 
 function TopBar({ isNight }: { isNight: boolean }) {
   const router = useRouter();
@@ -465,7 +412,9 @@ function TravelNoteShortcut({ isNight }: { isNight: boolean }) {
     <button type="button" onClick={() => router.push('/travel-note')} className="flex flex-col items-center" style={{ width: 49 }}>
       <span className="bg-cool-neutral-white/20 border-cool-neutral-white/40 relative flex h-11.75 w-11.75 items-center justify-center rounded-full border shadow-[0_4px_20px_rgba(0,0,0,0.1)] backdrop-blur-md">
         <Image src={homeTravelNoteIcon} alt="" aria-hidden="true" className="h-7.5 w-7.5 object-contain" />
-        <span className="text-cool-neutral-white absolute top-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff3030] px-1 text-[10px] font-medium">{guestbookCount >= 100 ? '99+' : guestbookCount}</span>
+        <span className="text-cool-neutral-white absolute top-0 right-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#ff3030] px-1 text-[10px] font-medium">
+          {guestbookCount >= 100 ? '99+' : guestbookCount}
+        </span>
       </span>
       <span className={`text-label-sm mt-1.25 font-medium ${isNight ? 'text-cool-neutral-white' : 'text-cool-neutral-950'}`}>방명록</span>
     </button>

@@ -19,7 +19,7 @@ import { TreasureProgressCard } from '@/components/Treasure/TreasureProgressCard
 import { TreasureRewardModal } from '@/components/Treasure/TreasureRewardModal/TreasureRewardModal';
 import { MISSION_TYPE_INPUT, resolveMissionId } from '@/constants/missionHome';
 import { useGetMissionHomeApiV1MissionsMissionTypeMissionIdGet } from '@/services/api/mission/mission';
-import { Treasure, TREASURE_DEV_APPROACH_BEARING_DEG, TREASURE_DEV_APPROACH_DISTANCES, TREASURE_PLACE_FALLBACK, TREASURE_TYPE, toTreasures } from '@/constants/treasureHunt';
+import { Treasure, TREASURE_PLACE_FALLBACK, TREASURE_TYPE, toTreasures } from '@/constants/treasureHunt';
 import type { TreasureRewardModalVariant } from '@/components/Treasure/TreasureRewardModal/rewardModalText';
 import {
   mergeGrantedRewards,
@@ -39,13 +39,12 @@ import {
   useStartTreasureMissionApiV1TreasureMissionsTreasureMissionIdProgressPost,
   useStopTreasureMissionApiV1TreasureMissionsTreasureMissionProgressIdProgressStopPatch,
 } from '@/services/api/treasure-mission/treasure-mission';
-import { isJudgeModeEnabled, judgeModePosition, useJudgeModeStore } from '@/store/judgeMode';
+import { applyAdminPosition } from '@/store/adminLocation';
 import { useMissionCompleteStore } from '@/store/missionComplete';
 import { useTreasureProgressStore } from '@/store/treasureProgress';
 import { MIN_BOTTOM_INSET } from '@/styles/safeArea';
 import { navigate } from '@/utils/navigate';
 import { resolveStopCoordinates } from '@/utils/missionStopCoords';
-import { resolveApproachTarget } from '@/utils/treasureApproachSimulation';
 import { resolveNearestTreasure, resolveSheetVisibility, shouldLeaveCamera } from '@/utils/treasureProximity';
 
 /**
@@ -93,19 +92,14 @@ const HEADER_SCRIM_BELOW_STATUS_BAR = 175 - 44;
  * 그마저 실패하면 지어낸 좌표를 보내는 대신 null을 돌려 호출부가 판단하게 한다.
  */
 async function readCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
-  // 심사위원용 모드면 측위하지 않고 제주시청을 보낸다. 서버는 이 좌표로 완료 후 '근처 장소'를
-  // 고르므로, 제주 밖 실제 좌표를 보내면 추천이 비거나 거리가 수백 km로 찍힌다.
-  // 이 분기 하나가 고정 좌표를 쓰는 **유일한** 경로다.
-  if (isJudgeModeEnabled()) return judgeModePosition();
-
   try {
     // 캐시가 있으면 그대로 쓴다 — GPS 측위는 실외에서도 몇 초가 걸린다
     const last = await Location.getLastKnownPositionAsync();
-    if (last) return { latitude: last.coords.latitude, longitude: last.coords.longitude };
+    if (last) return applyAdminPosition({ latitude: last.coords.latitude, longitude: last.coords.longitude });
 
     // 캐시가 없을 때만 실제로 측위한다. 기준점은 수십 m 오차로 뒤집히지 않으므로 Balanced면 충분하다
     const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    return { latitude: current.coords.latitude, longitude: current.coords.longitude };
+    return applyAdminPosition({ latitude: current.coords.latitude, longitude: current.coords.longitude });
   } catch {
     // 권한 거부·측위 실패. 호출부가 좌표 없는 상태를 처리한다
     return null;
@@ -238,20 +232,7 @@ export default function TreasureHuntScreen() {
   /** 서버가 준 보물 목록 + 화면 에셋 */
   const treasures = useMemo(() => toTreasures(toTreasureSpots(started?.treasureItems ?? [])), [started]);
 
-  /**
-   * 접근 시뮬레이션이 다가갈 보물.
-   *
-   * 좌표가 진행도마다 새로 뽑히므로 상수로 못 박을 수 없다 — 응답을 받은 뒤에 "끝까지 가장 가까운
-   * 보물로 남는" 후보를 골라 위치 훅에 넘긴다(utils/treasureApproachSimulation.ts).
-   * 심사위원용 모드가 꺼져 있으면 시뮬레이션 자체가 돌지 않으므로 계산할 이유가 없어 null이다.
-   */
-  const isApproachSimulated = useJudgeModeStore((state) => state.enabled);
-  const approachTarget = useMemo(() => {
-    if (!isApproachSimulated) return null;
-    return resolveApproachTarget(treasures, TREASURE_DEV_APPROACH_DISTANCES, TREASURE_DEV_APPROACH_BEARING_DEG)?.coords ?? null;
-  }, [isApproachSimulated, treasures]);
-
-  const { coords, heading, permissionDenied } = useTreasureLocation(approachTarget);
+  const { coords, heading, permissionDenied } = useTreasureLocation();
 
   // 헤더·진행도 분모는 서버 값이다. 시작 응답 전에는 목표 개수(3)로 받쳐 "0/0"이 보이지 않게 한다
   const totalCount = treasureCount > 0 ? treasureCount : TREASURE_TARGET_COUNT;

@@ -1,6 +1,5 @@
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { AppState } from 'react-native';
@@ -13,12 +12,13 @@ import { TOAST_WEBVIEW_CTA_CLEARANCE } from '@/components/Toast/styles';
 import type { ShareContent } from '@packages/shared';
 import type { LocationPermissionStatus } from '@/bridge';
 import { useStepCounter } from '@/hooks/useStepCounter';
-import { deleteAccountLocally } from '@/services/accountDeletion';
+import { deleteAccountLocally, resetUserStores } from '@/services/accountDeletion';
+import { logoutSession } from '@/services/auth';
+import { useQueryClient } from '@tanstack/react-query';
 import { gpsReportDelay, gpsReportDelayAfterAttempt } from '@/services/gpsReport';
 import { reportGps } from '@/services/gpsSender';
 import { saveImageToGallery, type SaveImageResult } from '@/services/saveImageToGallery';
-import { applyJudgeModePosition, isJudgeModeEnabled, useJudgeModeStore } from '@/store/judgeMode';
-import { persistJudgeMode } from '@/services/judgeModePersistence';
+import { applyAdminPosition } from '@/store/adminLocation';
 import { WEBVIEW_BOTTOM_INSET, webViewTopInset } from '@/styles/safeArea';
 import { resolveMissionNavigateTarget } from '@/utils/missionNavigateTarget';
 import { navigate } from '@/utils/navigate';
@@ -49,30 +49,11 @@ type LocationUpdatePayload = {
 };
 
 // web의 NAVIGATE.payload.route(케밥) ↔ /mission/intro의 mission 쿼리 파라미터 값 매핑
-/**
- * Home WebView의 브릿지 로직(PING 응대, 위치 권한·구독, 걸음 수 전달, NAVIGATE)을 한데 묶는 훅.
- * HomeWebView.tsx는 이 훅이 반환하는 onMessage를 WebView에 꽂고, `isJudgeModalOpenRef`·
- * `notifyHardwareBack`을 BackHandler에서 읽고 부른다(JUDGE_CODE_MODAL_STATE 분기 참고).
- * `shareContent`·`closeShareSheet`는 WebView 위에 올라가는 공유 시트가 쓴다(SHARE_SHEET 분기).
- *
- * 전송 함수들을 전부 useCallback으로 감싼 이유는 의존성 안정화만이 아니다.
- * 렌더 스코프에 그대로 두면 Date.now() 호출과 ref 접근이 "렌더 중 실행"으로 취급돼
- * react-hooks/purity·refs 규칙에 걸린다. 실제로는 이벤트/이펙트에서만 호출된다.
- */
 export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
   const { steps, retry: retryStepPermission } = useStepCounter();
   const { show, hide } = useToast();
-  const insets = useSafeAreaInsets();
-  const setJudgeMode = useJudgeModeStore((state) => state.setEnabled);
-  // 심사위원용 모드가 바뀌면 직전 계정으로 받아 둔 응답을 버린다(JUDGE_MODE_UPDATE 분기)
   const queryClient = useQueryClient();
-  /**
-   * 지금 공유 시트에 띄울 내용. `null`이면 시트가 떠 있지 않다(SHARE_SHEET 분기).
-   *
-   * ref가 아니라 state인 이유: 이 값이 바뀌면 HomeWebView가 **다시 그려져야** 시트가 뜬다.
-   * 위쪽 `isJudgeModalOpenRef`가 ref인 것과 반대인데, 그쪽은 화면을 바꾸지 않고 BackHandler
-   * 콜백이 읽기만 하는 값이라 다시 그릴 이유가 없다.
-   */
+  const insets = useSafeAreaInsets();
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
 
   /**
@@ -97,9 +78,7 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
   const latestPermissionStatusRef = useRef<LocationPermissionStatus | null>(null);
   const latestStepsRef = useRef(0);
   const latestSafeAreaRef = useRef({ top: webTopInset, bottom: WEBVIEW_BOTTOM_INSET });
-  // 심사위원 코드 입력 모달이 지금 열려 있는지(JUDGE_CODE_MODAL_STATE). HomeWebView.tsx의
   // BackHandler가 이 값을 보고 하드웨어 뒤로가기를 앱 종료 대신 모달 닫기로 돌릴지 정한다.
-  const isJudgeModalOpenRef = useRef(false);
   const lastSentStepsRef = useRef<number | null>(null);
   const readyRef = useRef(false);
   const watchSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
@@ -147,12 +126,6 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
     [webViewRef],
   );
 
-  // HomeWebView.tsx의 BackHandler가 isJudgeModalOpenRef를 보고 뒤로가기를 대신 소비했을 때 부른다 —
-  // "지금 그 뒤로가기, 모달을 닫는 데 써 달라"고 web에 되돌려 준다(JUDGE_CODE_MODAL_STATE 주석 참고).
-  const notifyHardwareBack = useCallback(() => {
-    sendToWeb(webViewRef, { type: 'HARDWARE_BACK_PRESSED', payload: {} });
-  }, [webViewRef]);
-
   // PING 도착 시 1회: ready 전환 + 그동안 쌓인 권한 결과/위치/걸음 수 flush
   const flushPending = useCallback(() => {
     readyRef.current = true;
@@ -194,29 +167,17 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
     }, [sendSafeArea]),
   );
 
-  /**
-   * 지금 위치를 한 번 읽어 web(postMessage)과 서버에 흘려보낸다.
-   *
-   * 아래 구독은 `distanceInterval: 5`라 5m를 움직여야 콜백이 온다. 책상에 앉아 있으면 그 조건이
-   * 영영 충족되지 않아, 이 밀어주기가 없으면 (1) 앱을 켠 직후 홈 상단 주소가
-   * "위치를 확인할 수 없어요"에 머물고 (2) 심사위원용 모드를 토글해도 옛 기준이 남는다.
-   *
-   * `immediate`는 서버 전송에만 걸린다(gpsSender.ts) — 앱 시작·모드 토글처럼 **좌표의 의미가
-   * 방금 바뀐** 호출은 간격을 건너뛰고, 아래 정기 타이머가 부르는 회차는 간격을 지킨다.
-   *
-   * 마지막으로 알려진 위치를 먼저 본다(실제 측위는 몇 초 걸린다). 둘 다 실패하면 구독이 이어받는다.
-   */
   const pushCurrentLocation = useCallback(
     async (immediate: boolean) => {
       try {
         const position = (await Location.getLastKnownPositionAsync()) ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
         if (!position) return;
 
-        // web에는 실측 좌표 그대로. 제주 고정은 web이 자기 쪽에서 한다(아래 구독과 같은 이유)
-        sendLocation({ lat: position.coords.latitude, lng: position.coords.longitude, accuracy: position.coords.accuracy ?? 0, timestamp: position.timestamp });
+        const displayed = applyAdminPosition(position.coords);
+        sendLocation({ lat: displayed.latitude, lng: displayed.longitude, accuracy: position.coords.accuracy ?? 0, timestamp: position.timestamp });
 
         // 서버에는 모드를 태운 좌표를 보낸다
-        const reported = applyJudgeModePosition(position.coords);
+        const reported = applyAdminPosition(position.coords);
         reportGps({ lat: reported.latitude, lng: reported.longitude }, { immediate });
       } catch {
         // 측위 실패는 구독이 이어받으므로 화면을 막을 이유가 아니다
@@ -315,11 +276,11 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
     watchSubscriptionRef.current?.remove();
     try {
       watchSubscriptionRef.current = await Location.watchPositionAsync({ accuracy: Location.Accuracy.Balanced, timeInterval: 3000, distanceInterval: 5 }, (location) => {
-        // web에는 **실측 좌표 그대로**. 제주 고정은 web이 자기 쪽에서 한다(entities/location) —
-        // 여기서 미리 바꾸면 web 스토어에 실제 위치가 없어 모드를 끄는 순간 주소가 제주에 머문다.
+        // 지도 표시와 API 전송에 동일한 관리자 변환 좌표를 사용한다.
+        const displayed = applyAdminPosition(location.coords);
         sendLocation({
-          lat: location.coords.latitude,
-          lng: location.coords.longitude,
+          lat: displayed.latitude,
+          lng: displayed.longitude,
           accuracy: location.coords.accuracy ?? 0,
           timestamp: location.timestamp,
         });
@@ -387,34 +348,9 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
             void requestLocationPermission();
             return;
           case 'AUTH_TOKEN_REQUEST':
-            // web이 401을 만났다. 새 토큰을 발급해 페이지에 다시 심어 준다(reissueWebViewAuth 주석).
-            void reissueWebViewAuth(webViewRef);
+            // 인증이 만료되면 앱과 WebView 세션을 지우고 로그인 화면으로 전환한다.
+            void reissueWebViewAuth(webViewRef, msg.payload.accessToken);
             return;
-          case 'JUDGE_MODE_UPDATE': {
-            // 모드를 **켜고 끄는 주인은 web**이고(홈의 "모드변경" + 코드 모달), **보관은 앱**이 한다.
-            // 앱은 받은 값을 스토어에 올려 협동 미션 시뮬레이션·네이티브 좌표·토큰에 쓰고
-            // (store/judgeMode.ts), 동시에 sqlite에 남겨 다음 실행의 출발값으로 되돌려 준다.
-            //
-            // web은 홈이 열릴 때마다 현재 값을 보내므로 대부분은 같은 값의 재통지다.
-            // 아래 캐시 정리를 그때마다 돌리지 않도록 **실제로 바뀐 회차만** 가려낸다.
-            const hasModeChanged = msg.payload.enabled !== isJudgeModeEnabled();
-            setJudgeMode(msg.payload.enabled);
-            // 다음 실행을 위해 남긴다. **앱이 보관소다**(services/judgeModePersistence.ts) —
-            // 예전처럼 메모리에만 두면 앱을 껐다 켤 때마다 web이 살아나 알려 줄 때까지 기본 모드로
-            // 시작해, 그 구간의 네이티브 호출이 남의 계정으로 나갔다.
-            // 바뀐 회차가 아니어도 쓴다 — 저장이 한 번 실패했을 수 있고, 같은 값을 다시 쓰는 비용은 없다.
-            void persistJudgeMode(msg.payload.enabled);
-            // 앱의 응답 캐시도 직전 모드의 계정으로 받아 둔 것이다. 토큰은 요청 시점에
-            // 계산되므로 되돌릴 것이 없지만(services/authHeader.ts), 캐시를 그대로 두면
-            // 모드를 바꾼 뒤에도 남의 계정 값이 화면에 남는다 — web이 같은 이유로 자기
-            // QueryClient를 비운다(web entities/location/model/judgeMode.ts).
-            if (hasModeChanged) void queryClient.resetQueries();
-            // 토글 즉시 새 기준으로 좌표를 다시 흘려보낸다. 스토어를 먼저 바꾼 뒤라
-            // 서버로 나가는 값이 새 모드를 탄다(zustand set은 동기라 여기서 이미 반영돼 있다).
-            // 간격을 건너뛰므로(immediate) 정기 회차의 위상도 이 시점부터 다시 센다.
-            void pushCurrentLocation(true);
-            return;
-          }
           case 'STEP_PERMISSION_REQUEST':
             // 홈에서 거절당한 신체 활동 권한을 마이페이지에서 한 번 더 묻는다.
             // 허용되면 useStepCounter가 센서를 켜고 미전송 걸음 수를 저장한다.
@@ -461,32 +397,29 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
               params: { characterId: msg.payload.characterId, name: msg.payload.name, imageUrl: msg.payload.imageUrl },
             });
             return;
+          case 'AUTH_LOGOUT_REQUEST':
+            void (async () => {
+              await queryClient.cancelQueries();
+              queryClient.clear();
+              try {
+                await logoutSession();
+              } catch (error) {
+                const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message;
+                show(message ?? '서버 로그아웃을 완료하지 못했습니다. 이 기기의 로그인 정보는 삭제했습니다.');
+              } finally {
+                resetUserStores();
+                queryClient.clear();
+                webViewRef.current?.injectJavaScript('window.__TAMNALOG_AUTH__ = null; localStorage.clear(); sessionStorage.clear(); true;');
+                navigate.dismissTo('/login');
+              }
+            })();
+            return;
           case 'ACCOUNT_DELETE_REQUEST':
-            /**
-             * 회원탈퇴 확정. 서버 API 없이 로컬 세션·상태만 지우고, web이 들고 있던
-             * localStorage(심사위원 모드 등)까지 지운 뒤 첫 화면으로 보낸다.
-             *
-             * **앱을 종료하지 않는다.** `BackHandler.exitApp()`은 Activity만 finish할 뿐 JS
-             * 프로세스를 죽이는 게 아니라서, 안드로이드가 그 프로세스를 회수하기 전에 앱을
-             * 다시 열면 죽지 않은 채로 남아있던 이 WebView(방금 그 탈퇴 모달)가 그대로
-             * 복원됐다(실기기 확인). index.tsx는 세션 변화를 구독하지 않고 마운트 시점에
-             * 한 번만 읽으므로, 여기서 지운 것을 화면에 반영하려면 명시적으로 index까지
-             * 되돌아가야 한다.
-             *
-             * `dismissTo`를 쓰는 이유는 homeReset과 같다(store/homeReset.ts 주석) — `replace`는
-             * 새 인스턴스를 쌓아 지금 이 home(WebView)을 언마운트하지 않고 남겨 두지만,
-             * dismissTo는 스택을 접어 위에 쌓인 화면을 확실히 버린다. index는 지워진 세션을
-             * 보고 스스로 /onboarding/step1로 리다이렉트한다(index.tsx).
-             */
             void (async () => {
               await deleteAccountLocally();
               webViewRef.current?.injectJavaScript('localStorage.clear(); sessionStorage.clear(); true;');
               navigate.dismissTo('/');
             })();
-            return;
-          case 'JUDGE_CODE_MODAL_STATE':
-            // 모달이 열려 있는 동안만 HomeWebView.tsx의 BackHandler가 뒤로가기를 가로챈다.
-            isJudgeModalOpenRef.current = msg.payload.isOpen;
             return;
           case 'SHARE_SHEET':
             // AI 엽서 결과 화면의 "공유". **화면은 web이 그대로 그리고**, 앱은 협동 미션 초대에서
@@ -502,12 +435,12 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
         }
       })(event);
     },
-    [webViewRef, flushPending, requestLocationPermission, retryStepPermission, show, hide, setJudgeMode, pushCurrentLocation, queryClient],
+    [webViewRef, flushPending, requestLocationPermission, retryStepPermission, show, hide, pushCurrentLocation, queryClient],
   );
 
   // 시트를 닫는 신호는 시트에서만 온다(✕·스크림·아래로 끌기·하드웨어 뒤로가기).
   // useCallback으로 감싸 HomeWebView가 렌더마다 새 함수를 시트에 넘기지 않게 한다.
   const closeShareSheet = useCallback(() => setShareContent(null), []);
 
-  return { onMessage, isJudgeModalOpenRef, notifyHardwareBack, shareContent, closeShareSheet };
+  return { onMessage, shareContent, closeShareSheet };
 }

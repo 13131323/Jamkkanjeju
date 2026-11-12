@@ -140,7 +140,7 @@ export function TreasureHuntMap({ path = DEFAULT_TREASURE_MAP_PATH, coords, head
         // 이 화면이 여는 /map?mode=treasure도 GET /api/v1/map/contents를 부르고 그 API는 401을 낸다.
         // 다른 WebView 5곳에는 이 갈래가 있었는데 여기만 빠져 있었다(같은 문서 §D).
         if (msg.type === 'AUTH_TOKEN_REQUEST') {
-          void reissueWebViewAuth(webViewRef);
+          void reissueWebViewAuth(webViewRef, msg.payload.accessToken);
           return;
         }
         if (msg.type !== 'PING') return;

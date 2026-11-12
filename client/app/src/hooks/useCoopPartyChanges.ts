@@ -1,7 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { Participant } from '@packages/shared';
-import { useCoopSimulationEnabled } from '@/config/coopSimulation';
-import { becameHost, removedParticipants, shouldSkipPartyChangeCheck, wasRemoved } from '@/utils/party';
+import { becameHost, removedParticipants, wasRemoved } from '@/utils/party';
 
 /**
  * 폴링 응답 사이의 **참여자 변화**를 화면에 알린다.
@@ -79,19 +78,10 @@ export function useCoopPartyChanges({
    * 순간은 폴링 두 회차 사이의 사건이 아니므로, 그 한 회차만 **스냅샷만 갈아 끼우고 넘어간다.**
    * 없던 일을 알리는 것보다 한 회차 알리지 않는 쪽이 낫다.
    */
-  const simulationEnabled = useCoopSimulationEnabled();
-  const previousSimulationRef = useRef(simulationEnabled);
 
   useEffect(() => {
     // 서버가 이 화면에 아직 명단을 준 적이 없다. 비교할 것이 없으므로 스냅샷째로 그냥 둔다.
     if (!hasServerParticipants) return;
-
-    if (shouldSkipPartyChangeCheck(previousSimulationRef.current, simulationEnabled)) {
-      previousSimulationRef.current = simulationEnabled;
-      // 새 기준으로 스냅샷만 다시 잡는다. 다음 회차부터는 같은 기준끼리 비교된다.
-      rememberParticipants(participants);
-      return;
-    }
 
     // 내가 빠졌으면 이 화면에 남을 이유가 없다. 다른 알림보다 먼저 처리한다.
     if (wasRemoved(previousParticipants, participants, myParticipantId)) {
@@ -106,5 +96,5 @@ export function useCoopPartyChanges({
     removedParticipants(previousParticipants, participants).forEach(onDeparted);
 
     rememberParticipants(participants);
-  }, [previousParticipants, participants, hasServerParticipants, myParticipantId, simulationEnabled, rememberParticipants, onRemoved, onBecameHost, onDeparted]);
+  }, [previousParticipants, participants, hasServerParticipants, myParticipantId, rememberParticipants, onRemoved, onBecameHost, onDeparted]);
 }

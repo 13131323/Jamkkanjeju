@@ -80,7 +80,7 @@ export default function PlaceDetailScreen() {
         // 히스토리가 없다 — 앱 라우터 스택을 pop하는 건 여기서만 할 수 있다.
         if (message.type === 'NAVIGATE_BACK') navigate.back();
         // web이 401을 만났다 — 토큰은 앱만 발급할 수 있어 여기서 다시 심어 준다(reissueWebViewAuth 주석)
-        if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef);
+        if (message.type === 'AUTH_TOKEN_REQUEST') void reissueWebViewAuth(webViewRef, message.payload.accessToken);
         // "근처에서 할 수 있는 미션"을 누르면 web이 route와 missionId를 보낸다. 미션 화면은 앱에만
         // 있으므로 홈 브릿지와 같은 방식으로 연다(useHomeBridge의 NAVIGATE와 같은 처리).
         if (message.type === 'NAVIGATE') {

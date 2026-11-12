@@ -16,7 +16,7 @@ import { QuizResultModal, QuizResultVariant } from '@/components/Quiz/QuizResult
 import { isCorrectAnswer, resolveCurrentQuizIndex, resolveQuizAdvance, toPlayableQuizzes } from '@/constants/cultureQuiz';
 import { MISSION_TYPE_INPUT, resolveMissionId } from '@/constants/missionHome';
 import { useMissionCancelGuard } from '@/hooks/useMissionCancelGuard';
-import { isJudgeModeEnabled, judgeModePosition } from '@/store/judgeMode';
+import { applyAdminPosition } from '@/store/adminLocation';
 import { useMissionCompleteStore } from '@/store/missionComplete';
 import {
   useSaveCultureMissionProgressApiV1CultureMissionsCultureMissionProgressIdProgressPatch,
@@ -51,19 +51,14 @@ const MAX_WRONG_ATTEMPTS = 2;
  * 폴백을 씌운다 — 이 함수는 그대로 null을 돌려준다.
  */
 async function readCoordinates(): Promise<{ latitude: number; longitude: number } | null> {
-  // 심사위원용 모드면 측위하지 않고 제주시청을 보낸다. 서버는 이 좌표로 완료 후 '근처 장소'를
-  // 고르므로, 제주 밖 실제 좌표를 보내면 추천이 비거나 거리가 수백 km로 찍힌다.
-  // 이 분기 하나가 고정 좌표를 쓰는 **유일한** 경로다.
-  if (isJudgeModeEnabled()) return judgeModePosition();
-
   try {
     // 캐시가 있으면 그대로 쓴다 — GPS 측위는 실외에서도 몇 초가 걸린다
     const last = await Location.getLastKnownPositionAsync();
-    if (last) return { latitude: last.coords.latitude, longitude: last.coords.longitude };
+    if (last) return applyAdminPosition({ latitude: last.coords.latitude, longitude: last.coords.longitude });
 
     // 캐시가 없을 때만 실제로 측위한다. 거리 표시는 수십 m 오차로 뒤집히지 않으므로 Balanced면 충분하다
     const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    return { latitude: current.coords.latitude, longitude: current.coords.longitude };
+    return applyAdminPosition({ latitude: current.coords.latitude, longitude: current.coords.longitude });
   } catch {
     // 권한 거부·측위 실패. 호출부가 좌표 없는 상태를 처리한다
     return null;
@@ -100,7 +95,13 @@ export default function CultureMissionScreen() {
   const [hasLocationFailed, setHasLocationFailed] = useState(false);
 
   // 진입 시 1회만 진행도를 만든다(이미 진행 중이면 서버가 기존 것을 돌려준다).
-  const { mutate: startMission, mutateAsync: startMissionAsync, data: started, isPending: isStarting, isError: hasStartFailed } = useStartCultureMissionApiV1CultureMissionsCultureMissionIdProgressPost();
+  const {
+    mutate: startMission,
+    mutateAsync: startMissionAsync,
+    data: started,
+    isPending: isStarting,
+    isError: hasStartFailed,
+  } = useStartCultureMissionApiV1CultureMissionsCultureMissionIdProgressPost();
   const saveProgress = useSaveCultureMissionProgressApiV1CultureMissionsCultureMissionProgressIdProgressPatch();
   const stopProgress = useStopCultureMissionProgressApiV1CultureMissionsCultureMissionProgressIdProgressStopPatch();
 

@@ -24,16 +24,11 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_API_PROXY_PATH
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG NEXT_PUBLIC_KAKAO_MAP_KEY
-# 심사위원용 모드 진입 코드. NEXT_PUBLIC_*은 next build가 번들에 인라인하므로
-# **builder 스테이지에 반드시 있어야 한다** — 런타임 env만 주면 값이 들어가지 않는다.
-# 비어 있어도 빌드는 통과하고, 그때는 어떤 코드로도 모드가 열리지 않는다(env.ts는 optional).
-ARG NEXT_PUBLIC_JUDGE_MODE_CODE
 
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_API_PROXY_PATH=${NEXT_PUBLIC_API_PROXY_PATH} \
     NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
-    NEXT_PUBLIC_KAKAO_MAP_KEY=${NEXT_PUBLIC_KAKAO_MAP_KEY} \
-    NEXT_PUBLIC_JUDGE_MODE_CODE=${NEXT_PUBLIC_JUDGE_MODE_CODE}
+    NEXT_PUBLIC_KAKAO_MAP_KEY=${NEXT_PUBLIC_KAKAO_MAP_KEY}
 
 RUN --mount=type=secret,id=sentry_auth_token,required=false \
     export SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
@@ -48,10 +43,6 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_API_PROXY_PATH
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG NEXT_PUBLIC_KAKAO_MAP_KEY
-# 심사위원용 모드 진입 코드. NEXT_PUBLIC_*은 next build가 번들에 인라인하므로
-# **builder 스테이지에 반드시 있어야 한다** — 런타임 env만 주면 값이 들어가지 않는다.
-# 비어 있어도 빌드는 통과하고, 그때는 어떤 코드로도 모드가 열리지 않는다(env.ts는 optional).
-ARG NEXT_PUBLIC_JUDGE_MODE_CODE
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
@@ -60,8 +51,7 @@ ENV NODE_ENV=production \
     NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_API_PROXY_PATH=${NEXT_PUBLIC_API_PROXY_PATH} \
     NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN} \
-    NEXT_PUBLIC_KAKAO_MAP_KEY=${NEXT_PUBLIC_KAKAO_MAP_KEY} \
-    NEXT_PUBLIC_JUDGE_MODE_CODE=${NEXT_PUBLIC_JUDGE_MODE_CODE}
+    NEXT_PUBLIC_KAKAO_MAP_KEY=${NEXT_PUBLIC_KAKAO_MAP_KEY}
 
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nextjs

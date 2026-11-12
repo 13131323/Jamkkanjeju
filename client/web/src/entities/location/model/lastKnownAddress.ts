@@ -1,30 +1,9 @@
-import { isJudgeAuthEnabled } from '@shared/api/auth/judgeToken';
+import { accountId } from '@shared/api/auth/session';
 
-/**
- * 마지막으로 보여준 주소를 담아 두는 외부 스토어.
- *
- * 홈 WebView는 미션을 끝낼 때마다 새로 로드되고 그때마다 좌표→주소 변환을 처음부터 다시 한다.
- * 그 사이 자리표시가 한 번 반짝이는 것이 거슬린다는 지적이 있어 직전 값으로 받친다.
- *
- * **useAddressDisplay가 아니라 별도 모듈인 이유**: 심사위원용 모드를 끌 때 이 캐시를 비워야 하는데
- * (judgeMode.ts), useAddressDisplay를 import하면 useCurrentCoords → forcedLocation → judgeMode로
- * 순환 참조가 된다. 값만 가진 이 모듈을 양쪽이 함께 보면 순환이 생기지 않는다.
- */
 const LAST_ADDRESS_STORAGE_KEY_PREFIX = 'tamnalog:last-address';
 
-/**
- * **저장 키를 계정으로 가른다** — 쿼리 캐시를 가른 것과 같은 규칙이다(shared/api/query/accountScopedHash.ts).
- *
- * 하나의 키를 함께 쓰던 동안은, 심사위원용 모드로 돌다 남긴 제주시청 주소가 기본 모드의 첫 화면에
- * (그리고 그 반대로도) **확정값처럼** 먼저 떴다가 바뀌었다. 쿼리에 게이트를 걸어도 이 경로는 게이트
- * 밖이라 그대로 남는다 — 값이 네트워크가 아니라 localStorage에서 오기 때문이다.
- *
- * judgeMode.ts가 아니라 shared의 플래그를 읽는 이유: 이 모듈은 judgeMode가 import하는 쪽이라
- * 거꾸로 import하면 순환이 된다(파일 첫 주석 참고). shared의 플래그는 토큰·쿼리 해시가 보는 값과
- * **같은 값**이라 세 곳이 갈릴 수 없다.
- */
 function accountScope(): string {
-  return isJudgeAuthEnabled() ? 'judge' : 'app';
+  return accountId();
 }
 
 function storageKey(): string {

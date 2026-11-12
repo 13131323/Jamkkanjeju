@@ -141,36 +141,13 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
     traceId: z.string(),
   }),
   z.object({
-    /**
-     * 토큰을 다시 심어 달라는 요청. web이 401을 받았을 때 보낸다.
-     *
-     * web은 토큰을 가질 수 없다 — 직접 `/auth/anonymous`를 부르면 앱과 다른 사용자가 된다.
-     * 앱이 새 익명 토큰을 발급해 주입 스크립트를 다시 실행하면, 그 스크립트가 쏘는
-     * `tamnalog:auth-ready`를 신호로 web이 원래 요청을 재시도한다.
-     */
+    /** 앱이 SecureStore의 리프레시 토큰으로 재발급하고 액세스 토큰만 다시 주입하도록 요청한다.
+     * accessToken은 만료 응답을 받은 요청의 값으로, 이미 갱신한 토큰의 불필요한 재회전을 막는다. */
     type: z.literal('AUTH_TOKEN_REQUEST'),
-    payload: z.object({}),
+    payload: z.object({ accessToken: z.string().optional() }),
     traceId: z.string(),
   }),
-  z.object({
-    /**
-     * 심사위원용 모드가 켜졌는지. 홈 단축 버튼 행의 "모드변경"에 코드를 넣으면 켜진다.
-     *
-     * 켜고 끄는 UI와 저장(localStorage)이 web에 있으므로 web이 주인이고, 앱은 받은 값을
-     * 메모리에만 든다 — 양쪽이 각자 저장하면 상태가 갈라진다.
-     *
-     * 앱에서의 효과: 협동 미션 시뮬레이션 + 네이티브 좌표를 JUDGE_MODE_COORDS로 고정
-     * + **API 호출을 JUDGE_ACCESS_TOKEN으로**(app/src/services/authHeader.ts).
-     *
-     * **불리언만 보낸다. 토큰은 payload에 싣지 않는다.** 값이 비밀이 아니고 이 파일의
-     * JUDGE_ACCESS_TOKEN이 web·app 공통 출처라 실어 보낼 이유가 없고, payload에 넣으면
-     * 앱이 낡았을 때 스키마 검증에서 메시지가 통째로 버려져 모드 자체가 켜지지 않는다
-     * (docs/trouble/2026-09-07-bridge-contract-drift.md).
-     */
-    type: z.literal('JUDGE_MODE_UPDATE'),
-    payload: z.object({ enabled: z.boolean() }),
-    traceId: z.string(),
-  }),
+
   z.object({
     // 보물찾기 step1 지도에서 보물 마커를 눌렀을 때. 앱이 step1 시트를 다시 올리는 데 쓴다 —
     // 시트는 손으로 끌어내려 닫을 수 있고, 닫은 뒤 다시 열 방법이 이 탭이다.
@@ -197,20 +174,14 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
     payload: z.object({}),
     traceId: z.string(),
   }),
+
   z.object({
-    /**
-     * 심사위원 코드 입력 모달이 열려 있는지.
-     *
-     * 이 모달은 web의 React state로만 뜬다 — URL도 히스토리도 바뀌지 않는다. 앱의 하드웨어
-     * 뒤로가기(HomeWebView.tsx의 BackHandler)는 WebView의 `canGoBack`만 보므로, 그대로 두면
-     * 모달이 열려 있어도 뒤로가기가 그냥 앱을 꺼 버린다. 그래서 web이 열고 닫을 때마다 이 값을
-     * 알려 주고, 앱은 `isOpen`인 동안 뒤로가기를 자기가 소비한 뒤 `HARDWARE_BACK_PRESSED`로
-     * "닫아 달라"고 되돌려 준다.
-     */
-    type: z.literal('JUDGE_CODE_MODAL_STATE'),
-    payload: z.object({ isOpen: z.boolean() }),
+    /** 현재 기기의 최신 리프레시 토큰으로 로그아웃하고 인증·화면 상태를 정리한다. */
+    type: z.literal('AUTH_LOGOUT_REQUEST'),
+    payload: z.object({}),
     traceId: z.string(),
   }),
+
   z.object({
     /**
      * 공유 시트를 앱이 WebView 위에 띄워 달라는 요청. AI 엽서 결과 화면의 "공유"가 보낸다.
@@ -255,82 +226,7 @@ export const WebToAppMessageSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
-/**
- * 심사위원용 모드에서 "현재 위치"로 삼는 좌표 — 제주시청.
- *
- * web(지도·주소)과 app(미션 좌표·GPS 저장)이 같은 지점을 봐야 해서 계약과 함께 여기 둔다.
- * 한쪽만 옮기면 web 지도에는 마커가 있는데 앱은 제주 밖이라 미션이 시작되지 않는다.
- */
-export const JUDGE_MODE_COORDS = { lat: 33.4996, lng: 126.5312 } as const;
-
-/**
- * 앱이 WebView에 심는 심사위원용 모드 전역의 이름 — `window.__TAMNALOG_JUDGE_MODE__`.
- *
- * **모드의 보관은 앱이, 편집은 web이 한다.** web의 localStorage는 문서가 실행된 뒤에야 읽히므로
- * 콜드 스타트에서 첫 렌더·첫 요청이 항상 기본 모드로 나갔다. 앱은 sqlite에 남긴 값을 부트스트랩에서
- * 되살리므로, 그 값을 문서 실행 전에 심으면(injectedJavaScriptBeforeContentLoaded) 그 경쟁이 사라진다
- * — 토큰을 브릿지가 아니라 주입으로 넘기는 것과 같은 이유다(app/.../authTokenScript.ts).
- *
- * **이름과 파싱 규칙을 여기 두는 이유**: 심는 쪽(app)과 읽는 쪽(web)이 문자열을 각자 적으면
- * 오타 하나로 조용히 "값이 없음"이 된다. 토큰 쪽은 실제로 두 파일에 손으로 복제해 두고 주석으로만
- * 맞춰 두었는데, 그 방식을 따라가지 않는다.
- */
-export const JUDGE_MODE_GLOBAL = '__TAMNALOG_JUDGE_MODE__';
-
-/**
- * 주입된 전역값을 켜짐/꺼짐으로 접는다.
- *
- * `true`만 켜짐이다 — 앱이 낡아 전역을 아예 심지 않는 경우(`undefined`)와 구버전이 문자열을 심는
- * 경우를 모두 안전한 쪽(꺼짐)으로 접는다. 전역은 web이 혼자 읽으므로 낡은 앱에서는 "값이 없다"가
- * 그대로 관측되고, web은 localStorage로 떨어진다.
- */
-export function parseInjectedJudgeMode(value: unknown): boolean {
-  return value === true;
-}
-
-/**
- * 제주 본섬의 중심점.
- *
- * **web과 app이 같은 값을 써야 한다** — JUDGE_MODE_COORDS와 같은 이유다. web은 좌표를 아직 모를 때
- * 홈 조회의 기준점으로 쓰고(_pages/home/model/homeQueryCoords.ts), app은 미션 중단 요청에서
- * 측위가 끝내 실패했을 때의 폴백으로 쓴다(utils/missionStopCoords.ts). 두 값이 갈리면 같은 "모름"
- * 상태인데 화면과 서버가 서로 다른 지점을 기준으로 추천을 뽑는다.
- */
 export const JEJU_CENTER = { lat: 33.361424638771474, lng: 126.52941927591584 } as const;
-
-/**
- * 심사위원용 모드에서 쓰는 고정 토큰 — 서버에 미리 심어 둔 목업 사용자.
- *
- * 심사 환경에서는 앱이 발급한 익명 사용자로는 볼 것이 없다(미션 진행 이력·도감이 비어 있다).
- * 그래서 모드가 켜지면 web도 app도 이 사용자로 호출한다.
- *
- * **web과 app이 같은 값을 써야 한다.** JUDGE_MODE_COORDS와 같은 이유이고, 어긋났을 때가 더
- * 나쁘다 — 좌표는 화면이 다르게 보이는 데서 그치지만, 토큰이 갈리면 홈(web)이 보여 준
- * "진행중인 미션"과 그것을 이어받는 앱 호출이 **서로 다른 사용자**가 된다. 실제로 그랬다:
- * 앱은 이 토큰을 모른 채 자기 익명 토큰으로 불렀고, 그래서 홈에서 이어하기를 누르면
- * 남의 진행도를 자기 계정으로 다시 시작하거나(토큰이 살아 있을 때) 401이 났다
- * (토큰이 서버에서 사라졌을 때 — 심사용 목업 시딩으로 익명 사용자가 지워진 경우).
- *
- * 값을 env로 빼지 않고 상수로 둔 이유: 비밀이 아니다. 서버 레포의 `scripts/sql/02-data-mock.sql`에
- * 해시가 그대로 커밋돼 있고 주석에 사용법까지 적혀 있다. env로 빼면 설정이 빠졌을 때 기능이
- * **조용히** 동작하지 않는 실패 모드만 하나 늘어난다.
- *
- * **하이픈이다.** `sha256("test-user-1-token")`이 서버 `USER.access_token_hash`와 일치하고
- * 밑줄 버전(`test_user_1_token`)은 불일치라 401이 된다 — 실제로 배포 API에 두 값을 넣어 확인했다.
- * docs/trouble/2026-09-09-webview-token-version-skew.md
- */
-export const JUDGE_ACCESS_TOKEN = 'test-user-1-token';
-
-/**
- * `Bearer {token}` — 서버가 요구하는 형식이다(server/app/core/security.py의 TOKEN_TYPE).
- *
- * **상수가 아니라 함수다.** app 쪽에서 모듈 최상위 상수로 만들면 Metro가 shared의 `export *`를
- * CommonJS로 옮기는 과정에서 배럴이 아직 비어 있는 시점에 평가돼 `undefined`가 박힌다
- * (app/src/store/judgeMode.ts의 judgeModePosition 주석과 같은 함정). 호출 시점으로 미룬다.
- */
-export function judgeAuthorizationHeader(): string {
-  return `Bearer ${JUDGE_ACCESS_TOKEN}`;
-}
 
 // 보물찾기 step1 지도용 위치·heading payload.
 // heading은 위치 권한이 없거나 나침반이 아직 준비되지 않은 경우 -1(무효값)이 올 수 있다.
@@ -407,13 +303,6 @@ export const AppToWebMessageSchema = z.discriminatedUnion('type', [
     traceId: z.string(),
   }),
   z.object({
-    /**
-     * 하드웨어 뒤로가기가 눌렸다는 신호.
-     *
-     * `JUDGE_CODE_MODAL_STATE`로 모달이 열렸다고 알린 뒤에만 온다 — 앱은 그동안 뒤로가기를
-     * 자기가 소비하고(BackHandler가 true를 반환해 기본 동작을 막는다) 대신 이 메시지로
-     * "닫아 달라"고 되돌려 준다. web은 열려 있는 모달을 닫는 것으로 응답한다.
-     */
     type: z.literal('HARDWARE_BACK_PRESSED'),
     payload: z.object({}),
     traceId: z.string(),

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { useLocationStore, resolveDisplayLocation, forcedJejuCoords } from '@entities/location';
+import { useLocationStore, resolveDisplayLocation } from '@entities/location';
 import { JEJU_CENTER } from '@shared/config/geo';
 import { useKakaoMapsSdk } from '@shared/lib/kakaoMaps/loadKakaoMapsSdk';
 
@@ -21,7 +21,7 @@ export function useKakaoMap(containerRef: RefObject<HTMLDivElement | null>, init
     // 이후 상태 변화는 이 map 인스턴스가 만들어진 뒤 다른 훅(useUserLocationMarker 등)이 반응형으로 처리한다.
     const { permissionStatus, coords, manualCoords } = useLocationStore.getState();
     // 마커(useDisplayLocation)와 같은 폴백을 봐야 제주 고정 모드에서 중심과 마커가 어긋나지 않는다
-    const { coords: displayCoords, initialLevel } = resolveDisplayLocation(permissionStatus, coords, manualCoords, forcedJejuCoords());
+    const { coords: displayCoords, initialLevel } = resolveDisplayLocation(permissionStatus, coords, manualCoords);
     const center = displayCoords ?? JEJU_CENTER;
 
     const instance = new window.kakao.maps.Map(containerRef.current, {

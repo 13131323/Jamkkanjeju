@@ -1,5 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios';
 import { notifyApiError } from '@packages/shared';
+import { authorizationHeaderOf, getCachedSession } from './sessionCache';
+import { clearAuthSession, reissueSession, isLogoutInProgress } from './auth';
 
 /**
  * 기본 Content-Type을 박지 않는다.
@@ -15,10 +17,39 @@ const axiosInstance = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL ?? '',
 });
 
-// 웹과 동일하게 백엔드 개발용 자동 로그인을 사용하며 인증 헤더를 첨부하지 않는다.
+axiosInstance.interceptors.request.use((config) => {
+  if (isLogoutInProgress()) throw new axios.CanceledError('로그아웃 중입니다.');
+  const header = authorizationHeaderOf(getCachedSession());
+  (config as typeof config & { authUserId?: number }).authUserId = getCachedSession()?.loginUser?.id;
+  if (header && config.url !== '/api/v2/auth/login') config.headers.set('Authorization', header);
+  return config;
+});
 axiosInstance.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    const userId = (response.config as typeof response.config & { authUserId?: number }).authUserId;
+    if (isLogoutInProgress() || (userId !== undefined && userId !== getCachedSession()?.loginUser?.id)) throw new axios.CanceledError('인증 상태가 변경되었습니다.');
+    return response;
+  },
+  async (error) => {
+    const config = error.config as (AxiosRequestConfig & { authRetried?: boolean; authUserId?: number }) | undefined;
+    const session = getCachedSession();
+    const owned = config?.authUserId === session?.loginUser?.id;
+    if (error.response?.status === 401 && config && config.url !== '/api/v2/auth/login' && owned) {
+      if (error.response?.data?.code === 'EXPIRED_TOKEN' && !config.authRetried && session) {
+        config.authRetried = true;
+        try {
+          const sent = String((config.headers as Record<string, unknown>)?.Authorization ?? '');
+          const next = await reissueSession(sent.replace(/^Bearer /, ''));
+          if (next && next.loginUser?.id === config.authUserId) return axiosInstance.request(config);
+        } catch (refreshError) {
+          notifyApiError(refreshError);
+          return Promise.reject(refreshError);
+        }
+      } else {
+        const header = authorizationHeaderOf(session);
+        if (!header || config.headers?.Authorization === header) await clearAuthSession();
+      }
+    }
     notifyApiError(error);
     return Promise.reject(error);
   },
