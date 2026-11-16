@@ -100,3 +100,14 @@ MySQL CLI를 종료하려면 아래 명령어를 입력합니다.
 ```sql
 exit;
 ```
+
+
+## 에이전트 저장 장소 조회
+
+- `GET /api/v2/agent/locations?page=0&size=100`
+- `X-Agent-Token` 헤더에 `.env`의 `AGENT_API_TOKEN` 원문을 전달합니다. 사용자 로그인이나 Bearer 접두사는 필요하지 않습니다.
+- Python Tool의 환경변수도 같은 이름·값을 사용합니다. 로컬 두 프로젝트에 같은 난수 키를 설정했습니다. `.env.example`에는 키 원문을 넣지 않습니다.
+- 키가 비어 있으면 에이전트 요청을 거부합니다. 정상 키도 이 조회 API에만 접근할 수 있으며 일반 API는 기존 JWT 인증을 유지합니다.
+- 키를 교체하면 Python 설정도 바꾸고 Spring을 재시작합니다. Docker Compose에서도 해당 환경변수를 전달합니다.
+- 장소 ID순으로 한 페이지를 조회합니다. `size`는 1~100, 다음 페이지 여부는 `locationsPage.hasNext`입니다. 조회만 수행하며 데이터는 변경하지 않습니다.
+- 명세와 내부 규칙·검증 결과는 `domain/agent/docs`에 기록합니다.

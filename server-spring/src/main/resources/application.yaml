@@ -39,6 +39,9 @@ spring:
       mode: never
 
 app:
+  agent:
+    token: ${AGENT_API_TOKEN:}
+
   openai:
     enabled: ${OPENAI_ENABLED:false}
     api-key: ${OPENAI_API_KEY:}

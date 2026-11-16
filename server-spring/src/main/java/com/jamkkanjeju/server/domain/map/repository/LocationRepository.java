@@ -16,6 +16,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface LocationRepository extends JpaRepository<Location, Long> {
 
     /**
+     * 결과: 장소 전체를 ID 오름차순으로 조회한 페이지이다. 연관 엔티티는 로딩하지 않고 결과가 없으면 빈 Slice이다.
+     * 사용: 저장 장소 조회({@code GET /api/v2/agent/locations})의 기본 필드와 다음 페이지 여부를 구성한다.
+     */
+    Slice<Location> findAllByOrderByIdAsc(Pageable pageable);
+
+    /**
      * 결과: 장소 이름에 {@code keyword}가 연속된 부분 문자열로 포함되는 장소의 요청 페이지이다.
      * 장소 ID 오름차순이며 전체 개수 집계 없이 다음 페이지 존재 여부를 제공한다.
      * 연관 엔티티는 로딩하지 않고 미션 유무·사용자 거리로 제한하지 않는다. 없으면 내용이 빈 {@code Slice}이다.
