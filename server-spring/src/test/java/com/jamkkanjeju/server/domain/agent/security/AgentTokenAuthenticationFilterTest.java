@@ -28,7 +28,8 @@ class AgentTokenAuthenticationFilterTest {
         run(TOKEN, request);
         var auth = SecurityContextHolder.getContext().getAuthentication();
         assertThat(auth.isAuthenticated()).isTrue();
-        assertThat(auth.getAuthorities()).extracting("authority").containsExactly("AGENT_LOCATIONS_READ");
+        assertThat(auth.getAuthorities()).extracting("authority")
+                .containsExactly("AGENT_LOCATIONS_READ", "AGENT_MAINTENANCE_WRITE");
         assertThat(auth.getCredentials()).isNull();
         assertThat(auth.toString()).doesNotContain(TOKEN).doesNotContain("ROLE_ADMIN");
     }

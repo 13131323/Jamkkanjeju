@@ -7,6 +7,7 @@ import { toHomeMissionCards, type HomeMissionCard } from '@packages/shared';
 import type { GeneratedApi } from '@packages/shared';
 import { useCurrentCoords } from '@entities/location';
 import { orvalClient } from '@shared/api/axios/instance';
+import type { HomeMaintenance, HomeResponse } from '@shared/api/home';
 import { resolveHomeQueryCoords } from './homeQueryCoords';
 import { selectVisibleProgressMissions } from './progressMissions';
 
@@ -16,6 +17,7 @@ export interface HomeDataResult {
   progressMissions: GeneratedApi.ProgressMission[];
   guestbookCount: number;
   characterImgUrl: string | null;
+  maintenance: HomeMaintenance | null;
   isPending: boolean;
   isError: boolean;
   /** 조회 실패 표시의 "다시 시도"가 쓴다 */
@@ -45,7 +47,7 @@ export function useHomeData(): HomeDataResult {
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['/api/v2/users/me/home', params],
     queryFn: ({ signal }) =>
-      orvalClient<GeneratedApi.HomeResponse>({
+      orvalClient<HomeResponse>({
         url: '/api/v2/users/me/home',
         method: 'GET',
         params,
@@ -68,6 +70,7 @@ export function useHomeData(): HomeDataResult {
     progressMissions,
     guestbookCount: data?.guestbookCount ?? 0,
     characterImgUrl: data?.characterImgUrl ?? null,
+    maintenance: data?.maintenance ?? null,
     isPending,
     isError,
     refetch,

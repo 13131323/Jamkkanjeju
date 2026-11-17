@@ -5,6 +5,9 @@ import com.jamkkanjeju.server.domain.auth.security.DevAuthenticationFilter;
 import com.jamkkanjeju.server.domain.auth.security.JsonAccessDeniedHandler;
 import com.jamkkanjeju.server.domain.auth.security.JsonAuthenticationEntryPoint;
 import com.jamkkanjeju.server.domain.auth.security.JwtAuthenticationFilter;
+import com.jamkkanjeju.server.domain.auth.security.SecurityErrorResponseWriter;
+import com.jamkkanjeju.server.domain.etc.security.MaintenanceAccessFilter;
+import com.jamkkanjeju.server.domain.etc.service.MaintenanceStateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -36,7 +39,9 @@ public class SecurityConfig {
                                                    JwtTokenProvider jwtTokenProvider,
                                                    JsonAuthenticationEntryPoint authenticationEntryPoint,
                                                    JsonAccessDeniedHandler accessDeniedHandler,
-                                                   DevAuthProperties devAuthProperties) throws Exception {
+                                                   DevAuthProperties devAuthProperties,
+                                                   MaintenanceStateService maintenanceStateService,
+                                                   SecurityErrorResponseWriter errorResponseWriter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .formLogin(formLogin -> formLogin.disable())
@@ -62,7 +67,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler))
                 .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider),
-                        UsernamePasswordAuthenticationFilter.class);
+                        UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new MaintenanceAccessFilter(maintenanceStateService, errorResponseWriter),
+                        JwtAuthenticationFilter.class);
 
         if (devAuthProperties.enabled()) {
             log.warn("""

@@ -1,5 +1,15 @@
 ```mermaid
 erDiagram
+MAINTENANCE {
+    bigint id PK "NOT NULL"
+    varchar_500 message "NOT NULL"
+    datetime starts_at "NOT NULL"
+    datetime ends_at "NOT NULL, CHECK: > starts_at"
+    varchar_20 status "NOT NULL, DEFAULT: SCHEDULED, Enum: SCHEDULED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED"
+    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+}
+
 USER {
 	bigint id PK "NOT NULL"
 	bigint onboarding_result_id FK

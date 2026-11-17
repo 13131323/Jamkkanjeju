@@ -85,3 +85,17 @@ Status Code : `500 Internal Server Error`
   "message": "서버 내부 오류가 발생했습니다."
 }
 ```
+
+
+#### 서비스 점검 중
+
+Status Code : `503 Service Unavailable`
+
+진행 중인 점검 일정이 있고 점검 중 허용한 API가 아닌 서비스 API를 호출한 경우.
+
+```json
+{
+  "code": "SERVICE_UNDER_MAINTENANCE",
+  "message": "서비스 점검 중입니다. 잠시 후 다시 이용해 주세요."
+}
+```

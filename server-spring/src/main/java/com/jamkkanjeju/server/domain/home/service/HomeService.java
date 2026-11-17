@@ -12,6 +12,9 @@ import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionProgres
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionProgressRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository.QuizCount;
+import com.jamkkanjeju.server.domain.etc.entity.Maintenance;
+import com.jamkkanjeju.server.domain.etc.entity.MaintenanceStatus;
+import com.jamkkanjeju.server.domain.etc.repository.MaintenanceRepository;
 import com.jamkkanjeju.server.domain.guestbook.service.GuestbookCounter;
 import com.jamkkanjeju.server.domain.home.dto.GetHomeRequest;
 import com.jamkkanjeju.server.domain.home.dto.GetHomeResponse;
@@ -24,6 +27,9 @@ import com.jamkkanjeju.server.domain.mission.service.MissionCompletionChecker;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMission;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionProgressRepository;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +53,8 @@ public class HomeService {
     private final MissionRecommender missionRecommender;
     private final GuestbookCounter guestbookCounter;
     private final TravelEstimator travelEstimator;
+    private final MaintenanceRepository maintenanceRepository;
+    private final Clock clock;
 
     /** 현재 사용자와 요청 위치를 기준으로 홈 조회 응답을 구성한다. */
     public GetHomeResponse getHome(Long userId, GetHomeRequest request) {
@@ -74,8 +82,12 @@ public class HomeService {
         // 7. 방명록 개수 집계
         long guestbookCount = guestbookCounter.countSince(user.getGuestbookLastCheckedAt());
 
-        // 8. 온보딩 캐릭터 이미지 구성
-        return GetHomeResponse.of(missionRecommend, progressMission, guestbookCount, user.getOnboardingResult());
+        // 8. 온보딩 캐릭터 이미지 + 9. 종료 전 예약·진행 중 점검 공지 구성
+        LocalDateTime now = LocalDateTime.ofInstant(clock.instant(), ZoneId.of("Asia/Seoul"));
+        Maintenance maintenance = maintenanceRepository.findFirstByStatusInAndEndsAtAfterOrderByStartsAtAscIdAsc(
+                List.of(MaintenanceStatus.SCHEDULED, MaintenanceStatus.IN_PROGRESS), now).orElse(null);
+        return GetHomeResponse.of(missionRecommend, progressMission, guestbookCount,
+                user.getOnboardingResult(), maintenance);
     }
 
     /** 사용자가 진행 중인 문화 미션을 홈 응답 항목으로 만든다. */

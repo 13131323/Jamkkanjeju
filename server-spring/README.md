@@ -102,12 +102,16 @@ exit;
 ```
 
 
-## 에이전트 저장 장소 조회
+## 에이전트 장소 조회·점검 예약
 
 - `GET /api/v2/agent/locations?page=0&size=100`
 - `X-Agent-Token` 헤더에 `.env`의 `AGENT_API_TOKEN` 원문을 전달합니다. 사용자 로그인이나 Bearer 접두사는 필요하지 않습니다.
 - Python Tool의 환경변수도 같은 이름·값을 사용합니다. 로컬 두 프로젝트에 같은 난수 키를 설정했습니다. `.env.example`에는 키 원문을 넣지 않습니다.
-- 키가 비어 있으면 에이전트 요청을 거부합니다. 정상 키도 이 조회 API에만 접근할 수 있으며 일반 API는 기존 JWT 인증을 유지합니다.
+- 키가 비어 있으면 에이전트 요청을 거부합니다. 정상 키도 명시한 에이전트 장소 조회·점검 예약 API에만 접근할 수 있으며 일반 API는 기존 JWT 인증을 유지합니다.
 - 키를 교체하면 Python 설정도 바꾸고 Spring을 재시작합니다. Docker Compose에서도 해당 환경변수를 전달합니다.
 - 장소 ID순으로 한 페이지를 조회합니다. `size`는 1~100, 다음 페이지 여부는 `locationsPage.hasNext`입니다. 조회만 수행하며 데이터는 변경하지 않습니다.
 - 명세와 내부 규칙·검증 결과는 `domain/agent/docs`에 기록합니다.
+
+- `POST /api/v2/agent/maintenances`: 같은 `X-Agent-Token`으로 점검 예약을 생성합니다. JSON 본문은 `{"message":"공지 문구"}`이며 `{}`·null/빈 문구에는 기본 공지를 사용합니다.
+- `startsAt`을 지정하면 그 KST 시각, 생략·null이면 서버 시각 1시간 뒤에 시작하며 시작 1시간 뒤 종료 예정인 `SCHEDULED` 예약을 저장하고 `201`과 `maintenanceId`, `message`, `startsAt`, `endsAt`, `status`를 반환합니다.
+- 예약 API는 저장만 처리합니다. 점검 상태는 1초 간격 스케줄러와 API 요청 시 갱신하며 점검 시간 동안 일반 API를 503으로 차단합니다. 홈 GET·로그인 POST·토큰 재발급 POST와 기존 인증을 거친 에이전트 API는 허용합니다. 종료 예정 시각에는 차단을 해제합니다. 장소 동기화는 직접 실행해야 합니다.

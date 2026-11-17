@@ -34,6 +34,7 @@ import com.jamkkanjeju.server.domain.culturemission.entity.CultureMissionProgres
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionProgressRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository;
 import com.jamkkanjeju.server.domain.culturemission.repository.CultureMissionQuizRepository.QuizCount;
+import com.jamkkanjeju.server.domain.etc.repository.MaintenanceRepository;
 import com.jamkkanjeju.server.domain.guestbook.service.GuestbookCounter;
 import com.jamkkanjeju.server.domain.home.dto.GetHomeRequest;
 import com.jamkkanjeju.server.domain.home.dto.GetHomeResponse;
@@ -47,6 +48,9 @@ import com.jamkkanjeju.server.domain.mission.entity.MissionTypeCode;
 import com.jamkkanjeju.server.domain.mission.service.MissionCompletionChecker;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
 import com.jamkkanjeju.server.domain.treasurehunt.repository.TreasureMissionProgressRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +87,8 @@ class HomeServiceTest {
     private GuestbookCounter guestbookCounter;
     @Mock
     private TravelEstimator travelEstimator;
+    @Mock
+    private MaintenanceRepository maintenanceRepository;
 
     private HomeService homeService;
     private User user;
@@ -91,7 +97,8 @@ class HomeServiceTest {
     void setUp() {
         homeService = new HomeService(userRepository, cultureMissionProgressRepository, cultureMissionQuizRepository,
                 treasureMissionProgressRepository, cooperativeMissionParticipantRepository,
-                new MissionCompletionChecker(), missionRecommender, guestbookCounter, travelEstimator);
+                new MissionCompletionChecker(), missionRecommender, guestbookCounter, travelEstimator,
+                maintenanceRepository, Clock.fixed(Instant.parse("2026-11-17T00:00:00Z"), ZoneId.of("Asia/Seoul")));
         user = activeUser(15L);
         lenient().when(travelEstimator.estimate(anyDouble(), anyDouble(), any())).thenAnswer(invocation ->
                 invocation.getArgument(2) == null ? TravelEstimate.UNKNOWN : LOCATED_ESTIMATE);

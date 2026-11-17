@@ -18,11 +18,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** 에이전트 경로에서만 고정 토큰을 검증하고 사용자와 분리된 조회 권한을 부여한다. */
+/** 에이전트 경로에서만 고정 토큰을 검증하고 사용자와 분리된 장소 조회·점검 예약 권한을 부여한다. */
 @RequiredArgsConstructor
 public class AgentTokenAuthenticationFilter extends OncePerRequestFilter {
     public static final String HEADER = "X-Agent-Token";
     public static final String READ_AUTHORITY = "AGENT_LOCATIONS_READ";
+    public static final String MAINTENANCE_WRITE_AUTHORITY = "AGENT_MAINTENANCE_WRITE";
     private final AgentApiProperties properties;
 
     /** 토큰이 없는 요청과 잘못된 요청을 구분하며 원문을 인증 객체에 저장하지 않는다. */
@@ -38,7 +39,8 @@ public class AgentTokenAuthenticationFilter extends OncePerRequestFilter {
                     values.getFirst().getBytes(StandardCharsets.UTF_8))) {
                 var context = SecurityContextHolder.createEmptyContext();
                 context.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(
-                        "agent", null, List.of(new SimpleGrantedAuthority(READ_AUTHORITY))));
+                        "agent", null, List.of(new SimpleGrantedAuthority(READ_AUTHORITY),
+                                new SimpleGrantedAuthority(MAINTENANCE_WRITE_AUTHORITY))));
                 SecurityContextHolder.setContext(context);
             } else {
                 request.setAttribute(JwtAuthenticationFilter.AUTH_ERROR_ATTRIBUTE, AuthErrorCode.INVALID_TOKEN);

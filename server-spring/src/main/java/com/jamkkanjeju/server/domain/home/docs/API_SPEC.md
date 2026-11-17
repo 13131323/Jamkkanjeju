@@ -11,7 +11,7 @@
 
 사용자가 메인 홈 화면에 진입하거나 홈을 새로고침할 때 호출한다. 사용자가 위치를 직접 선택한 경우 해당 행정구역의 대표 위도와 경도를 전달한다.
 
-인증된 사용자의 추천 미션, 진행 중인 미션, 서비스에 쌓인 방명록 개수와 사용자 캐릭터 이미지 URL을 한 번에 조회한다.
+인증된 사용자의 추천 미션, 진행 중인 미션, 서비스에 쌓인 방명록 개수와 사용자 캐릭터 이미지 URL과 점검 공지를 한 번에 조회한다.
 
 요청 위치를 기준으로 미션 장소까지의 거리는 미터 단위, 예상 소요 시간은 분 단위로 반환한다.
 
@@ -82,6 +82,14 @@ Status Code : `200 OK`
 | `progressMission[].currentStep` | integer | 사용자가 현재 진행 중인 단계 |
 | `guestbookCount` | integer | 마지막 방명록 확인 이후부터 현재까지 새로 생성된 방명록 개수. 전체 사용자의 일반·길바닥 방명록을 포함하며 삭제된 방명록은 제외 |
 | `characterImgUrl` | string, null | 온보딩 결과로 제공된 프로필 이미지 URL. 온보딩 결과가 없으면 `null` |
+| `maintenance` | object, null | 표시할 점검 공지. 예약 또는 진행 중이며 종료 예정 시각 전인 공지가 없으면 `null` |
+| `maintenance.message` | string | 점검 안내 문구 |
+| `maintenance.startsAt` | string(date-time) | 점검 시작 시각. KST 기준 offset 없는 ISO 8601 |
+| `maintenance.endsAt` | string(date-time) | 점검 종료 예정 시각. KST 기준 offset 없는 ISO 8601 |
+| `maintenance.status` | string | 저장된 점검 상태. `SCHEDULED`(예약) 또는 `IN_PROGRESS`(진행 중) |
+
+점검 시작 전에도 예약 공지를 반환한다. 종료 예정 시각과 현재 시각이 같거나 이미 지난 공지 및 완료·실패·취소된 공지는 반환하지 않는다.
+표시 대상이 여러 건이면 시작 시각이 가장 빠른 공지를 반환하고, 시작 시각이 같으면 먼저 등록된 공지를 반환한다.
 
 아래 JSON의 장소와 거리·시간은 응답 형식을 설명하기 위한 예시다.
 
@@ -135,7 +143,29 @@ Status Code : `200 OK`
     }
   ],
   "guestbookCount": 2,
-  "characterImgUrl": "https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/001.png"
+  "characterImgUrl": "https://jamkkanjejustorage.blob.core.windows.net/jamkkanjeju/character_image/001.png",
+  "maintenance": {
+    "message": "장소 데이터 동기화를 위한 점검이 예정되어 있습니다.",
+    "startsAt": "2026-11-18T02:00:00",
+    "endsAt": "2026-11-18T03:00:00",
+    "status": "SCHEDULED"
+  }
+}
+```
+
+---
+
+### 점검 공지가 없는 경우
+
+기존 홈 응답 필드는 동일하며 `maintenance`는 생략하지 않고 `null`로 반환한다.
+
+```json
+{
+  "missionRecommend": [],
+  "progressMission": [],
+  "guestbookCount": 0,
+  "characterImgUrl": null,
+  "maintenance": null
 }
 ```
 

@@ -23,6 +23,8 @@ import missionBannerCulture from '@shared/lib/images/mission-banner-culture.png'
 import missionBannerCoop from '@shared/lib/images/mission-banner-coop.png';
 import missionBannerTreasure from '@shared/lib/images/mission-banner-treasure.png';
 import { NavMenuButton, NavMenuModal } from '@widgets/nav-menu';
+import type { HomeMaintenance } from '@shared/api/home';
+import { HomeMaintenanceBackground, MaintenanceInProgress, ScheduledMaintenanceNotice } from './HomeMaintenance';
 
 // 배너 굵은 한 줄(Frame 619의 아래 텍스트)은 서버가 주지 않는 디자인 카피라 미션 종류로 매핑한다.
 // 문구는 "탐라로그 V2 / 배너" 세 variant에서 그대로 가져왔다
@@ -74,6 +76,24 @@ const mock = {
 };
 
 export function HomePage() {
+  const { maintenance, isPending, isError, refetch } = useHomeData();
+
+  // 점검 중에는 일반 홈의 메뉴·미션·주소 조회 등 부수 동작도 마운트하지 않는다.
+  if (maintenance?.status === 'IN_PROGRESS') return <MaintenanceInProgress maintenance={maintenance} />;
+  if (isPending || isError) {
+    return (
+      <HomeMaintenanceBackground>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white/40 px-6 backdrop-blur-sm">
+          <p role="status" className="text-body-md text-warm-neutral-900">{isError ? '홈을 불러오지 못했어요.' : '불러오는 중…'}</p>
+          {isError && <button type="button" onClick={refetch} className="bg-cool-neutral-900 text-cool-neutral-white rounded-full px-6 py-3">다시 시도</button>}
+        </div>
+      </HomeMaintenanceBackground>
+    );
+  }
+  return <AvailableHomePage maintenance={maintenance} />;
+}
+
+function AvailableHomePage({ maintenance }: { maintenance: HomeMaintenance | null }) {
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   // [보류] 위치 직접 입력 모달 — 아래 AddressModal 주석 참고
@@ -169,6 +189,7 @@ export function HomePage() {
             <TopBar isNight={isNight} />
 
             <MissionProgressCard isNight={isNight} />
+            {maintenance?.status === 'SCHEDULED' && <ScheduledMaintenanceNotice maintenance={maintenance} isNight={isNight} />}
 
             {/* 모드변경은 방명록·할 일과 같은 줄이지만 화면 **가장 왼쪽**에 선다(디자인 home_3 > Frame 628: boardX 18, boardY 157).
                 top 106은 디자인 그대로가 아니라, 미션 카드(바닥 82) ↔ 방명록·AI엽서 원(top 102) 간격을 20px로 맞추면서
@@ -178,7 +199,7 @@ export function HomePage() {
             {/* 미션 카드 바닥(82)에서 20px 떨어지도록 top을 112→102로 조정했다(사용자 요청).
                 할 일 숏컷은 원격 커밋(qa: 홈 할 일 숏컷 AI엽서 교체)에서 AI엽서 바로가기로 교체됨 —
                 병합 시 밤모드 흰 글자 지원만 이어서 추가했다. */}
-            <div className="pointer-events-auto absolute flex gap-4" style={{ right: 16, top: `calc(var(--safe-area-top) + 102px)` }}>
+            <div className="pointer-events-auto absolute flex gap-4" style={{ right: 16, top: `calc(var(--safe-area-top) + ${maintenance?.status === 'SCHEDULED' ? 144 : 102}px)` }}>
               <TravelNoteShortcut isNight={isNight} />
               <AiPostcardShortcut isNight={isNight} />
             </div>
