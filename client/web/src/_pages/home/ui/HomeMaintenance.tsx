@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useId, useRef, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
+import { MaintenanceDialog } from '@shared/ui/MaintenanceDialog';
+import { sendToApp } from '@shared/lib/bridge/utils';
 import Image from 'next/image';
 import type { HomeMaintenance } from '@shared/api/home';
 import homeBackImage from '@shared/lib/images/home-back-image.png';
@@ -36,51 +38,16 @@ export function HomeMaintenanceBackground({ children }: { children: React.ReactN
   );
 }
 
-/** 점검 중에는 안내만 표시하며 배경 터치·Escape·Tab으로 닫거나 홈을 조작할 수 없다. */
-export function MaintenanceInProgress({ maintenance }: { maintenance: HomeMaintenance }) {
-  const titleId = useId();
-  const messageId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const previousFocus = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    dialogRef.current?.focus();
-    function keepFocus(event: KeyboardEvent) {
-      if (event.key === 'Tab' || event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        dialogRef.current?.focus();
-      }
-    }
-    document.addEventListener('keydown', keepFocus, true);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', keepFocus, true);
-      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
-    };
-  }, []);
-
+/** 홈에서는 점검 정보와 종료 버튼만 제공한다. 일반 웹의 종료 버튼은 동작하지 않는다. */
+export function MaintenanceInProgress({ maintenance }: { maintenance: HomeMaintenance | null }) {
   return (
     <HomeMaintenanceBackground>
-      <div className="fixed inset-0 z-50 flex touch-none items-center justify-center bg-black/50 px-6 backdrop-blur-md">
-        <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={messageId} className="bg-cool-neutral-white flex max-h-[80dvh] w-full max-w-90 touch-pan-y flex-col items-center gap-5 overflow-y-auto rounded-3xl px-6 py-8 text-center shadow-xl outline-none">
-          <div aria-hidden="true" className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-tertiary-100 text-tertiary-800">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
-            </svg>
-          </div>
-          <h1 id={titleId} className="text-heading-h3 text-warm-neutral-900 font-bold">서비스 점검 중입니다</h1>
-          <p id={messageId} className="text-body-md text-warm-neutral-700 w-full whitespace-pre-wrap break-words">{maintenance.message}</p>
-          <div className="bg-cool-neutral-100 w-full rounded-2xl px-3 py-4">
-            <p className="text-label-sm text-cool-neutral-600 mb-1">점검 시간 (한국시간)</p>
-            <p className="text-label-md text-warm-neutral-900 font-semibold">{formatMaintenancePeriod(maintenance.startsAt, maintenance.endsAt)}</p>
-          </div>
-          <p className="text-body-sm text-cool-neutral-500">점검이 끝난 후 다시 이용해 주세요.</p>
-        </div>
-      </div>
+      <MaintenanceDialog
+        message={maintenance?.status === 'IN_PROGRESS' ? maintenance.message : '현재 서비스 점검 중입니다.'}
+        period={maintenance?.status === 'IN_PROGRESS' ? formatMaintenancePeriod(maintenance.startsAt, maintenance.endsAt) : undefined}
+        actionLabel="종료하기"
+        onAction={() => sendToApp({ type: 'EXIT_APP', payload: {} })}
+      />
     </HomeMaintenanceBackground>
   );
 }

@@ -12,12 +12,20 @@ import java.time.LocalDateTime;
 /** 지도 홈의 상세 응답. 장소별 미션·방명록·수령 쿠폰과 길바닥 방명록을 담는다. */
 public record GetMapContentsResponse(
         List<LocationInfo> locations,
-        List<RoadGuestbookInfo> roadGuestbooks
+        List<RoadGuestbookInfo> roadGuestbooks,
+        List<Long> pendingLocationImageIds
 ) {
 
     /** 서비스가 조합한 두 목록으로 상세 응답을 만든다. */
     public static GetMapContentsResponse of(List<LocationInfo> locations, List<RoadGuestbookInfo> roadGuestbooks) {
-        return new GetMapContentsResponse(List.copyOf(locations), List.copyOf(roadGuestbooks));
+        return of(locations, roadGuestbooks, List.of());
+    }
+
+    /** 사진을 준비 중인 장소 ID를 함께 반환하여 화면 갱신의 종료를 판단한다. */
+    public static GetMapContentsResponse of(List<LocationInfo> locations, List<RoadGuestbookInfo> roadGuestbooks,
+                                            List<Long> pendingLocationImageIds) {
+        return new GetMapContentsResponse(List.copyOf(locations), List.copyOf(roadGuestbooks),
+                List.copyOf(pendingLocationImageIds));
     }
 
     /** 장소 한 건과 해당 장소의 상세 지도 콘텐츠이다. */

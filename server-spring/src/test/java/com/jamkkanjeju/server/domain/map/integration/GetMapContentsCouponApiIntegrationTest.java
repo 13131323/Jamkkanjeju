@@ -4,8 +4,11 @@ import static com.jamkkanjeju.server.domain.map.support.MapModalFixtures.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.jwt.JwtTokenProvider;
 import com.jamkkanjeju.server.domain.home.entity.AcquiredCoupon;
@@ -25,6 +28,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 /** 실제 인증·MySQL에서 수령 쿠폰 식별자와 사용자별 격리를 검증한다. */
 @SpringBootTest(properties = {
@@ -39,8 +43,34 @@ class GetMapContentsCouponApiIntegrationTest extends MySqlIntegrationTestSupport
     @Autowired MockMvc mvc;
     @Autowired JwtTokenProvider tokens;
     @MockitoBean TourApiClient images;
+    @MockitoBean LocationImageCache cachedImages;
 
     private <T> T persist(T entity) { em.persist(entity); return entity; }
+
+    @Test
+    void 대표사진_Redis_장애는_지도홈_공통_500으로_반환한다() throws Exception {
+        User current = persist(user(null, "map-cache-error@example.com"));
+        persist(location(null, 9_000_000_111L));
+        em.flush();
+        when(cachedImages.getCachedLocationImageUrl(anyLong())).thenThrow(new RedisConnectionFailureException("test Redis outage"));
+        mvc.perform(get("/api/v2/map/contents")
+                        .header("Authorization", "Bearer " + tokens.createAccessToken(current).value())
+                        .param("leftTopLatitude", "33.451").param("leftTopLongitude", "126.919")
+                        .param("rightBottomLatitude", "33.449").param("rightBottomLongitude", "126.921")
+                        .param("userLatitude", "33.45").param("userLongitude", "126.92")
+                        .param("isClustered", "false"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("INTERNAL_SERVER_ERROR"));
+    }
+
+    @Test
+    void 클러스터_조회는_Redis를_호출하지_않는다() throws Exception {
+        User current = persist(user(null, "map-cache-cluster@example.com"));
+        persist(location(null, 9_000_000_112L));
+        em.flush();
+        request(current, true);
+        verifyNoInteractions(cachedImages);
+    }
 
     private void acquire(User user, Coupon coupon) {
         persist(AcquiredCoupon.builder().user(user).coupon(coupon).acquiredAt(TIME).build());

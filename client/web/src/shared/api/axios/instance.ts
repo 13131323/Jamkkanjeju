@@ -1,5 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
-import { notifyApiError } from '@packages/shared';
+import { notifyApiError, isServiceUnavailable, isMaintenanceActive, isMaintenanceAllowedRequest } from '@packages/shared';
 import axios, { type AxiosRequestConfig } from 'axios';
 import { env } from '@shared/config/env';
 import { ApiServerError, ApiTimeoutError } from '@shared/lib/errors';
@@ -14,6 +14,7 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
+  if (isMaintenanceActive() && !isMaintenanceAllowedRequest(config.url)) throw new axios.CanceledError('서비스 점검 중입니다.');
   if (isLogoutInProgress()) throw new axios.CanceledError('로그아웃 중입니다.');
   const session = readLoginSession();
   (config as typeof config & { authUserId?: number }).authUserId = session?.loginUser.id;
@@ -26,6 +27,10 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (isServiceUnavailable(error)) {
+      if (typeof window !== 'undefined') notifyApiError(error);
+      return Promise.reject(error);
+    }
     const config = error.config as (AxiosRequestConfig & { authRetried?: boolean; authUserId?: number }) | undefined;
     const current = readLoginSession();
     if (typeof window !== 'undefined' && error.response?.status === 401 && config && config.url !== '/api/v2/auth/login' && current?.loginUser.id === config.authUserId) {

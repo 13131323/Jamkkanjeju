@@ -1,7 +1,7 @@
 #requires -Version 7.0
 <#
 제주 TourAPI 장소를 현재 Spring 프로젝트의 로컬 Docker MySQL에 적재한다.
-FastAPI scripts/insert_location.py의 수집·분류·검증·contentId 정렬·갱신 규칙을 따른다.
+제주 법정동 코드와 도메인 분류 규칙으로 수집·검증하고 기존 contentId는 제외한다.
 Spring 서버·Maven·Python 없이 PowerShell 7과 Docker Compose만 사용한다.
 #>
 [CmdletBinding()]
@@ -67,6 +67,7 @@ function ConvertTo-ContentId {
     if (![long]::TryParse(([string]$Value).Trim(), [Globalization.NumberStyles]::Integer, $InvariantCulture, [ref]$id)) {
         throw 'TourAPI contentid가 유효한 BIGINT 정수가 아닙니다.'
     }
+    if ($id -le 0) { throw 'TourAPI contentid는 양수여야 합니다.' }
     return $id
 }
 
@@ -101,13 +102,29 @@ function ConvertTo-LocationRow {
         Radius = $LocationRadiusMeter
         Longitude = ConvertTo-Coordinate (Get-ItemValue $Item 'mapx') 'mapx' $contentId -180 180
         Latitude = ConvertTo-Coordinate (Get-ItemValue $Item 'mapy') 'mapy' $contentId -90 90
+        # 목록 응답의 대표 사진은 별도 Redis 사전 적재에서만 사용하며 LOCATION에는 저장하지 않는다.
+        RepresentativeImageUrl = Get-ListImageUrl $Item
     }
+}
+
+# 목록에 제공된 HTTP(S) 대표 사진만 사용한다. URL 부재는 사진 없음으로 확정하지 않는다.
+function Get-ListImageUrl {
+    param([Collections.IDictionary]$Item)
+    foreach ($field in @('firstimage', 'firstimage2')) {
+        $value = ([string](Get-ItemValue $Item $field)).Trim()
+        $uri = $null
+        if ([Uri]::TryCreate($value, [UriKind]::Absolute, [ref]$uri) -and $uri.Scheme -in @('http', 'https')) {
+            return $value
+        }
+    }
+    return $null
 }
 
 # 제주 전체를 마지막 페이지까지 조회한다. HTTP 예외에 키가 포함된 URL을 출력하지 않는다.
 function Get-TourApiLocations {
     param([hashtable]$Config)
     $byContentId = [Collections.Generic.Dictionary[long, object]]::new()
+    $seenIds = [Collections.Generic.HashSet[long]]::new()
     $pageNo = 1
     $fetched = 0
     $totalCount = $null
@@ -120,7 +137,7 @@ function Get-TourApiLocations {
                 MobileOS = $Config.TOUR_API_MOBILE_OS
                 MobileApp = $Config.TOUR_API_MOBILE_APP
                 _type = 'json'
-                areaCode = '39'
+                lDongRegnCd = '50'
                 numOfRows = $RowsPerPage
                 pageNo = $pageNo
             }
@@ -150,6 +167,14 @@ function Get-TourApiLocations {
             if (![int]::TryParse([string](Get-ItemValue $body 'totalCount'), [ref]$pageTotal) -or $pageTotal -lt 0) {
                 throw "TourAPI totalCount 형식 오류: pageNo=$pageNo"
             }
+            if ($null -ne $totalCount -and $totalCount -ne $pageTotal) {
+                throw "TourAPI 조회 중 totalCount가 변경되었습니다: pageNo=$pageNo"
+            }
+            $responsePage = 0
+            $responseRows = 0
+            if (![int]::TryParse([string](Get-ItemValue $body 'pageNo'), [ref]$responsePage) -or $responsePage -ne $pageNo) {
+                throw "TourAPI pageNo 불일치: pageNo=$pageNo"
+            }
             $totalCount = $pageTotal
             $items = Get-ItemValue $body 'items'
             $pageItems = @()
@@ -160,17 +185,23 @@ function Get-TourApiLocations {
                 elseif ($null -ne $rawItems -and $rawItems -ne '') { throw "TourAPI items 형식 오류: pageNo=$pageNo" }
             } elseif ($null -ne $items -and $items -ne '') { throw "TourAPI items 형식 오류: pageNo=$pageNo" }
 
+            $expected = [Math]::Min($RowsPerPage, [Math]::Max(0, $totalCount - $fetched))
+            if ($pageItems.Count -ne $expected -or
+                    ![int]::TryParse([string](Get-ItemValue $body 'numOfRows'), [ref]$responseRows) -or
+                    ($responseRows -ne $RowsPerPage -and $responseRows -ne $pageItems.Count)) {
+                throw "TourAPI 페이지 건수 불일치: pageNo=$pageNo"
+            }
             foreach ($item in $pageItems) {
-                if ($item -isnot [Collections.IDictionary]) { continue }
+                if ($item -isnot [Collections.IDictionary]) { throw "TourAPI 장소 형식 오류: pageNo=$pageNo" }
+                $contentId = ConvertTo-ContentId (Get-ItemValue $item 'contentid')
+                if (!$seenIds.Add($contentId)) { throw "TourAPI 중복 contentId: $contentId" }
+                if (([string](Get-ItemValue $item 'lDongRegnCd')).Trim() -ne '50') {
+                    throw "제주 이외 지역 또는 지역 코드 누락: contentId=$contentId"
+                }
                 $fetched++
                 $code = ([string](Get-ItemValue $item 'lclsSystm1')).Trim()
                 if (!$LocationCategories.Contains($code)) { continue }
                 $row = ConvertTo-LocationRow $item $LocationCategories[$code]
-                if ($byContentId.ContainsKey($row.ContentId)) {
-                    $before = ConvertTo-Json -InputObject $byContentId[$row.ContentId] -Compress
-                    $after = ConvertTo-Json -InputObject $row -Compress
-                    if ($before -cne $after) { throw "중복 contentId의 데이터가 서로 다릅니다: $($row.ContentId)" }
-                }
                 $byContentId[$row.ContentId] = $row
             }
             Write-Host "TourAPI page=$pageNo, 조회=$fetched/$totalCount, 저장 대상=$($byContentId.Count)"
@@ -190,11 +221,15 @@ function ConvertTo-SqlText {
     return "CONVERT(X'$hex' USING utf8mb4)"
 }
 
-# 전체 검증이 끝난 데이터만 트랜잭션으로 upsert한다. 기존 PK와 다른 테이블의 참조는 유지한다.
+# 임시 테이블에 수집 결과를 담고 DB에 없는 contentId만 추가한다. 기존 행은 수정하지 않는다.
 function New-LocationImportSql {
     param([object[]]$Locations)
+    if ($Locations.Count -eq 0) { throw '빈 목록으로 장소를 적재할 수 없습니다.' }
     $sql = [Text.StringBuilder]::new()
     [void]$sql.AppendLine('SET NAMES utf8mb4;')
+    # 임시 테이블 CHECK 실패는 mysql 배치 실행을 중단시켜 COMMIT 전에 연결 종료/롤백된다.
+    [void]$sql.AppendLine('CREATE TEMPORARY TABLE location_import_check (actual BIGINT NOT NULL, expected BIGINT NOT NULL, CHECK (actual = expected)) ENGINE=InnoDB;')
+    [void]$sql.AppendLine('CREATE TEMPORARY TABLE location_import_stage LIKE `location`;')
     [void]$sql.AppendLine('START TRANSACTION;')
     for ($start = 0; $start -lt $Locations.Count; $start += $SqlBatchSize) {
         $last = [Math]::Min($start + $SqlBatchSize, $Locations.Count)
@@ -211,16 +246,25 @@ function New-LocationImportSql {
             )
             '(' + ($values -join ', ') + ')'
         }
-        [void]$sql.AppendLine('INSERT INTO `location` (`content_id`, `title`, `address`, `category`, `radius`, `latitude`, `longitude`) VALUES')
+        [void]$sql.AppendLine('INSERT INTO location_import_stage (`content_id`, `title`, `address`, `category`, `radius`, `latitude`, `longitude`) VALUES')
         [void]$sql.AppendLine(($tuples -join ",`n"))
-        [void]$sql.AppendLine(@'
-ON DUPLICATE KEY UPDATE
- `title` = VALUES(`title`), `address` = VALUES(`address`), `category` = VALUES(`category`),
- `radius` = VALUES(`radius`), `latitude` = VALUES(`latitude`), `longitude` = VALUES(`longitude`);
-'@)
+        [void]$sql.AppendLine(';')
     }
-    [void]$sql.AppendLine('COMMIT;')
     $ids = ($Locations | ForEach-Object { $_.ContentId.ToString($InvariantCulture) }) -join ','
+    [void]$sql.AppendLine(@'
+INSERT INTO `location` (`content_id`, `title`, `address`, `category`, `radius`, `latitude`, `longitude`)
+SELECT s.content_id, s.title, s.address, s.category, s.radius, s.latitude, s.longitude
+FROM location_import_stage s
+LEFT JOIN `location` existing ON existing.content_id = s.content_id
+WHERE existing.id IS NULL
+ORDER BY s.content_id;
+SET @location_import_inserted = ROW_COUNT();
+'@)
+    $condition = " WHERE ``content_id`` IN ($ids)"
+    [void]$sql.AppendLine("INSERT INTO location_import_check SELECT COUNT(*), $($Locations.Count) FROM ``location``$condition;")
+    [void]$sql.AppendLine('COMMIT;')
+    [void]$sql.AppendLine("SELECT CONCAT('inserted_count=', @location_import_inserted);")
+    [void]$sql.AppendLine("SELECT CONCAT('skipped_count=', $($Locations.Count) - @location_import_inserted);")
     [void]$sql.AppendLine("SELECT CONCAT('verified_count=', COUNT(*)) FROM ``location`` WHERE ``content_id`` IN ($ids);")
     [void]$sql.AppendLine("SELECT CONCAT('target_database=', DATABASE());")
     return $sql.ToString()
@@ -288,7 +332,7 @@ function Invoke-LocationImport {
         throw '저장 후 LOCATION 건수 검증이 실패했습니다. COMMIT 이후 검증이므로 DB를 확인하십시오.'
     }
     Write-Host $outputText.Trim()
-    Write-Host 'LOCATION 저장 완료. 기존 장소 PK는 유지하며 원본에 없는 기존 장소는 삭제하지 않았습니다.'
+    Write-Host 'LOCATION 추가 완료. 기존 contentId는 건너뛰었으며 기존 장소 정보와 연결 데이터는 변경하지 않았습니다.'
 }
 
 # dot-source는 검증용 함수 로딩만 수행하고 API 호출이나 DB 적재를 자동 실행하지 않는다.

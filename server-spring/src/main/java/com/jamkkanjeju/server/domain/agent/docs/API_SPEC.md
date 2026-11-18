@@ -223,3 +223,59 @@ Status Code : `201 Created`
 요청 검증(400), 인증·인가(401/403), 서버 오류(500)는 [공통 오류 응답](../../../common/docs/commonError.md)을 따른다. 도메인 고유 오류는 없다.
 고정 토큰 누락은 `UNAUTHORIZED`, 비어 있거나 중복·불일치한 토큰 및 서버 토큰 미설정은 `INVALID_TOKEN`이다.
 고정 토큰에는 JWT 만료 판정을 적용하지 않는다.
+
+---
+
+# 에이전트 장소 동기화 API
+
+| 구분 | 내용 |
+| --- | --- |
+| HTTP 메서드 | `POST` |
+| 엔드포인트 | `/api/v2/agent/locations/sync` |
+
+### API 설명
+
+사용자가 승인한 장소 추가·삭제 계획을 반영한다. 승인 절차는 에이전트 CLI에서 수행하며 이 API는 고정 토큰을 가진 에이전트 전용이다. 사용자 JWT로 호출할 수 없다.
+
+### 요청 Header
+
+| 헤더 | 필수 여부 | 설명 |
+| --- | --- | --- |
+| `X-Agent-Token` | 필수 | 기존 에이전트 고정 토큰 |
+| `Idempotency-Key` | 필수 | 본문의 requestId와 동일 |
+
+### 요청 Body
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| requestId | string | `location-sync-` 뒤 소문자 16진수 32자리. 같은 ID와 같은 계획은 기존 결과 반환 |
+| storedSnapshotId | string | 필수, 공백 불가·최대 80자. 에이전트 DB 스냅샷 참조 |
+| tourapiSnapshotId | string | 필수, 공백 불가·최대 80자. 에이전트 TourAPI 스냅샷 참조 |
+| addLocations | object[] | 필수. contentId 양수·title 필수 최대 100자·address 필수 최대 255자·category 6분류·radius 0 이상·latitude -90~90·longitude -180~180 |
+| deleteLocations | object[] | 필수. locationId와 contentId 모두 양수 |
+
+허용 category는 축제·공연·행사, 체험관광, 음식, 쇼핑, 문화관광, 레저스포츠이다. 좌표는 유한한 수여야 한다. 배열 내 contentId 중복과 삭제 locationId 중복, 동일 contentId의 추가·삭제 동시 요청은 허용하지 않는다. 두 배열은 비어 있을 수 있다.
+
+```json
+{"requestId":"location-sync-11111111111111111111111111111111","storedSnapshotId":"db-example","tourapiSnapshotId":"tourapi-example","addLocations":[{"contentId":3000001,"title":"추가할 장소","address":"제주시","category":"음식","radius":100,"latitude":33.5,"longitude":126.5}],"deleteLocations":[{"locationId":11,"contentId":3000002}]}
+```
+
+### 정상 응답
+
+Status Code: `200 OK`
+
+```json
+{"requestId":"location-sync-11111111111111111111111111111111","status":"COMPLETED","addedCount":1,"deletedCount":1,"addedContentIds":[3000001],"deletedContentIds":[3000002]}
+```
+
+같은 requestId와 같은 계획을 재전송하면 최초 완료 결과를 반환한다. 배열 순서는 contentId 오름차순이다. 공통 요청·인증·서버 오류는 기존 [공통 오류](../../../common/docs/commonError.md)를 따른다.
+
+### 동기화 충돌
+
+Status Code: `409 Conflict`
+
+같은 requestId의 본문이 달라졌거나, 추가 contentId가 이미 존재하거나, 삭제할 locationId/contentId가 현재 DB와 다르면 반영하지 않는다. 새 비교와 승인이 필요하다.
+
+```json
+{"code":"LOCATION_SYNC_CONFLICT","message":"동기화 계획 또는 처리 상태가 변경되었습니다. 장소를 다시 비교하고 승인해 주세요."}
+```

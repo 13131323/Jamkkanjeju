@@ -115,3 +115,13 @@ exit;
 - `POST /api/v2/agent/maintenances`: 같은 `X-Agent-Token`으로 점검 예약을 생성합니다. JSON 본문은 `{"message":"공지 문구"}`이며 `{}`·null/빈 문구에는 기본 공지를 사용합니다.
 - `startsAt`을 지정하면 그 KST 시각, 생략·null이면 서버 시각 1시간 뒤에 시작하며 시작 1시간 뒤 종료 예정인 `SCHEDULED` 예약을 저장하고 `201`과 `maintenanceId`, `message`, `startsAt`, `endsAt`, `status`를 반환합니다.
 - 예약 API는 저장만 처리합니다. 점검 상태는 1초 간격 스케줄러와 API 요청 시 갱신하며 점검 시간 동안 일반 API를 503으로 차단합니다. 홈 GET·로그인 POST·토큰 재발급 POST와 기존 인증을 거친 에이전트 API는 허용합니다. 종료 예정 시각에는 차단을 해제합니다. 장소 동기화는 직접 실행해야 합니다.
+
+
+## 지도 대표 사진 Redis 캐시
+
+- Compose에 Redis 컨테이너를 추가했습니다. `docker compose up -d --build`로 앱과 함께 실행하며 로컬 Redis만 시작하려면 `docker compose up -d redis`를 사용합니다.
+- 컨테이너의 Spring은 `redis:6379`, 로컬 Maven 실행은 `.env`의 `REDIS_HOST=localhost`, `REDIS_PORT=6379`로 연결합니다. Redis 포트는 호스트의 127.0.0.1에만 바인딩합니다.
+- 대표 사진 URL은 24시간, 정상 사진 없음(NO_IMAGE)은 1시간 캐싱합니다. 지도 홈·모달·검색·주변 미션에서 공통 재사용합니다. TTL과 연결·명령 타임아웃은 application.yaml에 있습니다.
+- TourAPI 일시 장애는 최대 3회 시도 후 사진만 null로 대체하고 캐싱하지 않습니다. Redis 읽기·쓰기 장애는 공통 500이며 우회하지 않습니다.
+- 현재 Redis에는 캐시만 저장하며 재생성 후 캐시 미스에서는 사진을 다시 조회합니다. DB 마이그레이션은 필요하지 않습니다.
+- 연결은 [Spring Boot Redis 설정](https://docs.spring.io/spring-boot/reference/data/nosql.html#data.nosql.redis)과 StringRedisTemplate을 사용합니다.

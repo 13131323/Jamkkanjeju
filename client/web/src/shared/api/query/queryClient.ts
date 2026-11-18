@@ -1,12 +1,15 @@
 import { QueryClient } from '@tanstack/react-query';
+import { isMaintenanceActive, isServiceUnavailable, shouldRetryApiRequest } from '@packages/shared';
 import { hashQueryKeyByAccount } from './accountScopedHash';
 
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
+        retry: shouldRetryApiRequest,
         staleTime: 60 * 1000, // 1분 (임시설정)
-        throwOnError: true,
+        throwOnError: (error) => !isServiceUnavailable(error) && !isMaintenanceActive()
+          && (error as { code?: string } | null)?.code !== 'ERR_CANCELED',
         // 통째로 버리지 않아도 되고, 되돌아오면 캐시 적중으로 끝난다(accountScopedHash.ts)
         queryKeyHashFn: hashQueryKeyByAccount,
       },

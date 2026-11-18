@@ -13,7 +13,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/** 에이전트 요청을 사용자 JWT 인증과 분리하고 명시한 장소 조회·점검 예약 경로만 허용한다. */
+/** 에이전트 요청을 사용자 JWT 인증과 분리하고 명시한 장소 조회·점검 예약·동기화 경로만 허용한다. */
 @Configuration
 @EnableConfigurationProperties(AgentApiProperties.class)
 public class AgentApiSecurityConfig {
@@ -29,6 +29,8 @@ public class AgentApiSecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.POST, "/api/v2/agent/locations/sync")
+                        .hasAuthority(AgentTokenAuthenticationFilter.SYNC_AUTHORITY)
                         .requestMatchers(HttpMethod.GET, "/api/v2/agent/locations")
                         .hasAuthority(AgentTokenAuthenticationFilter.READ_AUTHORITY)
                         .requestMatchers(HttpMethod.POST, "/api/v2/agent/maintenances")

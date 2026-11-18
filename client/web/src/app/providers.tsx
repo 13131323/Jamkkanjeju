@@ -14,6 +14,7 @@ import { sendToApp } from '@shared/lib/bridge/utils';
 import { usePressFeedback } from '@shared/lib/interaction/usePressFeedback';
 import { rememberInitialPathname } from '@shared/lib/navigationHistory';
 import { ApiErrorToast } from '@shared/ui/ApiErrorToast';
+import { GlobalMaintenanceGate } from '@shared/ui/GlobalMaintenanceGate';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const queryClient = getQueryClient();
@@ -35,6 +36,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ApiErrorToast />
+      <GlobalMaintenanceGate />
       <Sentry.ErrorBoundary fallback={<p>오류가 발생했습니다.</p>}>
         {/* 앱이 낡거나 API 주소가 어긋나면 모든 화면이 401이라 데이터를 채울 수 없다.
             루트에서 한 번 갈라 안내를 띄운다 — 화면마다 "불러오지 못했어요"를 내면

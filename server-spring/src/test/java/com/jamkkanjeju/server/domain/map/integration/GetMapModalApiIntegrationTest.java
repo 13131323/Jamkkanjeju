@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.jwt.JwtTokenProvider;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
@@ -67,6 +68,7 @@ class GetMapModalApiIntegrationTest extends MySqlIntegrationTestSupport {
     @Autowired TravelEstimator travel;
     @MockitoBean Clock clock;
     @MockitoBean TourApiClient images;
+    @MockitoBean LocationImageCache cachedImages;
     @MockitoSpyBean MissionRewardStatusRepository rewards;
     User current;
     Location location;
@@ -76,7 +78,7 @@ class GetMapModalApiIntegrationTest extends MySqlIntegrationTestSupport {
     void setup() {
         when(clock.instant()).thenReturn(Instant.parse("2026-10-26T03:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
-        when(images.getLocationImageUrl(anyLong())).thenReturn("https://example.com/location.jpg");
+        when(cachedImages.getLocationImageUrl(anyLong())).thenReturn("https://example.com/location.jpg");
         current = newUser();
         location = persist(location(null, 8_000_000_001L));
     }
@@ -285,7 +287,7 @@ class GetMapModalApiIntegrationTest extends MySqlIntegrationTestSupport {
     @ValueSource(booleans = {false, true})
     void 미션이_없거나_비활성뿐이면_장소는_유지하고_이미지는_null일수있다(boolean inactive) throws Exception {
         if (inactive) treasure(MissionActivationStatus.INACTIVE, false);
-        when(images.getLocationImageUrl(location.getContentId())).thenReturn(null);
+        when(cachedImages.getLocationImageUrl(location.getContentId())).thenReturn(null);
         Map<String, List<Map<String, Object>>> before = snapshot();
         request(current, "LOCATION", location.getId()).andExpect(status().isOk())
                 .andExpect(jsonPath("$.mission").value(nullValue()))

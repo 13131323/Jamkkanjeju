@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.jwt.JwtTokenProvider;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.*;
@@ -66,6 +67,7 @@ class GetMapLocationDetailApiIntegrationTest extends MySqlIntegrationTestSupport
     @Autowired JwtTokenProvider tokens;
     @MockitoBean Clock clock;
     @MockitoBean TourApiClient images;
+    @MockitoBean LocationImageCache cachedImages;
     @MockitoSpyBean MissionRewardStatusRepository rewards;
     User current;
     Location location;
@@ -77,7 +79,7 @@ class GetMapLocationDetailApiIntegrationTest extends MySqlIntegrationTestSupport
         when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
         when(images.getLocationOverview(anyLong())).thenReturn("장소 설명");
         when(images.getLocationDetailImageUrls(anyLong(), anyInt())).thenReturn(List.of("detail-1.jpg", "detail-2.jpg"));
-        when(images.getLocationImageUrl(anyLong())).thenReturn("representative.jpg");
+        when(cachedImages.getLocationImageUrl(anyLong())).thenReturn("representative.jpg");
         // 임시 DB의 초기 추천 후보만 이번 트랜잭션에서 제외하고 준비한 좌표로 결과를 고정한다.
         jdbc.update("update treasure_mission set status='INACTIVE'");
         jdbc.update("update cooperative_mission set status='INACTIVE'");

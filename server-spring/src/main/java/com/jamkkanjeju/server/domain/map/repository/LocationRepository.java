@@ -1,5 +1,12 @@
 package com.jamkkanjeju.server.domain.map.repository;
 
+import jakarta.persistence.LockModeType;
+import java.util.Collection;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.repository.query.Param;
+
 import com.jamkkanjeju.server.domain.map.entity.Location;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
@@ -42,4 +49,21 @@ public interface LocationRepository extends JpaRepository<Location, Long> {
      */
     List<Location> findAllByLatitudeBetweenAndLongitudeBetween(double minLatitude, double maxLatitude,
                                                               double minLongitude, double maxLongitude);
+
+    /** 결과: 지정 장소 ID의 현재 행을 ID순으로 쓰기 잠금 조회한다. 없으면 빈 목록이고 연관은 로딩하지 않는다.
+     * 사용: POST /api/v2/agent/locations/sync의 삭제 계획에서 locationId/contentId 동일성을 검증한다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select l from Location l where l.id in :ids order by l.id")
+    List<Location> findAllLockedByIds(@Param("ids") Collection<Long> ids);
+
+    /** 결과: 지정 contentId가 이미 존재하는 장소 목록이다. 연관은 로딩하지 않으며 없으면 빈 목록이다.
+     * 사용: POST /api/v2/agent/locations/sync에서 승인 이후 추가 대상이 이미 생긴 충돌을 판단한다. */
+    List<Location> findAllByContentIdIn(Collection<Long> contentIds);
+
+    /** 결과: 지정 ID의 장소를 삭제하고 삭제 건수를 반환한다. 자식 참조는 DB FK 규칙을 따른다.
+     * 사용: POST /api/v2/agent/locations/sync에서 미션과 진행도 정리 후 승인한 장소만 제거한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Location l where l.id in :ids")
+    int deleteByIds(@Param("ids") Collection<Long> ids);
+
 }

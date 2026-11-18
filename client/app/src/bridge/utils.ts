@@ -3,6 +3,7 @@ import { type RefObject } from 'react';
 import type WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { WEB_TO_APP_MESSAGE_TYPES, WebToAppMessageSchema, type AppToWebMessage, type WebToAppMessage } from '.';
+import { handleMaintenanceBridgeMessage } from './maintenance';
 
 // 우선은 인라인 에러 타입 정의
 class PostMessageError extends Error {
@@ -91,7 +92,7 @@ export function listenFromWeb(handler: (message: WebToAppMessage) => void): (eve
       Sentry.captureException(new PostMessageError(`Invalid message from web: ${result.error.message}`));
       return;
     }
-    handler(result.data);
+    if (!handleMaintenanceBridgeMessage(result.data)) handler(result.data);
   };
 }
 /*

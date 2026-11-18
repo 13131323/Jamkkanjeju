@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.domain.auth.entity.User;
 import com.jamkkanjeju.server.domain.auth.jwt.JwtTokenProvider;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMission;
@@ -61,6 +62,7 @@ class GetMapSearchApiIntegrationTest extends MySqlIntegrationTestSupport {
     @Autowired JwtTokenProvider tokens;
     @MockitoBean Clock clock;
     @MockitoBean TourApiClient images;
+    @MockitoBean LocationImageCache cachedImages;
     @MockitoSpyBean LocationRepository locations;
     User current;
     int sequence;
@@ -69,7 +71,7 @@ class GetMapSearchApiIntegrationTest extends MySqlIntegrationTestSupport {
     void setup() {
         when(clock.instant()).thenReturn(Instant.parse("2026-10-26T03:00:00Z"));
         when(clock.getZone()).thenReturn(ZoneId.of("Asia/Seoul"));
-        when(images.getLocationImageUrl(anyLong())).thenReturn("representative.jpg");
+        when(cachedImages.getLocationImageUrl(anyLong())).thenReturn("representative.jpg");
         current = newUser();
     }
 
@@ -179,7 +181,7 @@ class GetMapSearchApiIntegrationTest extends MySqlIntegrationTestSupport {
                 .andExpect(jsonPath("$.locationsPage.page").value(0)).andExpect(jsonPath("$.locationsPage.size").value(20))
                 .andExpect(jsonPath("$.locationsPage.hasNext").value(true)));
         assertThat(ids(first)).containsExactlyElementsOf(places.subList(0, 20).stream().map(Location::getId).toList());
-        verify(images, never()).getLocationImageUrl(probe.getContentId());
+        verify(cachedImages, never()).getLocationImageUrl(probe.getContentId());
         assertThat(snapshot()).isEqualTo(before);
         // 다음 페이지 자체의 검증은 정상 미션 한 건으로 전환한 뒤 확인한다.
         jdbc.update("update cooperative_mission set status='INACTIVE' where location_id=?", probe.getId());
@@ -219,7 +221,7 @@ class GetMapSearchApiIntegrationTest extends MySqlIntegrationTestSupport {
         MissionRewardStatus granted = persist(MissionRewardStatus.builder().mission(treasure.getMission()).user(current).build());
         granted.grantArCharacterReward(); granted.grantPointReward(); granted.grantCouponReward();
         User other = newUser();
-        when(images.getLocationImageUrl(none.getContentId())).thenReturn(null);
+        when(cachedImages.getLocationImageUrl(none.getContentId())).thenReturn(null);
         Map<String, List<Map<String, Object>>> before = snapshot();
         String json = body(request(PREFIX).andExpect(jsonPath("$.locations[0].mission.missionId").value(treasure.getMissionId()))
                 .andExpect(jsonPath("$.locations[0].mission.missionType").value("TREASURE"))

@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.treasurehunt.repository;
 
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import com.jamkkanjeju.server.domain.mission.entity.MissionActivationStatus;
 import com.jamkkanjeju.server.domain.mission.repository.LocationMissionReference;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMission;
@@ -99,5 +101,12 @@ public interface TreasureMissionRepository extends JpaRepository<TreasureMission
      */
     @EntityGraph(attributePaths = {"mission.missionType", "arCharacter"})
     List<TreasureMission> findAllByStatusAndArCharacterIdIn(MissionActivationStatus status, Collection<Long> characterIds);
+
+
+    /** 결과: 지정 장소에 연결된 모든 상태의 미션을 ID순으로 쓰기 잠금 조회한다. 없으면 빈 목록이다.
+     * 사용: POST /api/v2/agent/locations/sync에서 해당 미션 비활성화와 전체 진행도·보상 상태 정리 대상을 정한다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select m from TreasureMission m where m.location.id in :ids order by m.missionId")
+    List<TreasureMission> findAllLockedByLocationIds(@Param("ids") Collection<Long> ids);
 
 }

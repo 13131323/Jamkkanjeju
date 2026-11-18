@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { GeneratedApi } from '@packages/shared';
 import type { Bounds, Coordinates } from '@shared/config/geo';
 import { buildMapContentsParams } from '@shared/lib/buildMapContentsParams';
 import { getMapContents, getMapContentsQueryKey, type MapContentsLocation } from '@shared/api/mapContents';
 import { useCurrentCoords } from '@entities/location';
+import { mapImageRefreshInterval } from '@shared/lib/mapImageRefresh';
 import { toClusteredPlaceLocation, toPlaceLocation, type ClusteredPlaceLocation, type PlaceLocation } from './types';
 
 type UseMapLocationsParams = {
@@ -25,11 +26,20 @@ export function useMapLocations({ bounds, center, isClustered, enabled = true }:
   const queryEnabled = enabled && bounds !== null;
   const userCoords = useCurrentCoords() ?? center;
   const requestParams = bounds ? buildMapContentsParams(bounds, userCoords, isClustered) : buildMapContentsParams({ sw: center, ne: center }, userCoords, isClustered);
+  const refreshWindow = useRef({ key: '', startedAt: 0 });
+  const requestKey = JSON.stringify(requestParams);
 
   const query = useQuery({
     queryKey: getMapContentsQueryKey(requestParams),
     queryFn: ({ signal }) => getMapContents(requestParams, signal),
     enabled: queryEnabled,
+    refetchInterval: (state) => {
+      if (state.state.status === 'error') return false;
+      const now = Date.now();
+      if (refreshWindow.current.key !== requestKey) refreshWindow.current = { key: requestKey, startedAt: now };
+      return mapImageRefreshInterval(state.state.data, isClustered, now - refreshWindow.current.startedAt);
+    },
+    refetchIntervalInBackground: false,
     // 조회 실패를 지도 화면 전체 오류로 올리지 않고 마커가 그냥 안 보이는 정도로 흡수한다.
     throwOnError: false,
     // bounds/tier가 바뀌어 쿼리키가 바뀌는 순간 data가 undefined로 비면서 마커가 전부 사라졌다 다시

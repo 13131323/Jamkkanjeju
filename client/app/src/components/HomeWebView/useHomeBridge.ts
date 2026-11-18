@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initTraceId, listenFromWeb, sendToWeb } from '@/bridge/utils';
 import { useToast } from '@/components/Toast/Toast';
 import { TOAST_WEBVIEW_CTA_CLEARANCE } from '@/components/Toast/styles';
-import type { ShareContent } from '@packages/shared';
+import { getMaintenanceScreen, type ShareContent } from '@packages/shared';
 import type { LocationPermissionStatus } from '@/bridge';
 import { useStepCounter } from '@/hooks/useStepCounter';
 import { deleteAccountLocally, resetUserStores } from '@/services/accountDeletion';
@@ -342,6 +342,7 @@ export function useHomeBridge(webViewRef: RefObject<WebView | null>) {
           case 'PING':
             initTraceId(msg.traceId);
             sendToWeb(webViewRef, { type: 'PONG', payload: { timestamp: Date.now() } });
+            if (getMaintenanceScreen() === 'home') sendToWeb(webViewRef, { type: 'MAINTENANCE_HOME', payload: {} });
             flushPending();
             return;
           case 'LOCATION_PERMISSION_REQUEST':

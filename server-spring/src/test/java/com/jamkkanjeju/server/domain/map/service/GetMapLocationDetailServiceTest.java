@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
@@ -54,6 +55,7 @@ class GetMapLocationDetailServiceTest {
     @Spy MissionCompletionChecker completion = new MissionCompletionChecker();
     @Spy TravelEstimator travel = new TravelEstimator();
     @Mock TourApiClient images;
+    @Mock LocationImageCache cachedImages;
     @Mock VisitedLocationRepository visits;
     @Mock MissionRewardStatusRepository rewards;
     @Mock NearbyMissionRecommender recommender;
@@ -121,7 +123,7 @@ class GetMapLocationDetailServiceTest {
         MissionRewardStatus saved = MissionRewardStatus.builder().mission(treasure.getMission()).user(user).build();
         saved.grantArCharacterReward();
         when(rewards.findAllByIdUserIdAndIdMissionIdIn(15L, List.of(32L, 31L))).thenReturn(List.of(saved));
-        when(images.getLocationImageUrl(anyLong())).thenAnswer(invocation ->
+        when(cachedImages.getLocationImageUrl(anyLong())).thenAnswer(invocation ->
                 treasure.getLocation().getContentId().equals(invocation.getArgument(0)) ? "treasure.jpg" : null);
         GetMapLocationDetailResponse response = get();
         assertThat(response.nearbyMissions()).extracting(GetMapLocationDetailResponse.NearbyMissionInfo::missionId)
@@ -129,7 +131,7 @@ class GetMapLocationDetailServiceTest {
         assertThat(response.nearbyMissions().get(1).rewardDetail().arCharacter().isReceived()).isTrue();
         assertThat(response.nearbyMissions().get(1).rewardDetail().point().isReceived()).isFalse();
         assertThat(response.nearbyMissions().get(1).representativeImageUrl()).isEqualTo("treasure.jpg");
-        verify(images, times(2)).getLocationImageUrl(anyLong());
+        verify(cachedImages, times(2)).getLocationImageUrl(anyLong());
         verify(rewards, never()).findById(any());
     }
 

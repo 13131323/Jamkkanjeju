@@ -1,5 +1,8 @@
 package com.jamkkanjeju.server.domain.mission.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatus;
 import com.jamkkanjeju.server.domain.mission.entity.MissionRewardStatusId;
 import java.util.Collection;
@@ -32,4 +35,11 @@ public interface MissionRewardStatusRepository extends JpaRepository<MissionRewa
      * 엽서 요소 조회({@code GET /api/v2/users/me/travel-ending-elements})에서도 최종 완료 미션들의 전체 보상 수령 여부를 구성한다.
      */
     List<MissionRewardStatus> findAllByIdUserIdAndIdMissionIdIn(Long userId, Collection<Long> missionIds);
+
+    /** 결과: 지정 미션 ID에 속한 전체 사용자 기록을 삭제하고 건수를 반환한다. 자식은 FK CASCADE를 따른다.
+     * 사용: POST /api/v2/agent/locations/sync에서 삭제 장소의 미션 진행도 또는 보상 상태를 초기화한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from MissionRewardStatus p where p.id.missionId in :missionIds")
+    int deleteAllByMissionIds(@Param("missionIds") Collection<Long> missionIds);
+
 }

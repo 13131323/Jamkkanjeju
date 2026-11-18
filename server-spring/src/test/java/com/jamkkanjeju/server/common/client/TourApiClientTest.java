@@ -10,6 +10,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
@@ -30,13 +31,13 @@ class TourApiClientTest {
     }
     @Test void originalImageHasPriority() {
         respond("""
-                {"response":{"header":{"resultCode":"0000"},"body":{"items":{"item":[{"firstimage":"original.png","firstimage2":"small.png"}]}}}}
+                {"response":{"header":{"resultCode":"0000"},"body":{"totalCount":1,"items":{"item":[{"contentid":"123","firstimage":"original.png","firstimage2":"small.png"}]}}}}
                 """);
         assertThat(client.getLocationImageUrl(123L)).isEqualTo("original.png");server.verify();
     }
     @Test void fallsBackToSmallImageAndAcceptsObjectItem() {
         respond("""
-                {"response":{"header":{"resultCode":"0000"},"body":{"items":{"item":{"firstimage":"","firstimage2":"small.png"}}}}}
+                {"response":{"header":{"resultCode":"0000"},"body":{"totalCount":1,"items":{"item":{"contentid":"123","firstimage":"","firstimage2":"small.png"}}}}}
                 """);
         assertThat(client.getLocationImageUrl(123L)).isEqualTo("small.png");server.verify();
     }
@@ -55,5 +56,46 @@ class TourApiClientTest {
     @Test void networkFailureReturnsNull() {
         server.expect(queryParam("contentId","123")).andRespond(withException(new IOException("test failure")));
         assertThat(client.getLocationImageUrl(123L)).isNull();server.verify();
+    }
+
+    @Test void normalZeroCountIsDistinctFromFailure() {
+        respond("{\"response\":{\"header\":{\"resultCode\":\"0000\"},\"body\":{\"totalCount\":0,\"items\":\"\"}}}");
+        assertThat(client.lookupLocationImage(123L).status()).isEqualTo(TourApiImageResult.Status.NO_IMAGE);
+        server.verify();
+    }
+
+    @Test void normalRecordWithoutImagesIsNoImage() {
+        respond("{\"response\":{\"header\":{\"resultCode\":\"0000\"},\"body\":{\"totalCount\":1,\"items\":{\"item\":[{\"contentid\":\"123\",\"firstimage\":\"\",\"firstimage2\":\"\"}]}}}}");
+        assertThat(client.lookupLocationImage(123L).status()).isEqualTo(TourApiImageResult.Status.NO_IMAGE);
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "invalid json", "{\"response\":{\"header\":{\"resultCode\":\"9999\"}}}",
+            "{\"response\":{\"header\":{\"resultCode\":\"0000\"},\"body\":{\"totalCount\":1,\"items\":{\"item\":[]}}}}",
+            "{\"response\":{\"header\":{\"resultCode\":\"0000\"},\"body\":{\"totalCount\":1,\"items\":{\"item\":[{\"contentid\":\"999\"}]}}}}"})
+    void invalidPayloadIsNeverNormalNoImage(String payload) {
+        respond(payload);
+        assertThat(client.lookupLocationImage(123L).status()).isEqualTo(TourApiImageResult.Status.FAILED);
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 408, 429, 503})
+    void onlyTransientHttpFailureCanRetry(int status) {
+        server.expect(queryParam("contentId", "123")).andRespond(withStatus(HttpStatus.valueOf(status)));
+        var result = client.lookupLocationImage(123L);
+        assertThat(result.status()).isEqualTo(status == 429
+                ? TourApiImageResult.Status.RATE_LIMITED : TourApiImageResult.Status.FAILED);
+        assertThat(result.retryable()).isEqualTo(status == 408 || status >= 500);
+        if (status == 429) assertThat(result.retryAfterSeconds()).isEqualTo(60);
+        server.verify();
+    }
+
+    @Test void rateLimitPreservesLongerRetryAfter() {
+        server.expect(queryParam("contentId", "123"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS).header("Retry-After", "120"));
+        assertThat(client.lookupLocationImage(123L).retryAfterSeconds()).isEqualTo(120);
+        server.verify();
     }
 }

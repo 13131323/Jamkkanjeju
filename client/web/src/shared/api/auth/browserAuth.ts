@@ -1,4 +1,4 @@
-import { loginSessionFrom, type WebLoginResponse } from '@packages/shared';
+import { loginSessionFrom, isServiceUnavailable, notifyApiError, type WebLoginResponse } from '@packages/shared';
 import { saveLoginSession } from './session';
 /** 브라우저 탭 사이에서도 쿠키 회전을 직렬화한다. 지원하지 않는 환경은 탭 내부 중복 방지를 사용한다. */
 export async function withBrowserAuthLock<T>(work: () => Promise<T>): Promise<T> {
@@ -13,8 +13,12 @@ export async function authRequest(path: 'login' | 'refresh', body: unknown): Pro
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20000),
   });
-  const data = await response.json();
-  if (!response.ok) throw { response: { status: response.status, data } };
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = { response: { status: response.status, data } };
+    if (isServiceUnavailable(error)) notifyApiError(error);
+    throw error;
+  }
   return data;
 }
 export async function browserLogin(email: string, password: string): Promise<void> {

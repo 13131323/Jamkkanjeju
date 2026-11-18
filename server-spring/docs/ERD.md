@@ -1,5 +1,15 @@
 ```mermaid
 erDiagram
+AGENT_LOCATION_SYNC_EXECUTION {
+    varchar_80 request_id PK "NOT NULL"
+    char_64 request_hash "NOT NULL"
+    varchar_20 status "NOT NULL, Enum: PENDING, COMPLETED"
+    json added_content_ids "NOT NULL"
+    json deleted_content_ids "NOT NULL"
+    datetime created_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+    datetime updated_at "NOT NULL, DEFAULT: CURRENT_TIMESTAMP"
+}
+
 MAINTENANCE {
     bigint id PK "NOT NULL"
     varchar_500 message "NOT NULL"

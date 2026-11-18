@@ -24,6 +24,8 @@ import { registerGpsReportTask } from '@/services/gpsBackgroundTask';
 import { sendStepRecord } from '@/services/stepCountSender';
 import { syncUnsentRecords } from '@/services/stepSyncService';
 import { MIN_BOTTOM_INSET } from '@/styles/safeArea';
+import { shouldRetryApiRequest } from '@packages/shared';
+import { MaintenanceGate } from '@/components/Maintenance/MaintenanceGate';
 
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
@@ -34,7 +36,7 @@ Sentry.init({
   tracesSampleRate: 0,
 });
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: shouldRetryApiRequest } } });
 
 /** 스플래시 원본 크기. 화면 폭에 맞춰 높이를 계산할 때 쓴다 */
 const SPLASH_SIZE = { width: 1080, height: 2400 };
@@ -215,6 +217,7 @@ function RootLayout() {
             </Stack>
           </SafeAreaPadding>
         </ToastProvider>
+        <MaintenanceGate />
         <StatusBar style="auto" />
       </QueryClientProvider>
       {/* 오프라인 안내는 Stack을 **덮기만 하고 걷어내지 않는다.**

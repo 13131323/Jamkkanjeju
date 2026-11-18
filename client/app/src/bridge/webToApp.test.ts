@@ -83,9 +83,9 @@ describe('WebToAppMessageSchema', () => {
     expect(WebToAppMessageSchema.safeParse({ type: 'SAVE_IMAGE', payload: { dataUrl, fileName: 'a/b' }, traceId }).success).toBe(false);
   });
 
-  it('JUDGE_CODE_MODAL_STATE — 모달이 열렸는지를 불리언으로 받는다', () => {
-    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: true }, traceId }).success).toBe(true);
-    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: false }, traceId }).success).toBe(true);
+  it('삭제된 심사위원 모드 메시지는 받지 않는다', () => {
+    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: true }, traceId }).success).toBe(false);
+    expect(WebToAppMessageSchema.safeParse({ type: 'JUDGE_CODE_MODAL_STATE', payload: { isOpen: false }, traceId }).success).toBe(false);
   });
 
   it('JUDGE_CODE_MODAL_STATE — isOpen이 불리언이 아니면 거른다', () => {

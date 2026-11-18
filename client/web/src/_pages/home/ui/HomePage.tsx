@@ -25,6 +25,7 @@ import missionBannerTreasure from '@shared/lib/images/mission-banner-treasure.pn
 import { NavMenuButton, NavMenuModal } from '@widgets/nav-menu';
 import type { HomeMaintenance } from '@shared/api/home';
 import { HomeMaintenanceBackground, MaintenanceInProgress, ScheduledMaintenanceNotice } from './HomeMaintenance';
+import { enterMaintenanceHome, getMaintenanceScreen, getMaintenanceServerSnapshot, subscribeMaintenance } from '@packages/shared';
 
 // 배너 굵은 한 줄(Frame 619의 아래 텍스트)은 서버가 주지 않는 디자인 카피라 미션 종류로 매핑한다.
 // 문구는 "탐라로그 V2 / 배너" 세 variant에서 그대로 가져왔다
@@ -77,9 +78,13 @@ const mock = {
 
 export function HomePage() {
   const { maintenance, isPending, isError, refetch } = useHomeData();
+  const maintenanceScreen = useSyncExternalStore(subscribeMaintenance, getMaintenanceScreen, getMaintenanceServerSnapshot);
+  useEffect(() => {
+    if (maintenance?.status === 'IN_PROGRESS') enterMaintenanceHome();
+  }, [maintenance?.status]);
 
   // 점검 중에는 일반 홈의 메뉴·미션·주소 조회 등 부수 동작도 마운트하지 않는다.
-  if (maintenance?.status === 'IN_PROGRESS') return <MaintenanceInProgress maintenance={maintenance} />;
+  if (maintenanceScreen === 'home' || maintenance?.status === 'IN_PROGRESS') return <MaintenanceInProgress maintenance={maintenance} />;
   if (isPending || isError) {
     return (
       <HomeMaintenanceBackground>

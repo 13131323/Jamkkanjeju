@@ -2,6 +2,15 @@ spring:
   application:
     name: server-spring
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: 1s
+      timeout: 1s
+      repositories:
+        enabled: false
+
   servlet:
     multipart:
       # 서블릿 기본 제한 대신 이미지·오디오 공통 검증에서 각각 10MB를 적용한다.
@@ -39,6 +48,10 @@ spring:
       mode: never
 
 app:
+  location-image-cache:
+    image-ttl: 24h
+    no-image-ttl: 1h
+
   agent:
     token: ${AGENT_API_TOKEN:}
 

@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
@@ -52,6 +53,7 @@ class GetMapSearchServiceTest {
     @Mock MissionCompletionChecker completion;
     @Spy TravelEstimator travel = new TravelEstimator();
     @Mock TourApiClient images;
+    @Mock LocationImageCache cachedImages;
     @Mock VisitedLocationRepository visits;
     @Mock MissionRewardStatusRepository rewards;
     @Mock NearbyMissionRecommender recommender;
@@ -94,7 +96,8 @@ class GetMapSearchServiceTest {
         List<Long> ids = List.of(31L, 32L);
         when(treasures.findAllByLocationIdInAndStatus(ids, MissionActivationStatus.ACTIVE)).thenReturn(List.of(treasure));
         when(cooperatives.findAllByLocationIdInAndStatus(ids, MissionActivationStatus.ACTIVE)).thenReturn(List.of(cooperative));
-        when(images.getLocationImageUrl(treasure.getLocation().getContentId())).thenReturn("treasure.jpg");
+        when(cachedImages.getLocationImageUrl(treasure.getLocation().getContentId())).thenReturn("treasure.jpg");
+        when(cachedImages.getLocationImageUrl(cooperative.getLocation().getContentId())).thenReturn(null);
         GetMapSearchResponse response = get();
         assertThat(response.locations()).extracting(GetMapSearchResponse.LocationInfo::locationId).containsExactly(31L, 32L);
         assertThat(response.locations().getFirst().distanceMeter()).isGreaterThan(response.locations().getLast().distanceMeter());
@@ -104,7 +107,7 @@ class GetMapSearchServiceTest {
         assertThat(response.locations().getFirst().representativeImageUrl()).isEqualTo("treasure.jpg");
         assertThat(response.locations().getLast().representativeImageUrl()).isNull();
         assertThat(response.locationsPage().hasNext()).isEqualTo(hasNext);
-        verify(images, times(2)).getLocationImageUrl(anyLong());
+        verify(cachedImages, times(2)).getLocationImageUrl(anyLong());
         verifyNoInteractions(progresses, participants, completion, rewards, roads, books, visits, coupons, recommender);
         verify(users, never()).save(any());
         verify(locations, never()).save(any());
@@ -121,7 +124,7 @@ class GetMapSearchServiceTest {
             assertThat(item.mission()).isNull();
             assertThat(item.representativeImageUrl()).isNull();
         });
-        verify(images).getLocationImageUrl(first.getContentId());
+        verify(cachedImages).getLocationImageUrl(first.getContentId());
         verifyNoMoreInteractions(images);
     }
 

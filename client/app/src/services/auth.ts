@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { isLoginSession, isStoredLoginSession, loginSessionFrom, type LoginResponse } from '@packages/shared';
+import { isLoginSession, isStoredLoginSession, loginSessionFrom, isServiceUnavailable, notifyApiError, type LoginResponse } from '@packages/shared';
 import type { StoredSession } from '@/db/models/Session';
 import { clearSession, readSession, saveLoginSession } from '@/db/session';
 import { authorizationHeaderOf, getCachedSession, getSessionRevision, setCachedSession } from './sessionCache';
@@ -83,6 +83,9 @@ export function logoutSession(): Promise<void> {
           await axios.post(`${process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '')}/api/v2/auth/logout`, { refreshToken: credential.refreshToken }, { timeout: 15000 });
         }
       });
+    } catch (error) {
+      if (isServiceUnavailable(error)) notifyApiError(error);
+      throw error;
     } finally {
       await clearAuthSession();
     }
@@ -119,6 +122,7 @@ export function reissueSession(failedAccessToken?: string): Promise<StoredSessio
       }
       return await storeResponse(data, credential.apiOrigin, revision, current.user);
     } catch (error) {
+      if (isServiceUnavailable(error)) notifyApiError(error);
       const status = (error as { response?: { status?: number } }).response?.status;
       if (status === 401 || status === 403) await clearAuthSession(revision);
       // 일시적인 통신·서버 오류에서는 토큰을 유지해 재시도할 수 있게 한다.

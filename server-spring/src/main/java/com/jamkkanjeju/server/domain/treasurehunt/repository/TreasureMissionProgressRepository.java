@@ -1,5 +1,8 @@
 package com.jamkkanjeju.server.domain.treasurehunt.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import com.jamkkanjeju.server.domain.mission.entity.MissionProgressStatus;
 import com.jamkkanjeju.server.domain.treasurehunt.entity.TreasureMissionProgress;
 import java.util.Collection;
@@ -67,4 +70,11 @@ public interface TreasureMissionProgressRepository extends JpaRepository<Treasur
     @EntityGraph(attributePaths = {"treasureMission.arCharacter", "treasureMission.coupon.location"})
     Optional<TreasureMissionProgress> findByIdAndUserIdAndMissionStatus(Long id, Long userId,
                                                                        MissionProgressStatus missionStatus);
+
+    /** 결과: 지정 미션 ID에 속한 전체 사용자 기록을 삭제하고 건수를 반환한다. 자식은 FK CASCADE를 따른다.
+     * 사용: POST /api/v2/agent/locations/sync에서 삭제 장소의 미션 진행도 또는 보상 상태를 초기화한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from TreasureMissionProgress p where p.treasureMission.missionId in :missionIds")
+    int deleteAllByMissionIds(@Param("missionIds") Collection<Long> missionIds);
+
 }

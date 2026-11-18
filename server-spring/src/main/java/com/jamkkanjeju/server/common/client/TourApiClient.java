@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.HtmlUtils;
 import tools.jackson.databind.JsonNode;
@@ -35,65 +36,77 @@ public class TourApiClient {
         this.jsonMapper = jsonMapper;
     }
 
-    /** contentId의 대표 이미지 URL을 반환한다. 원본 이미지(firstimage)가 없으면 축소 이미지(firstimage2)를 사용한다. */
+    /** 기존 호출자는 이미지 조회 실패도 null로 처리한다. 지도 캐시는 lookupLocationImage의 상태를 구분한다. */
     public String getLocationImageUrl(Long contentId) {
-        if (contentId == null || contentId <= 0) {
-            log.warn("TourAPI 이미지 조회 생략: 유효하지 않은 contentId={}", contentId);
-            return null;
-        }
-        if (!StringUtils.hasText(properties.serviceKey())) {
-            log.warn("TourAPI 이미지 조회 생략: 인증키 미설정, contentId={}", contentId);
-            return null;
-        }
+        return lookupLocationImage(contentId).imageUrl();
+    }
 
+    /** 한 번의 외부 요청에서 정상 사진 없음과 호출 실패를 분리한다. 재시도 여부는 호출자가 결정한다. */
+    public TourApiImageResult lookupLocationImage(Long contentId) {
+        if (contentId == null || contentId <= 0 || !StringUtils.hasText(properties.serviceKey())) {
+            return TourApiImageResult.failed(false);
+        }
         try {
-            // 인증키는 디코딩된 원문을 사용하고 URI 변수 확장 시 인코딩한다.
-            String body = restClient.get()
+            String raw = restClient.get()
                     .uri(builder -> builder.path("/detailCommon2")
                             .queryParam("serviceKey", "{serviceKey}")
                             .queryParam("MobileOS", "{mobileOs}")
                             .queryParam("MobileApp", "{mobileApp}")
                             .queryParam("_type", "json")
                             .queryParam("contentId", "{contentId}")
-                            .build(Map.of(
-                                    "serviceKey", properties.serviceKey(),
-                                    "mobileOs", properties.mobileOs(),
-                                    "mobileApp", properties.mobileApp(),
-                                    "contentId", contentId)))
-                    .retrieve()
-                    .body(String.class);
-            if (!StringUtils.hasText(body)) {
-                log.warn("TourAPI 이미지 조회 실패: 빈 응답, contentId={}", contentId);
-                return null;
+                            .build(Map.of("serviceKey", properties.serviceKey(), "mobileOs", properties.mobileOs(),
+                                    "mobileApp", properties.mobileApp(), "contentId", contentId)))
+                    .retrieve().body(String.class);
+            if (!StringUtils.hasText(raw)) return TourApiImageResult.failed(false);
+            JsonNode response = jsonMapper.readTree(raw).path("response");
+            if (!"0000".equals(text(response.path("header").path("resultCode")))) {
+                return TourApiImageResult.failed(false);
             }
-
-            JsonNode response = jsonMapper.readTree(body).path("response");
-            String resultCode = text(response.path("header").path("resultCode"));
-            if (!"0000".equals(resultCode)) {
-                log.warn("TourAPI 이미지 조회 실패: API 오류 또는 응답 형식 오류, contentId={}, resultCode={}",
-                        contentId, resultCode);
-                return null;
+            JsonNode body = response.path("body");
+            JsonNode countNode = body.path("totalCount");
+            int count = Integer.parseInt(countNode.isString() ? countNode.asString() : countNode.toString());
+            JsonNode items = body.path("items").path("item");
+            if (count == 0) {
+                return items.isMissingNode() || items.isNull() || (items.isArray() && items.isEmpty())
+                        ? TourApiImageResult.noImage() : TourApiImageResult.failed(false);
             }
-
-            JsonNode items = response.path("body").path("items").path("item");
-            JsonNode item = items.isArray() ? items.path(0) : items;
-            String imageUrl = text(item.path("firstimage"));
-            if (imageUrl == null) {
-                imageUrl = text(item.path("firstimage2"));
+            if (count != 1 || (items.isArray() && items.size() != 1)) return TourApiImageResult.failed(false);
+            JsonNode item = items.isArray() ? items.get(0) : items;
+            if (!item.isObject()) return TourApiImageResult.failed(false);
+            JsonNode idNode = item.path("contentid");
+            long actualId = Long.parseLong(idNode.isString() ? idNode.asString() : idNode.toString());
+            if (actualId != contentId) return TourApiImageResult.failed(false);
+            for (String field : List.of("firstimage", "firstimage2")) {
+                JsonNode value = item.path(field);
+                if (!value.isMissingNode() && !value.isNull() && !value.isString()) {
+                    return TourApiImageResult.failed(false);
+                }
             }
-            if (imageUrl == null) {
-                log.debug("TourAPI 대표 이미지 없음: contentId={}", contentId);
-            }
-            return imageUrl;
+            String url = text(item.path("firstimage"));
+            if (url == null) url = text(item.path("firstimage2"));
+            return url == null ? TourApiImageResult.noImage() : TourApiImageResult.found(url);
         } catch (RestClientResponseException exception) {
-            // 예외 메시지와 응답 본문에는 인증키 등 외부 요청 정보가 포함될 수 있어 기록하지 않는다.
-            log.warn("TourAPI 이미지 조회 실패: HTTP 오류, contentId={}, status={}",
-                    contentId, exception.getStatusCode().value());
-            return null;
+            int status = exception.getStatusCode().value();
+            log.warn("TourAPI 이미지 HTTP 오류: contentId={}, status={}", contentId, status);
+            if (status == 429) {
+                long retryAfter = 60;
+                if (exception.getResponseHeaders() != null) {
+                    try {
+                        retryAfter = Long.parseLong(exception.getResponseHeaders().getFirst("Retry-After"));
+                    } catch (NumberFormatException ignored) {
+                        // 초 단위 Retry-After가 없으면 최소 60초 동안 호출을 중단한다.
+                    }
+                }
+                return TourApiImageResult.rateLimited(retryAfter);
+            }
+            return TourApiImageResult.failed(status == 408 || status >= 500);
+        } catch (ResourceAccessException exception) {
+            log.warn("TourAPI 이미지 통신 오류: contentId={}", contentId);
+            return TourApiImageResult.failed(true);
         } catch (RuntimeException exception) {
-            log.warn("TourAPI 이미지 조회 실패: 통신 또는 응답 처리 오류, contentId={}, errorType={}",
-                    contentId, exception.getClass().getSimpleName());
-            return null;
+            // 외부 요청 URL·응답 원문에 인증키가 포함될 수 있으므로 로그에 남기지 않는다.
+            log.warn("TourAPI 이미지 응답 검증 실패: contentId={}, errorType={}", contentId, exception.getClass().getSimpleName());
+            return TourApiImageResult.failed(false);
         }
     }
 

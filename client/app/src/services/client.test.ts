@@ -4,6 +4,7 @@ const auth = vi.hoisted(() => ({ reissueSession: vi.fn(), clearAuthSession: vi.f
 vi.mock('./auth', () => auth);
 import api from './client';
 import { getCachedSession, setCachedSession } from './sessionCache';
+import { clearMaintenance, getMaintenanceScreen } from '@packages/shared';
 const user = { id: 4, role: 'ADMIN' as const, nickname: null, onboardingCompleted: true };
 const session = { accessToken: 'old', tokenType: 'Bearer', expiresAt: Date.now() + 1000000, loginUser: user, user: null, apiOrigin: 'http://localhost' };
 const handlers = api.interceptors as unknown as { request: { handlers: { fulfilled: (c: any) => any }[] }; response: { handlers: { rejected: (e: any) => Promise<unknown> }[] } };
@@ -11,12 +12,21 @@ function config() {
   return handlers.request.handlers[0].fulfilled({ url: '/api/v2/users/me/home', headers: new AxiosHeaders() });
 }
 beforeEach(() => {
+  clearMaintenance();
   vi.restoreAllMocks();
   vi.clearAllMocks();
   setCachedSession(session);
   auth.clearAuthSession.mockImplementation(async () => setCachedSession(null));
 });
 describe('앱 API 만료 재시도', () => {
+  it('503이면 공통 점검 상태를 만들고 일반 요청을 차단하되 홈은 허용한다', async () => {
+    const failure = { response: { status: 503, data: { code: 'POSTCARD_DISABLED' } } };
+    await expect(handlers.response.handlers[0].rejected(failure)).rejects.toBe(failure);
+    expect(getMaintenanceScreen()).toBe('notice');
+    expect(() => handlers.request.handlers[0].fulfilled({ url: '/api/v2/map/contents', headers: new AxiosHeaders() })).toThrow('서비스 점검 중입니다.');
+    expect(() => config()).not.toThrow();
+    expect(auth.reissueSession).not.toHaveBeenCalled();
+  });
   it('로그인 토큰을 요청에 넣는다', () => {
     expect(config().headers.get('Authorization')).toBe('Bearer old');
   });

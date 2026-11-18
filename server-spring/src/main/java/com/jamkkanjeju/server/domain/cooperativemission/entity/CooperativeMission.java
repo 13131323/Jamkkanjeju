@@ -76,4 +76,9 @@ public class CooperativeMission extends BaseTimeEntity {
     public void changeStatus(MissionActivationStatus status) {
         this.status = status;
     }
+    /** 장소 동기화 삭제 시 미션 정의와 보상 설정을 유지하고 비활성화·장소 연결 해제한다. */
+    public void deactivateAndUnlinkLocation() {
+        this.status = MissionActivationStatus.INACTIVE;
+        this.location = null;
+    }
 }

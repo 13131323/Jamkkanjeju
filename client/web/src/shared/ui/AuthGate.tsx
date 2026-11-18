@@ -1,11 +1,14 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { getMaintenanceScreen, getMaintenanceServerSnapshot, subscribeMaintenance } from '@packages/shared';
 import { usePathname, useRouter } from 'next/navigation';
 import { readLoginSession, SESSION_EVENT } from '@shared/api/auth/session';
 import { requestAuthReissue } from '@shared/api/auth/reissueToken';
 /** 저장된 액세스 토큰이 만료되어도 재발급을 먼저 시도하며 로그인 화면으로 즉시 이동하지 않는다. */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const maintenanceScreen = useSyncExternalStore(subscribeMaintenance, getMaintenanceScreen, getMaintenanceServerSnapshot);
+  const maintenanceHome = maintenanceScreen === 'home' && pathname === '/';
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -43,9 +46,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
   useEffect(() => {
+    if (maintenanceHome) return;
     if (ready && !error && !authenticated && !publicPage) router.replace('/login');
     if (ready && authenticated && pathname === '/login') router.replace('/');
-  }, [ready, authenticated, publicPage, pathname, router, error]);
+  }, [ready, authenticated, publicPage, pathname, router, error, maintenanceHome]);
+  if (maintenanceHome) return children;
   if (error && !publicPage)
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-white px-7 text-center">

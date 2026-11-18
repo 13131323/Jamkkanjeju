@@ -24,6 +24,8 @@ public abstract class MySqlIntegrationTestSupport {
         registry.add("spring.flyway.schemas", database::name);
         registry.add("spring.flyway.default-schema", database::name);
         registry.add("app.dev-auth.enabled", () -> false);
+        // 기동 이벤트가 통합 테스트 밖의 TourAPI·Redis에 접근하지 않도록 분리한다.
+        registry.add("app.location-image-cache.warmup-enabled", () -> false);
         registry.add("app.jwt.secret-key", () -> "dGVzdC1zZWNyZXQta2V5LWZvci1qd3Qtc2lnbmluZy0zMmJ5dGVzIQ==");
         registry.add("app.jwt.access-token-expiration", () -> "30m");
         registry.add("app.jwt.refresh-token-expiration", () -> "14d");

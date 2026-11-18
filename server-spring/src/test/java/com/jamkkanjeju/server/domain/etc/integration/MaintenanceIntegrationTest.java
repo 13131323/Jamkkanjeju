@@ -36,6 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc
 @Transactional
 class MaintenanceIntegrationTest extends MySqlIntegrationTestSupport {
+    // HTTP 회귀 테스트가 기동 사전 적재가 실제 TourAPI·Redis에 접근하지 않게 분리한다.
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.jamkkanjeju.server.domain.map.service.LocationImageCacheWarmup imageCacheWarmup;
+
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 31, 23, 30);
     @Autowired JdbcTemplate jdbc;
     @Autowired MaintenanceStateService service;

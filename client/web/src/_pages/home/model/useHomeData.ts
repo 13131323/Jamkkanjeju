@@ -10,6 +10,7 @@ import { orvalClient } from '@shared/api/axios/instance';
 import type { HomeMaintenance, HomeResponse } from '@shared/api/home';
 import { resolveHomeQueryCoords } from './homeQueryCoords';
 import { selectVisibleProgressMissions } from './progressMissions';
+import { isServiceUnavailable } from '@packages/shared';
 
 export interface HomeDataResult {
   missionCards: HomeMissionCard[];
@@ -33,6 +34,7 @@ const MAX_RETRY = 2;
  * orval이 TError를 ErrorResponse로 선언하지만 실제로 거부되는 값은 AxiosError다.
  */
 function shouldRetryHome(failureCount: number, error: unknown): boolean {
+  if (isServiceUnavailable(error) || (error as { code?: string } | null)?.code === 'ERR_CANCELED') return false;
   const status = isAxiosError(error) ? error.response?.status : undefined;
   if (status !== undefined && status >= 400 && status < 500) return false;
   return failureCount < MAX_RETRY;

@@ -1,5 +1,7 @@
 package com.jamkkanjeju.server.domain.cooperativemission.repository;
 
+import org.springframework.data.jpa.repository.Modifying;
+import java.util.Collection;
 import com.jamkkanjeju.server.domain.cooperativemission.entity.CooperativeMissionProgress;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
@@ -69,4 +71,11 @@ public interface CooperativeMissionProgressRepository extends JpaRepository<Coop
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select p from CooperativeMissionProgress p where p.teamToken = :teamToken")
     Optional<CooperativeMissionProgress> findByTeamTokenForUpdate(@Param("teamToken") String teamToken);
+
+    /** 결과: 지정 미션 ID에 속한 전체 사용자 기록을 삭제하고 건수를 반환한다. 자식은 FK CASCADE를 따른다.
+     * 사용: POST /api/v2/agent/locations/sync에서 삭제 장소의 미션 진행도 또는 보상 상태를 초기화한다. */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from CooperativeMissionProgress p where p.cooperativeMission.missionId in :missionIds")
+    int deleteAllByMissionIds(@Param("missionIds") Collection<Long> missionIds);
+
 }

@@ -1,5 +1,5 @@
 import axios, { type AxiosRequestConfig } from 'axios';
-import { notifyApiError } from '@packages/shared';
+import { notifyApiError, isServiceUnavailable, isMaintenanceActive, isMaintenanceAllowedRequest } from '@packages/shared';
 import { authorizationHeaderOf, getCachedSession } from './sessionCache';
 import { clearAuthSession, reissueSession, isLogoutInProgress } from './auth';
 
@@ -18,6 +18,7 @@ const axiosInstance = axios.create({
 });
 
 axiosInstance.interceptors.request.use((config) => {
+  if (isMaintenanceActive() && !isMaintenanceAllowedRequest(config.url)) throw new axios.CanceledError('서비스 점검 중입니다.');
   if (isLogoutInProgress()) throw new axios.CanceledError('로그아웃 중입니다.');
   const header = authorizationHeaderOf(getCachedSession());
   (config as typeof config & { authUserId?: number }).authUserId = getCachedSession()?.loginUser?.id;
@@ -31,6 +32,10 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   async (error) => {
+    if (isServiceUnavailable(error)) {
+      notifyApiError(error);
+      return Promise.reject(error);
+    }
     const config = error.config as (AxiosRequestConfig & { authRetried?: boolean; authUserId?: number }) | undefined;
     const session = getCachedSession();
     const owned = config?.authUserId === session?.loginUser?.id;

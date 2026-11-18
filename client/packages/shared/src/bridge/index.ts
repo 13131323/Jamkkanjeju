@@ -35,6 +35,8 @@ export type LocationPermissionStatus = z.infer<typeof LocationPermissionStatusSc
  * docs/trouble/2026-09-07-bridge-contract-drift.md
  */
 export const WebToAppMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('EXIT_APP'), payload: z.object({}), traceId: z.string() }),
+  z.object({ type: z.literal('MAINTENANCE_HOME'), payload: z.object({}), traceId: z.string() }),
   z.object({
     type: z.literal('PING'),
     payload: z.object({ timestamp: z.number() }),
@@ -234,6 +236,7 @@ export const JEJU_CENTER = { lat: 33.361424638771474, lng: 126.52941927591584 } 
 export const TREASURE_INVALID_HEADING = -1;
 
 export const AppToWebMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('MAINTENANCE_HOME'), payload: z.object({}), traceId: z.string() }),
   z.object({
     type: z.literal('PONG'),
     payload: z.object({ timestamp: z.number() }),

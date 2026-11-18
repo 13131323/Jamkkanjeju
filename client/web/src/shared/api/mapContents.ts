@@ -22,6 +22,7 @@ export type MapContentsLocation = Omit<GeneratedApi.MapLocationResponse, 'treasu
 export type DetailedMapContents = {
   locations: MapContentsLocation[];
   roadGuestbooks: GeneratedApi.MapRoadGuestbookResponse[];
+  pendingLocationImageIds: number[];
 };
 export type ClusteredMapContents = {
   locations: GeneratedApi.ClusteredLocationResponse[];

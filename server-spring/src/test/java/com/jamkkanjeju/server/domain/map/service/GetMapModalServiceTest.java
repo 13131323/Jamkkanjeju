@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.entity.User;
@@ -54,6 +55,7 @@ class GetMapModalServiceTest {
     @Spy MissionCompletionChecker completion = new MissionCompletionChecker();
     @Spy TravelEstimator travel = new TravelEstimator();
     @Mock TourApiClient images;
+    @Mock LocationImageCache cachedImages;
     @Mock VisitedLocationRepository visits;
     @Mock MissionRewardStatusRepository rewards;
     @InjectMocks MapService service;

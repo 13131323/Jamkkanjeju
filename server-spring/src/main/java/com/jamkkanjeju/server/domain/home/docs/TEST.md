@@ -164,3 +164,52 @@
 - `TravelEstimatorTest`의 기대 거리는 반지름 6,371km 구에서 중심각 1도의 호 길이(111,194.93m)로 고정
 - 통합 테스트는 요청 위치를 초기 데이터의 제주 장소와 먼 좌표(위도 10, 경도 10)로 두고 테스트용 장소를 그 근처에 만들어 기존 데이터와 격리. 후보 없음 검증은 테스트 트랜잭션 안에서 기존 미션을 모두 비활성으로 바꾼 뒤 확인
 - 통합 테스트의 서버 오류는 `@MockitoSpyBean`으로 방명록 집계 컴포넌트가 예외를 던지게 해 유도
+
+# 홈 진입 사진 캐시 갱신 테스트 계획 (이전 구현 기록)
+
+> 이후 서버 기동 사전 적재 방식으로 교체되어 HomeImageCacheWarmup 및 해당 테스트는 제거했다. 현행 검증은 지도 도메인의 서버 기동 사진 사전 적재 계획을 따른다.
+
+- 상태: 완료
+- 실행일: 2026-11-18
+- 결과: 관련 단위 테스트 110개 통과. 실패·오류·건너뜀 0개. 전체 API 테스트는 실행하지 않았다.
+- 범위: 이번 갱신 기능 및 기존 홈·사진 캐시 관련 테스트만 실행한다. 전체 API 테스트는 실행하지 않는다. 실제 TourAPI는 Mock으로 대체한다.
+
+| 클래스 | 검증 내용 |
+| --- | --- |
+| HomeImageCacheWarmupTest | 관리 정보 없음·만료·59초에서 실행, 60초·충분한 TTL에서 생략, 비동기 즉시 반환·동시 홈 중복 방지, Redis/외부 오류 격리 및 실패 완료 미기록, 토큰 잠금, 제주 5km 우선·제주 밖 순서 |
+| TourApiLocationImageClientTest | 법정동 제주·6분류·사진 URL, 전체 페이지 수·안정 totalCount·중복·지역·오류 실패를 검증 |
+| LocationImageCacheBackgroundTest | 지도 사진 키만 삭제, 이전 세대 늦은 결과 저장 방지, 기존 비동기 조회 회귀 |
+| HomeServiceTest | 기존 홈 응답 회귀와 정상 홈 구성 후 비동기 갱신 연결 |
+
+- 순서: 문서 → 컴파일 → 갱신·외부 클라이언트 단위 → 홈·캐시 관련 회귀. 결과는 실행 후 기록한다.
+
+## 결과
+
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| HomeImageCacheWarmupTest | 12 | 통과 |
+| TourApiLocationImageClientTest | 7 | 통과 |
+| HomeServiceTest | 13 | 통과 |
+| LocationImageCacheBackgroundTest | 5 | 통과 |
+| LocationImageCacheTest | 12 | 통과 |
+| TourApiImageRequestQueueTest | 4 | 통과 |
+| TourApiClientTest | 23 | 통과 |
+| GetMapContentsImageServiceTest | 2 | 통과 |
+| GetMapLocationDetailServiceTest | 9 | 통과 |
+| GetMapModalServiceTest | 15 | 통과 |
+| GetMapSearchServiceTest | 8 | 통과 |
+| 합계 | 110 | 전부 통과 |
+
+## 발견하고 수정한 점
+
+- 만료까지 정확히 60초는 유지하고 59초·만료·관리 정보 없음·사진 키 소실에서 갱신함을 확인했다.
+- 외부 API를 latch로 멈춰도 홈 요청의 작업 등록이 즉시 반환되고 동시 홈 요청이 한 작업으로 합쳐지는 것을 확인했다.
+- 이전 개별 사진 요청의 늦은 완료가 전체 교체 후 새 값을 덮지 않도록 세대 검사와 대기열 해제를 추가했다.
+- 홈·점검 HTTP 통합 테스트는 사전 적재 빈을 Mock으로 분리해 향후 테스트 실행 시 개발 Redis 초기화나 실제 TourAPI 호출이 발생하지 않게 했다. 이번에는 해당 HTTP 통합 테스트를 실행하지 않았다.
+- 단위 테스트는 실제 TourAPI·개발 DB를 호출하지 않았다. 기존 API의 요청·응답 스키마와 마이그레이션은 변경하지 않았다.
+
+### 로컬 실행 확인
+
+- 백엔드 앱 컨테이너를 재빌드하고 실제 홈 조회로 확인했다. 홈 응답은 325ms에 반환됐고 백그라운드 작업은 실제 TourAPI 목록 조회로 대표 사진 URL 1,376개를 적재했다. 이 확인에서는 실제 목록 API를 호출했다.
+- 두 번째 홈 조회 전후의 completedAt이 같아 재적재가 생략됨을 확인했다. 사진 외 Redis 확인용 키도 유지됐으며 확인 후 자기 키를 제거했다.
+- 확인용 로그인에서 발급된 리프레시 토큰은 로그아웃 API로 제거했다. 사용자 데이터·장소 데이터를 삭제하거나 변경하지 않았다.

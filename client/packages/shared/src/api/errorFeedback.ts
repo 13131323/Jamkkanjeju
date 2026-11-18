@@ -1,3 +1,5 @@
+import { isMaintenanceActive, isServiceUnavailable, showMaintenanceNotice } from './maintenance';
+
 /** 백엔드 오류 응답의 message만 읽는다. 응답이 없는 네트워크 오류에는 메시지를 만들지 않는다. */
 export function getApiErrorMessage(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) return null;
@@ -15,6 +17,15 @@ let pending: string[] = [];
 
 /** 웹·앱의 공통 요청 코드가 서버 오류 메시지를 기존 토스트 표시 지점에 전달한다. */
 export function notifyApiError(error: unknown): void {
+  if (isMaintenanceActive() && (error as { code?: string } | null)?.code === 'ERR_CANCELED') {
+    if (typeof error === 'object' && error !== null) notified.add(error);
+    return;
+  }
+  if (isServiceUnavailable(error)) {
+    if (typeof error === 'object' && error !== null) notified.add(error);
+    showMaintenanceNotice();
+    return;
+  }
   const message = getApiErrorMessage(error);
   if (message === null || typeof error !== 'object' || error === null || notified.has(error)) return;
   notified.add(error);

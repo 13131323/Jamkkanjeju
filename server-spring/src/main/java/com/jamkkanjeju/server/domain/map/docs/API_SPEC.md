@@ -21,6 +21,10 @@
 
 `isClustered=false`이면 장소 상세 정보·단일 미션·방명록 수·이미지·현재 사용자의 수령 쿠폰과 길바닥 방명록 상세 정보를 반환한다. `isClustered=true`이면 같은 범위의 항목에 대해 클러스터링에 필요한 ID·좌표와 장소의 미션 ID·유형만 반환한다. 서버가 여러 항목을 하나의 클러스터로 합치지는 않는다.
 
+장소 대표 사진이 없거나 외부 사진 조회가 최종 실패하면 해당 사진 URL은 `null`이며 기존 대체 아이콘을 표시한다. 대표 사진 캐시 저장소 장애 시에는 공통 `500 INTERNAL_SERVER_ERROR`로 처리한다. 같은 정책은 장소 모달·검색·상세 화면의 주변 미션 대표 사진에도 적용한다.
+
+지도 홈은 준비된 사진만 반환하며 사진 조회 완료를 기다리지 않는다. 준비 중인 사진은 null로 반환하고 pendingLocationImageIds에 장소 ID를 포함한다. 이후 재조회에서 준비된 URL을 제공하며 정상적으로 사진이 없는 장소는 준비 중 목록에서 제외한다.
+
 ---
 
 ### 요청 Header
@@ -79,6 +83,7 @@ Status Code : `200 OK`
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `locations` | object[] | 확장 범위 안의 장소 목록. 없으면 빈 배열 |
+| `pendingLocationImageIds` | integer[] | 대표 사진이 아직 응답에 없고 정상 사진 없음으로 확정되지 않은 장소 ID. 갱신할 대상이 없으면 빈 배열. 상세 응답에만 포함 |
 | `locations[].id` | integer | 장소 ID. 미션 ID가 아님 |
 | `locations[].locationTitle` | string | 장소 이름 |
 | `locations[].latitude` | number | 장소 위도 |

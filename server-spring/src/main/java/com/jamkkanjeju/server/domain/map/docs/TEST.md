@@ -324,3 +324,161 @@
 - 응답 팩토리가 Coupon 대신 AcquiredCoupon을 받아 현재 사용자의 사용 시각을 보존하도록 변경했다. 서비스의 기존 장소별 묶음 조회를 유지했으며 별도 DB 조회를 추가하지 않았다.
 - 미사용 쿠폰은 usedAt 키를 생략하지 않고 null로 반환하며 사용 완료 쿠폰도 목록에 남는다.
 - 실제 MySQL 임시 DB에서 검증했고 종료 시 임시 DB를 제거했다. 개발 DB와 프론트 사용 여부 판단은 변경하지 않았다.
+
+
+---
+
+# 지도 대표 사진 Redis 캐시 테스트 계획
+
+- 상태: 완료
+- 실행일: 2026-11-17
+- 결과: 관련 단위 65개·Redis 및 지도 HTTP 통합 10개, 총 75개 통과. 실패·오류·건너뜀 0개.
+- 범위: 이번 캐시와 기존 지도 대표 사진 호출부만 검증한다. 전체 API 테스트는 실행하지 않는다.
+
+## 진행 방식
+
+| 구분 | 방법 |
+| --- | --- |
+| 단위 | LocationImageCacheTest: Redis·TourAPI 대역으로 URL/NO_IMAGE hit·miss·TTL, 일시 오류 3회·비일시 오류 1회·성공 복구·실패 비캐싱·Redis 읽기/쓰기 오류 전파 검증 |
+| 외부 클라이언트 | TourApiClientTest: MockRestServiceServer로 정상 없음·HTTP/통신/스키마 실패·ID 불일치를 구분. 실제 TourAPI 호출 없음 |
+| Redis 통합 | LocationImageCacheRedisTest: 실제 Redis의 격리된 DB 15와 테스트별 고유 contentId를 사용해 값·실제 TTL·만료 후 재조회·동시 요청을 검증. 자기 키만 삭제하며 FLUSH는 금지 |
+| HTTP 통합 | GetMapContentsCouponApiIntegrationTest: 기존 쿠폰 응답과 공통 Redis 장애 500, 클러스터의 캐시 생략을 임시 MySQL·실제 보안 체인에서 확인 |
+| 지도 회귀 | 기존 GetMapSearchServiceTest·GetMapModalServiceTest·GetMapLocationDetailServiceTest에서 캐시 의존성으로 변경한 사진 Mock과 응답 조합 검증 |
+
+## 실행 순서
+
+1. 캐시·외부 클라이언트·지도 서비스 단위 테스트.
+2. 실제 Redis 통합 테스트.
+3. 지도 홈 HTTP 통합 테스트 후 결과와 임시 DB·테스트 키 정리 확인.
+
+## 결과
+
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| LocationImageCacheTest | 11 | 통과 |
+| TourApiClientTest | 22 | 통과 |
+| GetMapLocationDetailServiceTest | 9 | 통과 |
+| GetMapModalServiceTest | 15 | 통과 |
+| GetMapSearchServiceTest | 8 | 통과 |
+| LocationImageCacheRedisTest | 6 | 통과 |
+| GetMapContentsCouponApiIntegrationTest | 4 | 통과 |
+| 합계 | 75 | 전부 통과 |
+
+## 발견하고 수정한 점
+
+- 실제 Redis에서 URL 24시간·NO_IMAGE 1시간 TTL, 다음 요청·다른 캐시 인스턴스의 값 재사용, 만료 후 새 조회, 동시 미스 한 번 조회를 확인했다.
+- TourAPI 장애를 NO_IMAGE로 저장하지 않고 일시 오류만 최대 3회 시도하는 것을 검증했다. 실제 TourAPI·LLM은 호출하지 않았다.
+- Redis 읽기·쓰기 예외 전파와 실제 지도 HTTP 체인의 공통 500을 확인했다. 클러스터 응답에서는 캐시를 호출하지 않았다.
+- 기존 지도 테스트의 대표 이미지 Mock을 LocationImageCache로 옮기고 설명·상세 이미지 Mock은 TourApiClient에 유지했다.
+- Redis 테스트는 DB 15의 테스트별 고유 키만 삭제했다. 검증 후 DB 15의 키는 0개다. 임시 MySQL DB tour_test_133974505d584b2cb7270e6e183f5e71는 실행 종료 시 자동 삭제됐다.
+- Compose의 Redis 컨테이너를 추가·기동해 정상 상태와 PONG을 확인했다. 기존 Spring·MySQL 컨테이너는 재생성하지 않았다. 전체 API 테스트는 실행하지 않았다.
+
+# 대표 사진 호출 대기열 테스트 계획
+
+- 상태: 완료
+- 실행일: 2026-11-17
+- 결과: 관련 단위 테스트 71개 통과. 실패·오류·건너뜀 0개.
+- 범위: 이미지 대기열·캐시·TourAPI 클라이언트 관련 단위 테스트만 실행한다. 실제 TourAPI와 개발 DB는 호출하지 않는다.
+
+| 클래스 | 검증 항목 |
+| --- | --- |
+| TourApiImageRequestQueueTest | 최대 5개 동시 처리, 앞 묶음 전체 종료 후 다음 묶음 시작, 묶음 간격, 개별 실패 후 다음 요청 처리, 429 전체 대기 및 대기 종료 후 복구, 종료 시 대기 요청 해제 |
+| LocationImageCacheTest | 기존 TTL·실패 비캐싱·Redis 장애 회귀, 429 즉시 재시도 중단 및 다른 장소 호출 차단 |
+| TourApiClientTest | HTTP 429 구분과 Retry-After 전달, 기존 이미지 응답 처리 회귀 |
+
+- 실행 순서: 컴파일 → 대기열·캐시 단위 → 클라이언트 회귀. 완료 후 결과를 기록한다.
+
+## 결과
+
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| TourApiImageRequestQueueTest | 4 | 통과 |
+| LocationImageCacheTest | 12 | 통과 |
+| TourApiClientTest | 23 | 통과 |
+| GetMapLocationDetailServiceTest | 9 | 통과 |
+| GetMapModalServiceTest | 15 | 통과 |
+| GetMapSearchServiceTest | 8 | 통과 |
+| 합계 | 71 | 전부 통과 |
+
+## 발견하고 수정한 점
+
+- 기존 사진 루프는 한 HTTP 요청 안에서 순차 조회하므로 대기열에만 제한을 두면 5개 묶음을 채우지 못했다. JPA 정보는 부모 스레드에서 읽고 contentId만 최대 5개씩 사진 조회 작업으로 전달하도록 변경했다.
+- 검색 테스트는 두 번째 사진 없음 응답을 Mock 기본값에 의존해 첫 번째 stub 사용 순서에 영향을 받았다. 동시 조회 순서와 무관하게 의도대로 검증하도록 두 번째 null 응답도 명시했다.
+- 실제 TourAPI·LLM·개발 DB는 테스트에서 호출하지 않았다. 전체 API 테스트는 실행하지 않았다.
+
+# 지도 홈 사진 비동기 응답 테스트 계획
+
+- 상태: 완료
+- 실행일: 2026-11-17
+- 결과: 관련 백엔드 단위 79개·프론트 단위 4개 통과. Next.js 프로덕션 빌드 및 TypeScript 검사 통과.
+- 범위: LocationImageCacheBackgroundTest에서 외부 호출을 latch로 멈춰도 즉시 반환, 동일 장소 중복 등록 방지, 백그라운드 정상 URL·없음 저장, 준비 상태 구분, Redis 읽기 장애 전파를 검증한다.
+- TourApiImageRequestQueueTest·LocationImageCacheTest·TourApiClientTest와 지도 서비스 관련 단위 테스트를 회귀 실행한다. HTTP 통합의 Redis 장애 Mock도 캐시 전용 경로로 변경한다.
+- 프론트 mapImageRefresh.test.ts에서 준비 중만 갱신·준비 완료 중단·클러스터 생략·시간 제한을 검증하고 TypeScript 검사를 실행한다.
+- 실제 TourAPI·LLM 호출 없이 검증한다. 전체 API 테스트는 실행하지 않는다.
+
+- GetMapContentsImageServiceTest: 실제 지도 홈 서비스가 대기형 사진 조회를 호출하지 않고 null+준비 중 ID 또는 캐시 URL을 반환하는지 검증한다.
+
+## 결과
+
+| 검증 | 개수 | 결과 |
+| --- | --- | --- |
+| LocationImageCacheBackgroundTest | 4 | 통과 |
+| GetMapContentsImageServiceTest | 2 | 통과 |
+| GetMapContentsCouponResponseTest | 2 | 통과 |
+| 기존 사진 대기열·캐시·클라이언트·지도 서비스 회귀 | 71 | 통과 |
+| mapImageRefresh.test.ts | 4 | 통과 |
+| Next.js 프로덕션 빌드 및 TypeScript 검사 | - | 통과 |
+
+## 발견하고 수정한 점
+
+- 기존 지도 홈은 대기열을 동기 호출했으므로 외부 API가 느리면 HTTP 응답도 느려졌다. 캐시 전용 조회와 백그라운드 적재 경로를 분리했다. 외부 조회를 latch로 멈춰도 홈 조회 경로가 반환되고 중복 등록되지 않는 것을 검증했다.
+- 최초 응답의 null을 정상 사진 없음으로 오인하지 않도록 pendingLocationImageIds를 추가하고 프론트의 한시적 현재 화면 갱신에 연결했다.
+- 다른 지도 API의 기존 대표 사진 조회 동작은 유지했다. 사진 갱신 완료 시 마커의 기존 signature 비교로 이미지가 변경된 마커만 갱신한다.
+- 프론트 로컬에는 pnpm·node_modules가 없어 Docker의 빌더 이미지에서 관련 Vitest를 실행했다. 개발 DB와 실제 TourAPI·LLM 호출을 테스트에 사용하지 않았다.
+
+# 서버 기동 사진 사전 적재 변경 테스트 계획
+
+- 상태: 완료
+- 실행일: 2026-11-18
+- 결과: 관련 단위 테스트 111개 통과. 실패·오류·건너뜀 0개. 전체 API 테스트는 실행하지 않았다.
+- 범위: 서버 기동 작업·홈 서비스·기존 사진 캐시 관련 테스트만 실행한다. 실제 TourAPI는 단위 테스트에서 Mock으로 대체한다.
+
+| 클래스 | 검증 |
+| --- | --- |
+| LocationImageCacheWarmupTest | 기동 이벤트 비동기 반환·중복 방지, DB 빈 목록/캐시 전체 hit 시 외부 호출 생략, miss만 적재, NX로 기존 값 유지, URL 부재 생략, 잠금 소유권·실패 격리 |
+| LocationImageCacheBackgroundTest | 만료/없는 키 판별, 유효 URL·NO_IMAGE 보존, 빈 목록에서 Redis 조회 생략, SET NX 및 24시간 TTL, 기존 miss 비동기 처리 회귀 |
+| HomeServiceTest | 홈 사진 갱신 의존성 제거 후 기존 홈 응답 회귀 |
+
+- 실행: 컴파일 → 위 단위 → 목록 클라이언트·기존 캐시·지도 서비스 관련 회귀. 전체 API 테스트는 실행하지 않는다.
+
+## 결과
+
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| LocationImageCacheWarmupTest | 9 | 통과 |
+| LocationImageCacheWarmupConfigurationTest | 2 | 통과 |
+| LocationImageCacheBackgroundTest | 7 | 통과 |
+| HomeServiceTest | 13 | 통과 |
+| LocationImageCacheTest | 12 | 통과 |
+| TourApiImageRequestQueueTest | 4 | 통과 |
+| TourApiLocationImageClientTest | 7 | 통과 |
+| TourApiClientTest | 23 | 통과 |
+| GetMapContentsImageServiceTest | 2 | 통과 |
+| GetMapLocationDetailServiceTest | 9 | 통과 |
+| GetMapModalServiceTest | 15 | 통과 |
+| GetMapSearchServiceTest | 8 | 통과 |
+| 합계 | 111 | 전부 통과 |
+
+## 발견하고 수정한 점
+
+- 홈 적재기·GPS 우선순위·전체 삭제·세대 교체·전역 만료 메타데이터를 제거하고 ApplicationReadyEvent를 사용하는 지도 기동 적재기로 교체했다.
+- MGET으로 없는 키만 판별하고 SET NX로 다른 조회가 먼저 저장한 값도 유지한다. 유효한 NO_IMAGE도 miss로 간주하지 않는다.
+- 목록에 URL이 없는 대상은 기존 5개 묶음 대기열로 확인하여 정상 사진 없음과 호출 오류를 계속 구분한다. 실패 결과는 캐싱하지 않는다.
+- HTTP 통합 테스트의 Mock 대상을 새 기동 적재기로 변경해 향후 실행 시 실제 외부 API·개발 Redis에 접근하지 않도록 했다. 이번에는 HTTP 통합 테스트를 실행하지 않았다.
+- 단위 테스트는 실제 TourAPI·개발 DB에 접근하지 않았다.
+
+### 기동·기존 캐시 보존 확인
+
+- 앱 컨테이너 재빌드·기동 후 health UP을 확인했다. 기동 전후 기존 사진 값이 같고 TTL이 초기화되지 않고 감소한 것을 확인했다.
+- 기동 작업의 잠금이 정상 해제됐고 DB 장소 1,528개에 대한 캐시 키가 준비됐다. 실제 이 확인에서는 목록 및 개별 사진 API를 사용했다. 장소 데이터는 그대로 1,528개다.
+- 공통 MySQL 통합 테스트 설정에서 app.location-image-cache.warmup-enabled=false로 기동 작업을 비활성화한다. ApplicationContextRunner 두 테스트로 운영 기본 활성화·테스트 비활성화를 확인했다.

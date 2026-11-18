@@ -1,6 +1,7 @@
 package com.jamkkanjeju.server.domain.map.service;
 
 import com.jamkkanjeju.server.common.client.TourApiClient;
+import com.jamkkanjeju.server.common.client.LocationImageCache;
 import com.jamkkanjeju.server.common.exception.BusinessException;
 import com.jamkkanjeju.server.common.exception.CommonErrorCode;
 import com.jamkkanjeju.server.domain.auth.repository.UserRepository;
@@ -58,6 +59,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -89,6 +93,7 @@ public class MapService {
     private final MissionCompletionChecker missionCompletionChecker;
     private final TravelEstimator travelEstimator;
     private final TourApiClient tourApiClient;
+    private final LocationImageCache locationImageCache;
     private final VisitedLocationRepository visitedLocationRepository;
     private final MissionRewardStatusRepository missionRewardStatusRepository;
     private final NearbyMissionRecommender nearbyMissionRecommender;
@@ -134,7 +139,9 @@ public class MapService {
         Map<Long, List<ReceivedCoupon>> coupons = receivedCoupons(userId, locationIds);
 
         // 7. 장소 대표 이미지 조회 및 거리·시간 구성
-        Map<Long, String> imageUrls = locationImageUrls(locations);
+        Map<Long, String> imageUrls = new HashMap<>();
+        locations.stream().map(Location::getContentId).distinct().forEach(contentId ->
+                imageUrls.put(contentId, locationImageCache.getCachedLocationImageUrl(contentId)));
         List<LocationInfo> items = locations.stream().map(location -> {
             LocatedMission locatedMission = missions.get(location.getId());
             MissionInfo missionInfo = null;
@@ -152,7 +159,11 @@ public class MapService {
         }).toList();
 
         // 8. 상세 응답 구성
-        return GetMapContentsResponse.of(items, roadItems);
+        List<Long> pendingImageIds = locations.stream()
+                .filter(location -> imageUrls.get(location.getContentId()) == null
+                        && locationImageCache.needsImageRefresh(location.getContentId()))
+                .map(Location::getId).toList();
+        return GetMapContentsResponse.of(items, roadItems, pendingImageIds);
     }
 
     /** 현재 사용자를 확인하고 선택한 유형의 모달 DTO 자체를 반환한다. */
@@ -182,7 +193,7 @@ public class MapService {
         ModalMission modalMission = locationModalMission(location.getId());
 
         // 6. 대표 이미지·방문 여부·미션 완료·항목별 보상 수령 여부 구성 (조회 중 지급하지 않는다)
-        String imageUrl = tourApiClient.getLocationImageUrl(location.getContentId());
+        String imageUrl = locationImageCache.getLocationImageUrl(location.getContentId());
         boolean visited = visitedLocationRepository.existsByUserIdAndLocationId(userId, location.getId());
         GetLocationMapModalResponse.MissionInfo missionInfo = null;
         if (modalMission != null) {
@@ -448,11 +459,27 @@ public class MapService {
                         Collectors.mapping(ReceivedCoupon::from, Collectors.toList())));
     }
 
-    /** 같은 contentId는 한 번만 조회하고 이미지 없음·외부 조회 실패의 null도 요청 내에서 유지한다. */
+    /** JPA 객체는 요청 스레드에서 읽고, 대표 사진만 5개씩 공유 대기열에 전달한다. */
     private Map<Long, String> locationImageUrls(List<Location> locations) {
         Map<Long, String> images = new HashMap<>();
-        locations.stream().map(Location::getContentId).distinct()
-                .forEach(contentId -> images.put(contentId, tourApiClient.getLocationImageUrl(contentId)));
+        List<Long> contentIds = locations.stream().map(Location::getContentId).distinct().toList();
+        if (contentIds.isEmpty()) return images;
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int start = 0; start < contentIds.size(); start += 5) {
+                List<Long> batch = contentIds.subList(start, Math.min(start + 5, contentIds.size()));
+                List<Future<String>> pending = batch.stream()
+                        .map(id -> executor.submit(() -> locationImageCache.getLocationImageUrl(id))).toList();
+                for (int index = 0; index < batch.size(); index++) {
+                    images.put(batch.get(index), pending.get(index).get());
+                }
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("지도 사진 조회가 중단되었습니다.", exception);
+        } catch (ExecutionException exception) {
+            if (exception.getCause() instanceof RuntimeException runtimeException) throw runtimeException;
+            throw new IllegalStateException("지도 사진 조회에 실패했습니다.", exception.getCause());
+        }
         return images;
     }
 

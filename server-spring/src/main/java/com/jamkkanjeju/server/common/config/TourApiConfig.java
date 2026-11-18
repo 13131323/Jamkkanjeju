@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClient;
 
 /** TourAPI 설정값과 외부 요청용 HTTP 클라이언트를 Spring 빈으로 등록한다. */
 @Configuration
-@EnableConfigurationProperties(TourApiProperties.class)
+@EnableConfigurationProperties({TourApiProperties.class, LocationImageCacheProperties.class})
 public class TourApiConfig {
 
     /** TourAPI 기본 URL과 연결·응답 대기 시간을 적용한 전용 클라이언트이다. */
