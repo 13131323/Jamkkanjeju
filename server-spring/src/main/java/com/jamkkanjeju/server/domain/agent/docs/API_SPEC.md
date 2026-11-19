@@ -279,3 +279,36 @@ Status Code: `409 Conflict`
 ```json
 {"code":"LOCATION_SYNC_CONFLICT","message":"동기화 계획 또는 처리 상태가 변경되었습니다. 장소를 다시 비교하고 승인해 주세요."}
 ```
+
+
+# 에이전트 장소 방명록 조회 API
+
+| 구분 | 내용 |
+| --- | --- |
+| HTTP 메서드 | `GET` |
+| 엔드포인트 | `/api/v2/agent/guestbooks` |
+
+### API 설명
+장소에 연결된 ACTIVE 방명록을 방명록 ID 오름차순으로 조회한다. 글이 없는 방명록도 포함한다.
+
+### 요청 Header
+`X-Agent-Token`: 기존 에이전트 고정 토큰(필수). 사용자 JWT는 대신 사용할 수 없다.
+
+### 요청 Query
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| page | integer | 0 이상, 기본 0 |
+| size | integer | 1~100, 기본 100 |
+| guestbookIds | integer[] | 선택. 지정 시 해당 ID만 조회. 1~100개, 각 ID는 양수. 쉼표 구분 또는 같은 이름의 Query 반복 |
+
+### 정상 응답 데이터
+Status Code : `200 OK`
+```json
+{"guestbooks":[{"locationId":1,"guestbookId":10,"text":null}],"guestbooksPage":{"page":0,"size":100,"hasNext":false}}
+```
+요청 예: `GET /api/v2/agent/guestbooks?guestbookIds=103,104&size=100`. 존재하지 않거나 ACTIVE 장소 방명록이 아닌 ID는 결과에 포함하지 않는다.
+
+`text`는 문자열 또는 null이다. 결과가 없으면 빈 배열을 반환한다. 여러 페이지 조회 중 데이터 고정은 보장하지 않는다.
+
+### 오류 응답
+공통 요청·인증·인가·서버 오류는 [공통 오류](../../../common/docs/commonError.md)를 따른다.

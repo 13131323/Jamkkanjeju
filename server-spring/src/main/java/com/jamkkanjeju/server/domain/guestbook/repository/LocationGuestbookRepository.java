@@ -19,6 +19,34 @@ import org.springframework.data.repository.query.Param;
  * 저장된 공통 내용과 함께 응답의 {@code guestbookId}, {@code locationId}, {@code missionId}를 구성한다.
  */
 public interface LocationGuestbookRepository extends JpaRepository<LocationGuestbook, Long> {
+    /**
+     * 결과: 상태가 일치하며 방문·장소가 연결된 방명록의 ID·장소 ID·텍스트 Slice이다. ID 오름차순, 없으면 빈 Slice이다.
+     * 사용: GET /api/v2/agent/guestbooks의 guestbooks와 guestbooksPage 구성. 원문은 로컬 감성 분류 입력이다.
+     */
+    @Query("""
+            select new com.jamkkanjeju.server.domain.agent.dto.GetAgentGuestbooksResponse$GuestbookText(
+                location.id, g.id, g.contentWriting)
+            from LocationGuestbook l join l.guestbook g join l.visitedLocation v join v.location location
+            where g.status = :status order by g.id asc
+            """)
+    Slice<com.jamkkanjeju.server.domain.agent.dto.GetAgentGuestbooksResponse.GuestbookText> findTextsByStatus(
+            @Param("status") GuestbookStatus status, Pageable pageable);
+
+    /**
+     * 결과: 지정한 ID·상태와 일치하고 장소에 연결된 방명록 텍스트 Slice이다. ID 오름차순, 없으면 빈 Slice이다.
+     * 사용: GET /api/v2/agent/guestbooks의 guestbookIds 요청에서 선택한 원문만 조회한다.
+     */
+    @Query("""
+            select new com.jamkkanjeju.server.domain.agent.dto.GetAgentGuestbooksResponse$GuestbookText(
+                location.id, g.id, g.contentWriting)
+            from LocationGuestbook l join l.guestbook g join l.visitedLocation v join v.location location
+            where g.status = :status and g.id in :guestbookIds order by g.id asc
+            """)
+    Slice<com.jamkkanjeju.server.domain.agent.dto.GetAgentGuestbooksResponse.GuestbookText> findTextsByStatusAndIds(
+            @Param("status") GuestbookStatus status, @Param("guestbookIds") Collection<Long> guestbookIds,
+            Pageable pageable);
+
+
 
     /**
      * 결과: 상태·사용자 조회 조건에 맞는 방명록의 요청 Slice이다. 조건을 적용한 뒤 페이징한다.

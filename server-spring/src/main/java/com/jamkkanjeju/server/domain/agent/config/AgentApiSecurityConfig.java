@@ -31,7 +31,7 @@ public class AgentApiSecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/v2/agent/locations/sync")
                         .hasAuthority(AgentTokenAuthenticationFilter.SYNC_AUTHORITY)
-                        .requestMatchers(HttpMethod.GET, "/api/v2/agent/locations")
+                        .requestMatchers(HttpMethod.GET, "/api/v2/agent/locations", "/api/v2/agent/guestbooks")
                         .hasAuthority(AgentTokenAuthenticationFilter.READ_AUTHORITY)
                         .requestMatchers(HttpMethod.POST, "/api/v2/agent/maintenances")
                         .hasAuthority(AgentTokenAuthenticationFilter.MAINTENANCE_WRITE_AUTHORITY)

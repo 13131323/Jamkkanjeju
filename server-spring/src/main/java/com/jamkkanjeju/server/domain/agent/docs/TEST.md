@@ -91,3 +91,47 @@
 - 마지막 완료 기록 저장을 강제로 실패시켜 장소 삭제·추가·미션 비활성화·진행도/보상 상태 삭제가 전부 롤백됨을 확인했다. 테스트 로그의 forced final write failure는 이 검증을 위한 의도된 오류이다.
 - HTTP 테스트는 요청별 실제 커밋·롤백을 관찰하며, 종료 후 자신이 만든 장소·미션·보상·실행 기록만 정리한다. 개발 DB와 실제 TourAPI는 사용하지 않았다.
 - 기존 토큰 테스트의 전용 권한 기대값에 동기화 권한을 추가했다. 사용자 JWT와 누락/오류 고정 토큰은 새 API에서도 거부됐다. 전체 테스트는 실행하지 않았다.
+
+
+# 장소 방명록 분석 Tool 테스트 계획
+- 상태: 완료
+- 실행일: 2026-11-19
+| 구분 | 검증 |
+| --- | --- |
+| GetAgentGuestbooksApiIntegrationTest | ACTIVE/장소 연결 조건, 텍스트 null 포함, 페이지·기본값, 잘못된 입력, 토큰 인증, 읽기 전용 |
+| Python test_guestbook_tools.py | 전체 페이지 검증·실패, 로컬 분류·전체 대비 비율, 빈 장소, 원문/score 비저장, 사본 격리, 부분 실패 시 저장 금지 |
+- 순서: Python 단위 → Spring API 통합 → 기존 관련 회귀. 전체 테스트는 실행하지 않는다.
+
+## 장소 방명록 분석 결과
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| GetAgentGuestbooksApiIntegrationTest | 7 | 통과 |
+| GetStoredLocationsApiIntegrationTest (기존 관련 회귀) | 16 | 통과 |
+| Python test_guestbook_tools.py | 19 | 통과 |
+| Python 분류기·대화·공유 클라이언트 관련 회귀 | 26 | 통과 |
+
+## 장소 방명록 분석에서 발견하고 수정한 점
+- 최초 통합 실행은 Docker 종료로 MySQL 접속 단계에서 실패했다. Docker 시작 후 같은 테스트를 다시 실행해 23개 통과를 확인했다. 임시 DB 자동 삭제도 확인했다.
+- Spring compile 통과. 실제 로컬 감성 모델 입력 3건(긍정·부정·텍스트 없음)도 각각 1건과 부정 비율 1/3으로 확인했다. 유료 LLM API는 호출하지 않았다.
+- 전체 테스트는 실행하지 않았다. 소스 변경의 검증이며 실행 중인 app 컨테이너는 재빌드하지 않았다.
+
+# 방명록 원문 조회 Tool 테스트 계획
+- 상태: 완료
+- 실행일: 2026-11-19
+| 클래스 | 검증 항목 |
+| --- | --- |
+| AgentGuestbookServiceTest | 전체 조회 유지, ID 필터 전달·ACTIVE 조건, null 원문 및 누락 ID의 빈 결과 |
+| GetAgentGuestbooksRequestTest | 기본값·단일/복수 ID·양수·100개 상한 검증 |
+| Python test_guestbook_texts.py | 단일·다중 원문, 분류별 배열, 스냅샷 분류 유지, 100개 단위 요청, 누락 ID·응답 오류·전체 실패 |
+- 서버·DB를 별도로 기동하지 않는다. Spring compile·DB 없는 단위 테스트 → Python 관련 회귀만 실행한다. 실제 MySQL 통합 테스트는 이번 실행에서 진행하지 않는다.
+
+## 방명록 원문 조회 Tool 결과
+| 클래스 | 개수 | 결과 |
+| --- | --- | --- |
+| AgentGuestbookServiceTest | 3 | 통과 |
+| GetAgentGuestbooksRequestTest | 3 | 통과(HTTP Query 바인딩 포함) |
+| Python 원문 Tool·기존 분석·대화·공유 클라이언트 | 58 | 통과 |
+
+## 방명록 원문 조회 Tool 검증 범위
+- 입력은 사용자 확인대로 snapshotId + guestbookIds이며 분류 모델을 다시 호출하지 않는다. 원문을 분석 스냅샷에 보관하지 않는다.
+- Spring compile 통과. 유료 LLM 호출·서버 기동·재빌드는 수행하지 않았다. 실제 DB 통합 테스트는 이번 작업에서 실행하지 않았다.
